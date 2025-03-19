@@ -187,9 +187,46 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
         principalForThisInstallment = loanApplicationTerms.adjustPrincipalIfLastRepaymentPeriod(principalForThisInstallment,
                 totalCumulativePrincipalToDate, periodNumber);
 
+        // Handle cases where interest for first payment exceeds fixed EMI,
+        // and remaining principal causes final payment to exceed EMI as well.
+        // Adjust first payment to cover expected principal payment + all accrued interest.
+        BigDecimal fixedEmiAmount = loanApplicationTerms.getFixedEmiAmount();
+        if (periodNumber == 1 && fixedEmiAmount != null) {
+            PrincipalInterest idealPrincipalInterest = getIdealPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
+            Money normalEmi = loanApplicationTerms.pmtForInstallment(calculator, outstandingBalance, 1, mc);
+            Money idealInterest = idealPrincipalInterest.interest();
+            Money idealPrincipal = normalEmi.minus(idealInterest);
+
+            if (idealPrincipal.isGreaterThanZero()) {
+                principalForThisInstallment = idealPrincipal;
+            }
+        }
+
         PrincipalInterest principalInterest = new PrincipalInterest(principalForThisInstallment, interestForThisInstallment,
                 interestBroughtFowardDueToGrace);
         principalInterest.setRescheduleInterestPortion(loanApplicationTerms.getInterestTobeApproppriated());
         return principalInterest;
+    }
+
+    /**
+     * Calculate the ideal principal and interest for the first payment period.
+     *
+     * Ideal in this context means that the first payment period is exactly one period away from the disbursement date
+     * (no extra interest accrual).
+     */
+    private PrincipalInterest getIdealPrincipalInterest(final LoanApplicationTerms loanApplicationTerms,
+            final PaymentPeriodsInOneYearCalculator calculator, final MathContext mc, final Money outstandingBalance) {
+        LocalDate idealFirstPeriodStart = loanApplicationTerms.getExpectedDisbursementDate();
+        LocalDate idealFirstPeriodEnd = switch (loanApplicationTerms.getRepaymentPeriodFrequencyType()) {
+            case DAYS -> idealFirstPeriodStart.plusDays(loanApplicationTerms.getRepaymentEvery());
+            case WEEKS -> idealFirstPeriodStart.plusWeeks(loanApplicationTerms.getRepaymentEvery());
+            case MONTHS -> idealFirstPeriodStart.plusMonths(loanApplicationTerms.getRepaymentEvery());
+            case YEARS -> idealFirstPeriodStart.plusYears(loanApplicationTerms.getRepaymentEvery());
+            default -> idealFirstPeriodStart.plusMonths(loanApplicationTerms.getRepaymentEvery());
+        };
+
+        PrincipalInterest idealPrincipalInterest = loanApplicationTerms.calculateTotalInterestForPeriod(calculator, BigDecimal.ZERO, 1, mc,
+                Money.zero(loanApplicationTerms.getCurrency()), outstandingBalance, idealFirstPeriodStart, idealFirstPeriodEnd);
+        return idealPrincipalInterest;
     }
 }
