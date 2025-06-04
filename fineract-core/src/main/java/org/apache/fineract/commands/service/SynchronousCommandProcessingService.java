@@ -354,6 +354,16 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 reqmap.put("createdByName", context.authenticatedUser().getUsername());
                 reqmap.put("createdByFullName", context.authenticatedUser().getDisplayName());
 
+                if (command.getUrl() != null) {
+                    reqmap.put("resourceUrl", command.getUrl());
+                }
+                if (command.getResourceId() != null) {
+                    reqmap.put("resourceId", command.getResourceId());
+                }
+                if (command.getSubresourceId() != null) {
+                    reqmap.put("subresourceId", command.getSubresourceId());
+                }
+
                 reqmap.put("request", myMap);
                 if (result instanceof CommandProcessingResult) {
                     CommandProcessingResult resultCopy = CommandProcessingResult
