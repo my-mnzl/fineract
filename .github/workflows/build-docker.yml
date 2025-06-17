@@ -65,4 +65,4 @@ jobs:
           docker tag $IMAGE_NAME $REGISTRY/$REGISTRY_IMAGE:$TAG
           docker push $REGISTRY/$REGISTRY_IMAGE:${{ github.sha }}
           docker push $REGISTRY/$REGISTRY_IMAGE:$TAG
-        if: ${{ github.ref_name == 'refs/heads/develop' || startsWith(github.ref_name, 'refs/heads/mnzl') }}
+        if: ${{ github.ref == 'refs/heads/develop' || startsWith(github.ref_name, 'mnzl') }}
