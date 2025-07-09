@@ -258,7 +258,7 @@ bootJar {
 
 jib {
     from {
-        image = 'azul/zulu-openjdk-alpine:17'
+        image = 'ghcr.io/my-mnzl/zulu-openjdk-alpine:17'
         platforms {
             platform {
                 architecture = System.getProperty("os.arch").equals("aarch64")?"arm64":"amd64"
@@ -379,7 +379,7 @@ task devRun(type: org.springframework.boot.gradle.tasks.run.BootRun) {
     // Configure the build to skip quality checks
     gradle.taskGraph.whenReady { graph ->
         if (graph.hasTask(devRun)) {
-            tasks.matching { task -> 
+            tasks.matching { task ->
                 task.name in ['checkstyle', 'checkstyleMain', 'checkstyleTest',
                             'spotlessCheck', 'spotlessApply',
                             'spotbugsMain', 'spotbugsTest',
@@ -400,7 +400,7 @@ task devRun(type: org.springframework.boot.gradle.tasks.run.BootRun) {
     classpath = bootRun.classpath
     mainClass = bootRun.mainClass
     jvmArgs = bootRun.jvmArgs
-    
+
     doFirst {
         println "Running in development mode - quality checks are disabled"
     }
