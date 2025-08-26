@@ -530,6 +530,9 @@ public class FineractProperties {
         public static class FineractSecurityOAuth2Properties {
 
             private boolean enabled;
+            private boolean useJwtPermissions;
+            private String jwtPermissionsClaimName;
+            private boolean fallbackToDatabasePermissions;
             private ClientProperties client;
 
             @Getter
@@ -543,7 +546,6 @@ public class FineractProperties {
                 @Getter
                 @Setter
                 public static final class Registration implements Serializable {
-
                     @Serial
                     private static final long serialVersionUID = 1L;
                     private String clientId;

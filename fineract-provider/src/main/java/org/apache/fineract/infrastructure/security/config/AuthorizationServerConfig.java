@@ -267,7 +267,7 @@ public class AuthorizationServerConfig {
 
     @Bean
     public FineractJwtAuthenticationTokenConverter authenticationConverter() {
-        return new FineractJwtAuthenticationTokenConverter(userDetailsService);
+        return new FineractJwtAuthenticationTokenConverter(userDetailsService, fineractProperties); // pragma: allowlist secret
     }
 
     public RequestResponseFilter requestResponseFilter() {
