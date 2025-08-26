@@ -21,6 +21,12 @@ package org.apache.fineract.infrastructure.security.data;
 
 import java.util.Collection;
 import java.util.Objects;
+import java.util.HashSet;
+import java.util.Collections;
+
+import org.apache.fineract.useradministration.domain.AppUser;
+import org.apache.fineract.useradministration.domain.Role;
+import org.apache.fineract.useradministration.domain.Permission;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -31,8 +37,32 @@ public class FineractJwtAuthenticationToken extends JwtAuthenticationToken {
     private final UserDetails user;
 
     public FineractJwtAuthenticationToken(Jwt jwt, Collection<GrantedAuthority> authorities, UserDetails user) {
+        this(jwt, authorities, user, false);
+    }
+
+    public FineractJwtAuthenticationToken(Jwt jwt, Collection<GrantedAuthority> authorities, UserDetails user,
+            boolean useJwtPermissions) {
         super(jwt, authorities, user.getUsername());
         this.user = Objects.requireNonNull(user, "user");
+
+        if (useJwtPermissions) {
+            Role role = new Role("JWT", "JWT");
+            for (GrantedAuthority authority : authorities) {
+                String permissionCode = authority.getAuthority();
+                if (permissionCode == null) {
+                    continue;
+                }
+
+                String[] parts = permissionCode.split("_");
+                if (parts.length != 2) {
+                    continue;
+                }
+
+                Permission permission = new Permission("JWT", parts[1], parts[0]);
+                role.updatePermission(permission, true);
+            }
+            ((AppUser) user).updateRoles(new HashSet<>(Collections.singleton(role)));
+        }
     }
 
     @Override

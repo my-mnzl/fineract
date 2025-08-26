@@ -170,13 +170,67 @@ public class OAuth2SecurityConfig {
     private Converter<Jwt, FineractJwtAuthenticationToken> authenticationConverter() {
         return jwt -> {
             try {
-                UserDetails user = userDetailsService.loadUserByUsername(jwt.getSubject());
                 jwtGrantedAuthoritiesConverter.setAuthorityPrefix("");
-                Collection<GrantedAuthority> authorities = jwtGrantedAuthoritiesConverter.convert(jwt);
-                return new FineractJwtAuthenticationToken(jwt, authorities, user);
+                UserDetails user = userDetailsService.loadUserByUsername(jwt.getSubject());
+                Collection<GrantedAuthority> authorities;
+                boolean useJwtPermissions = fineractProperties.getSecurity().getOauth().isUseJwtPermissions();
+                if (useJwtPermissions) {
+                    authorities = extractPermissionsFromJwt(jwt);
+                    if (authorities.isEmpty()
+                            && fineractProperties.getSecurity().getOauth().isFallbackToDatabasePermissions()) {
+                        useJwtPermissions = false;
+                        authorities = jwtGrantedAuthoritiesConverter.convert(jwt);
+                    }
+                } else {
+                    authorities = jwtGrantedAuthoritiesConverter.convert(jwt);
+                }
+
+                return new FineractJwtAuthenticationToken(jwt, authorities, user, useJwtPermissions);
             } catch (UsernameNotFoundException ex) {
                 throw new OAuth2AuthenticationException(new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN), ex);
             }
         };
+    }
+
+    /**
+     * Extract permissions from JWT token claims.
+     */
+    private Collection<GrantedAuthority> extractPermissionsFromJwt(Jwt jwt) {
+        Collection<GrantedAuthority> authorities = new ArrayList<>();
+
+        String permissionClaimName = fineractProperties.getSecurity().getOauth().getJwtPermissionsClaimName();
+        if (permissionClaimName != null) {
+            Object claimValue = jwt.getClaim(permissionClaimName);
+            if (claimValue != null) {
+                authorities.addAll(convertClaimToAuthorities(claimValue));
+            }
+        }
+
+        return authorities;
+    }
+
+    /**
+     * Convert JWT claim values to Spring Security authorities.
+     */
+    private Collection<GrantedAuthority> convertClaimToAuthorities(Object claimValue) {
+        Collection<GrantedAuthority> authorities = new ArrayList<>();
+
+        if (claimValue instanceof String) {
+            authorities
+                    .add(new org.springframework.security.core.authority.SimpleGrantedAuthority((String) claimValue));
+        } else if (claimValue instanceof Collection) {
+            for (Object item : (Collection<?>) claimValue) {
+                if (item instanceof String) {
+                    authorities
+                            .add(new org.springframework.security.core.authority.SimpleGrantedAuthority((String) item));
+                }
+            }
+        } else if (claimValue instanceof String[]) {
+            for (String permission : (String[]) claimValue) {
+                authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority(permission));
+            }
+        }
+
+        return authorities;
     }
 }

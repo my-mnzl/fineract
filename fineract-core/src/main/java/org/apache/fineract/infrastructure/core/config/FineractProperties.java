@@ -519,6 +519,9 @@ public class FineractProperties {
     public static class FineractSecurityOAuth {
 
         private boolean enabled;
+        private boolean useJwtPermissions;
+        private String jwtPermissionsClaimName;
+        private boolean fallbackToDatabasePermissions;
     }
 
     @Getter
