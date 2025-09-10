@@ -131,13 +131,16 @@ public class LoanTermVariationsMapper {
         if (loan.getLoanProduct().isLinkedToFloatingInterestRate()) {
             floatingRateDTO.resetInterestRateDiff();
             Collection<FloatingRatePeriodData> applicableRates = loan.getLoanProduct().fetchInterestRates(floatingRateDTO);
-            LocalDate interestRateStartDate = DateUtils.getBusinessLocalDate();
+            LocalDate today = DateUtils.getBusinessLocalDate();
+            LocalDate latestStartDate = LocalDate.MIN;
             for (FloatingRatePeriodData periodData : applicableRates) {
                 LoanTermVariationsData loanTermVariation = new LoanTermVariationsData(
                         LoanEnumerations.loanVariationType(LoanTermVariationType.INTEREST_RATE), periodData.getFromDateAsLocalDate(),
                         periodData.getInterestRate(), dateValue, isSpecificToInstallment);
-                if (!DateUtils.isBefore(interestRateStartDate, periodData.getFromDateAsLocalDate())) {
-                    interestRateStartDate = periodData.getFromDateAsLocalDate();
+                boolean beforeToday = DateUtils.isBefore(periodData.getFromDateAsLocalDate(), today);
+                boolean afterLatest = DateUtils.isAfter(periodData.getFromDateAsLocalDate(), latestStartDate);
+                if (beforeToday && afterLatest) {
+                    latestStartDate = periodData.getFromDateAsLocalDate();
                     interestRate = periodData.getInterestRate();
                 }
                 loanTermVariations.add(loanTermVariation);
