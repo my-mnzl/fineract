@@ -1827,10 +1827,12 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 -- for past due interest recalculation
                 LEFT JOIN m_loan_recalculation_details rcd ON rcd.loan_id = l.id
                 -- For Floating rate changes
-                LEFT JOIN m_product_loan_floating_rates pfr
-                    ON l.product_id = pfr.loan_product_id AND l.is_floating_interest_rate = TRUE
+                LEFT JOIN m_product_loan_floating_rates pfr ON l.product_id = pfr.loan_product_id
                 LEFT JOIN m_floating_rates fr ON pfr.floating_rates_id = fr.id
-                LEFT JOIN m_floating_rates_periods frp ON fr.id = frp.floating_rates_id
+                LEFT JOIN m_floating_rates_periods frp
+                    ON fr.id = frp.floating_rates_id AND frp.from_date <= ?
+                    AND ((l.interest_recalcualated_on IS NULL AND l.disbursedon_date < frp.from_date
+                        OR l.interest_recalcualated_on < frp.from_date))
                 LEFT JOIN m_loan_reschedule_request lrr ON lrr.loan_id = l.id
                 -- this is to identify the applicable rates when base rate is changed
                 LEFT JOIN m_floating_rates bfr ON bfr.is_base_lending_rate = TRUE
@@ -1848,8 +1850,9 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                         -- float rate changes
                         (fr.is_active = TRUE
                             AND frp.is_active = TRUE
-                            AND (frp.created_date >= ?
-                                 OR (bfrp.id IS NOT NULL
+                            AND ((l.interest_recalcualated_on IS NULL AND l.disbursedon_date < frp.from_date)
+                                OR l.interest_recalcualated_on < frp.from_date
+                                OR (bfrp.id IS NOT NULL
                                      AND frp.is_differential_to_base_lending_rate = TRUE
                                      AND frp.from_date >= bfrp.from_date))
                             AND lrr.loan_id IS NULL)
@@ -1860,8 +1863,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
             LocalDate currentdate = DateUtils.getBusinessLocalDate();
             // will look only for yesterday modified rates
             LocalDate yesterday = DateUtils.getBusinessLocalDate().minusDays(1);
-            return this.jdbcTemplate.queryForList(sql, Long.class, yesterday, LoanStatus.ACTIVE.getValue(), currentdate, currentdate,
-                    currentdate, yesterday);
+            return this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday, LoanStatus.ACTIVE.getValue(),
+                    currentdate, currentdate, currentdate);
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }
@@ -1883,10 +1886,12 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 -- for past due interest recalculation
                 LEFT JOIN m_loan_recalculation_details rcd ON rcd.loan_id = l.id
                 -- For Floating rate changes
-                LEFT JOIN m_product_loan_floating_rates pfr
-                    ON l.product_id = pfr.loan_product_id AND l.is_floating_interest_rate = TRUE
+                LEFT JOIN m_product_loan_floating_rates pfr ON l.product_id = pfr.loan_product_id
                 LEFT JOIN m_floating_rates fr ON pfr.floating_rates_id = fr.id
-                LEFT JOIN m_floating_rates_periods frp ON fr.id = frp.floating_rates_id
+                LEFT JOIN m_floating_rates_periods frp
+                    ON fr.id = frp.floating_rates_id AND frp.from_date <= ?
+                    AND ((l.interest_recalcualated_on IS NULL AND l.disbursedon_date < frp.from_date
+                        OR l.interest_recalcualated_on < frp.from_date))
                 LEFT JOIN m_loan_reschedule_request lrr ON lrr.loan_id = l.id
                 -- this is to identify the applicable rates when base rate is changed
                 LEFT JOIN m_floating_rates bfr ON bfr.is_base_lending_rate = TRUE
@@ -1902,7 +1907,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                         OR
                          (fr.is_active = TRUE
                              AND frp.is_active = TRUE
-                             AND (frp.created_date >= ?
+                             AND ((l.interest_recalcualated_on IS NULL AND l.disbursedon_date < frp.from_date)
+                                  OR l.interest_recalcualated_on < frp.from_date
                                   OR (bfrp.id IS NOT NULL
                                       AND frp.is_differential_to_base_lending_rate = TRUE
                                       AND frp.from_date >= bfrp.from_date))
@@ -1914,8 +1920,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 LIMIT ?
                 """;
         try {
-            return Collections.synchronizedList(this.jdbcTemplate.queryForList(sql, Long.class, yesterday, LoanStatus.ACTIVE.getValue(),
-                    currentdate, currentdate, currentdate, yesterday, maxLoanIdInList, officeHierarchy, pageSize));
+            return Collections.synchronizedList(this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday, LoanStatus.ACTIVE.getValue(),
+                    currentdate, currentdate, currentdate, maxLoanIdInList, officeHierarchy, pageSize));
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }

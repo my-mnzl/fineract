@@ -206,7 +206,8 @@ public class LoanUtilService implements ILoanUtilService {
     private FloatingRateDTO constructFloatingRateDTO(final Loan loan) {
         FloatingRateDTO floatingRateDTO = null;
         if (loan.loanProduct().isLinkedToFloatingInterestRate()) {
-            boolean isFloatingInterestRate = loan.getIsFloatingInterestRate();
+            // The loan is considered to have a floating rate if linked to a floating rate
+            boolean isFloatingInterestRate = true;
             BigDecimal interestRateDiff = loan.getInterestRateDifferential();
             List<FloatingRatePeriodData> baseLendingRatePeriods = null;
             try {
