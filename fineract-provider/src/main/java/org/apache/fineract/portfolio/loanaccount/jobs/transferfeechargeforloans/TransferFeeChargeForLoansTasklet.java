@@ -42,6 +42,11 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.lang.NonNull;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -50,6 +55,7 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
     private final LoanChargeReadPlatformService loanChargeReadPlatformService;
     private final AccountAssociationsReadPlatformService accountAssociationsReadPlatformService;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
@@ -100,8 +106,19 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
     }
 
     private void transferFeeCharge(final AccountTransferDTO accountTransferDTO, List<Throwable> errors) {
+        // Configure transaction template to use REQUIRES_NEW propagation
+        // This ensures each transfer runs in its own transaction
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
         try {
-            accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
+            transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+                @Override
+                protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {
+                    accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
+                    log.debug("Successfully transferred fee charge {} for loan id {}",
+                            accountTransferDTO.getChargeId(), accountTransferDTO.getToAccountId());
+                }
+            });
         } catch (RuntimeException e) {
             log.error("Exception while paying charge {} for loan id {}", accountTransferDTO.getChargeId(),
                     accountTransferDTO.getToAccountId(), e);

@@ -32,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 public class TransferFeeChargeForLoansConfig {
@@ -46,6 +47,8 @@ public class TransferFeeChargeForLoansConfig {
     private AccountAssociationsReadPlatformService accountAssociationsReadPlatformService;
     @Autowired
     private AccountTransfersWritePlatformService accountTransfersWritePlatformService;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Bean
     protected Step transferFeeChargeForLoansStep() {
@@ -55,13 +58,15 @@ public class TransferFeeChargeForLoansConfig {
 
     @Bean
     public Job transferFeeChargeForLoansJob() {
-        return new JobBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository).start(transferFeeChargeForLoansStep())
+        return new JobBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository)
+                .start(transferFeeChargeForLoansStep())
                 .incrementer(new RunIdIncrementer()).build();
     }
 
     @Bean
     public TransferFeeChargeForLoansTasklet transferFeeChargeForLoansTasklet() {
-        return new TransferFeeChargeForLoansTasklet(loanChargeReadPlatformService, accountAssociationsReadPlatformService,
-                accountTransfersWritePlatformService);
+        return new TransferFeeChargeForLoansTasklet(loanChargeReadPlatformService,
+                accountAssociationsReadPlatformService,
+                accountTransfersWritePlatformService, transactionTemplate);
     }
 }
