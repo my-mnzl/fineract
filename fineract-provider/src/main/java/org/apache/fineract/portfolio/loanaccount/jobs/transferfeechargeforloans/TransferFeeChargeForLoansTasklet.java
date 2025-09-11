@@ -25,7 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
-import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
+import org.apache.fineract.infrastructure.jobs.exception.TruncatedJobExecutionException;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
 import org.apache.fineract.portfolio.account.data.PortfolioAccountData;
@@ -100,7 +100,9 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
             }
         }
         if (!errors.isEmpty()) {
-            throw new JobExecutionException(errors);
+            log.error("TransferFeeChargeForLoans job completed with {} errors out of {} total charges",
+                    errors.size(), chargeDatas != null ? chargeDatas.size() : 0);
+            throw new TruncatedJobExecutionException(errors);
         }
         return RepeatStatus.FINISHED;
     }
