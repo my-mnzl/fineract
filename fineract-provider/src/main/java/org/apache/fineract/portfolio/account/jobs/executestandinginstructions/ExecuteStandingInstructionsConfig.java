@@ -33,6 +33,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 public class ExecuteStandingInstructionsConfig {
@@ -49,6 +50,8 @@ public class ExecuteStandingInstructionsConfig {
     private DatabaseSpecificSQLGenerator sqlGenerator;
     @Autowired
     private AccountTransfersWritePlatformService accountTransfersWritePlatformService;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Bean
     protected Step executeStandingInstructionsStep() {
@@ -65,6 +68,6 @@ public class ExecuteStandingInstructionsConfig {
     @Bean
     public ExecuteStandingInstructionsTasklet executeStandingInstructionsTasklet() {
         return new ExecuteStandingInstructionsTasklet(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator,
-                accountTransfersWritePlatformService);
+                accountTransfersWritePlatformService, transactionTemplate);
     }
 }
