@@ -220,7 +220,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             boolean isFirst = true;
             for (LoanDisbursementDetails disbursementDetail : loanDisburseDetails) {
                 if (disbursementDetail.actualDisbursementDate() == null) {
-                    // If multiple charges to be applied, only the first one will get the provided externalId, for the
+                    // If multiple charges to be applied, only the first one will get the provided
+                    // externalId, for the
                     // rest we generate new ones (if needed)
                     if (!isFirst) {
                         externalId = externalIdFactory.create();
@@ -274,7 +275,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
         }
         if (!overpaidReprocess && AdvancedPaymentScheduleTransactionProcessor.ADVANCED_PAYMENT_ALLOCATION_STRATEGY
                 .equals(loan.transactionProcessingStrategy())) {
-            // [For Adv payment allocation strategy] check if charge due date is earlier than last transaction
+            // [For Adv payment allocation strategy] check if charge due date is earlier
+            // than last transaction
             // date, if yes trigger reprocess else no reprocessing
             final Optional<LocalDate> lastPaymentTransactionDate = loanTransactionRepository.findLastTransactionDateForReprocessing(loan);
             if (lastPaymentTransactionDate.isPresent()
@@ -348,7 +350,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
         if (loanCharge.isPenaltyCharge()) {
             chargeRefundChargeType = "P";
         }
-        // chargeRefundChargeType only included as a parameter for accounting reason - in order to identify whether fee
+        // chargeRefundChargeType only included as a parameter for accounting reason -
+        // in order to identify whether fee
         // or penalty GL account is relevant
         CommandProcessingResult result = loanWritePlatformService.makeLoanRepaymentWithChargeRefundChargeType(
                 LoanTransactionType.CHARGE_REFUND, repaymentJsonCommand.getLoanId(), repaymentJsonCommand, isRecoveryRepayment,
@@ -948,7 +951,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
         LoanCharge loanCharge = loanChargePaidBy.getLoanCharge();
         final Integer installmentNumber = loanChargePaidBy.getInstallmentNumber();
         LoanInstallmentCharge chargePerInstallment;
-        // final Integer installmentNumber = command.integerValueOfParameterNamed("installmentNumber");
+        // final Integer installmentNumber =
+        // command.integerValueOfParameterNamed("installmentNumber");
         if (installmentNumber != null) {
             // Get installment charge.
             chargePerInstallment = loanCharge.getInstallmentLoanCharge(installmentNumber);
@@ -1056,7 +1060,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             throw new LoanChargeCannotBeAddedException("loanCharge", "overdue.charge", defaultUserMessage, null,
                     chargeDefinition.getName());
         } else if (loanCharge.getDueLocalDate() != null) {
-            // TODO: Review, error message seems not valid if interest recalculation is not enabled.
+            // TODO: Review, error message seems not valid if interest recalculation is not
+            // enabled.
             boolean isCumulative = loan.getLoanRepaymentScheduleDetail().getLoanScheduleType().equals(LoanScheduleType.CUMULATIVE);
             LocalDate validationDate = loan.isInterestBearingAndInterestRecalculationEnabled() && isCumulative
                     ? loan.getLastUserTransactionDate()
@@ -1097,7 +1102,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
         loanChargeService.addLoanCharge(loan, loanCharge);
         loanCharge = this.loanChargeRepository.saveAndFlush(loanCharge);
 
-        // we want to apply charge transactions only for those loans charges that are applied when a loan is active and
+        // we want to apply charge transactions only for those loans charges that are
+        // applied when a loan is active and
         // the loan product uses Upfront Accruals, or only when the loan are closed too,
         if ((loan.getStatus().isActive() && loan.isNoneOrCashOrUpfrontAccrualAccountingEnabledOnLoanProduct())
                 || loan.getStatus().isOverpaid() || loan.getStatus().isClosedObligationsMet()) {
@@ -1162,7 +1168,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
 
             for (Map.Entry<Integer, LocalDate> entry : scheduleDates.entrySet()) {
 
-                final LoanCharge loanCharge = loanChargeAssembler.createNewFromJson(loan, chargeDefinition, command, entry.getValue());
+                final LoanCharge loanCharge = loanChargeAssembler.createNewFromJson(loan, chargeDefinition, command, entry.getValue(),
+                        installment);
 
                 if (BigDecimal.ZERO.compareTo(loanCharge.amount()) == 0) {
                     continue;
@@ -1250,7 +1257,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
 
     private BigDecimal loanChargeValidateRefundAmount(LoanCharge loanCharge, LoanInstallmentCharge installmentChargeEntry,
             BigDecimal transactionAmount) {
-        // if transactionAmount not provided return max refundable amount (amount paid minus previous refunds)
+        // if transactionAmount not provided return max refundable amount (amount paid
+        // minus previous refunds)
         BigDecimal chargeAmountPaid;
         BigDecimal chargeAmountRefunded = BigDecimal.ZERO;
         MonetaryCurrency loanCurrency = loanCharge.getLoan().getCurrency();
@@ -1490,7 +1498,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
                 || loan.hasContractTerminationTransaction())) {
             loanScheduleService.regenerateRepaymentSchedule(loan, scheduleGeneratorDTO);
         }
-        // Waive of charges whose due date falls after latest 'repayment' transaction don't require entire loan schedule
+        // Waive of charges whose due date falls after latest 'repayment' transaction
+        // don't require entire loan schedule
         // to be reprocessed.
         if (!loanCharge.isDueAtDisbursement() && loanCharge.isPaidOrPartiallyPaid(loan.getCurrency())) {
             reprocessLoanTransactionsService.reprocessTransactions(loan);

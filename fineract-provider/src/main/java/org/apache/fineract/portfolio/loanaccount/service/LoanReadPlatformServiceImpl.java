@@ -2096,8 +2096,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
             LocalDate currentdate = DateUtils.getBusinessLocalDate();
             // will look only for yesterday modified rates
             LocalDate yesterday = DateUtils.getBusinessLocalDate().minusDays(1);
-            return this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday, LoanStatus.ACTIVE.getValue(),
-                    currentdate, currentdate, currentdate);
+            return this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday, LoanStatus.ACTIVE.getValue(), currentdate,
+                    currentdate, currentdate);
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }
@@ -2153,8 +2153,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 LIMIT ?
                 """;
         try {
-            return Collections.synchronizedList(this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday, LoanStatus.ACTIVE.getValue(),
-                    currentdate, currentdate, currentdate, maxLoanIdInList, officeHierarchy, pageSize));
+            return Collections.synchronizedList(this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday,
+                    LoanStatus.ACTIVE.getValue(), currentdate, currentdate, currentdate, maxLoanIdInList, officeHierarchy, pageSize));
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }

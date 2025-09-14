@@ -176,8 +176,7 @@ public class OAuth2SecurityConfig {
                 boolean useJwtPermissions = fineractProperties.getSecurity().getOauth().isUseJwtPermissions();
                 if (useJwtPermissions) {
                     authorities = extractPermissionsFromJwt(jwt);
-                    if (authorities.isEmpty()
-                            && fineractProperties.getSecurity().getOauth().isFallbackToDatabasePermissions()) {
+                    if (authorities.isEmpty() && fineractProperties.getSecurity().getOauth().isFallbackToDatabasePermissions()) {
                         useJwtPermissions = false;
                         authorities = jwtGrantedAuthoritiesConverter.convert(jwt);
                     }
@@ -216,13 +215,11 @@ public class OAuth2SecurityConfig {
         Collection<GrantedAuthority> authorities = new ArrayList<>();
 
         if (claimValue instanceof String) {
-            authorities
-                    .add(new org.springframework.security.core.authority.SimpleGrantedAuthority((String) claimValue));
+            authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority((String) claimValue));
         } else if (claimValue instanceof Collection) {
             for (Object item : (Collection<?>) claimValue) {
                 if (item instanceof String) {
-                    authorities
-                            .add(new org.springframework.security.core.authority.SimpleGrantedAuthority((String) item));
+                    authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority((String) item));
                 }
             }
         } else if (claimValue instanceof String[]) {
