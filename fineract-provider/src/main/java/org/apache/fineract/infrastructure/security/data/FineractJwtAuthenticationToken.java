@@ -20,13 +20,12 @@
 package org.apache.fineract.infrastructure.security.data;
 
 import java.util.Collection;
-import java.util.Objects;
-import java.util.HashSet;
 import java.util.Collections;
-
+import java.util.HashSet;
+import java.util.Objects;
 import org.apache.fineract.useradministration.domain.AppUser;
-import org.apache.fineract.useradministration.domain.Role;
 import org.apache.fineract.useradministration.domain.Permission;
+import org.apache.fineract.useradministration.domain.Role;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -40,8 +39,7 @@ public class FineractJwtAuthenticationToken extends JwtAuthenticationToken {
         this(jwt, authorities, user, false);
     }
 
-    public FineractJwtAuthenticationToken(Jwt jwt, Collection<GrantedAuthority> authorities, UserDetails user,
-            boolean useJwtPermissions) {
+    public FineractJwtAuthenticationToken(Jwt jwt, Collection<GrantedAuthority> authorities, UserDetails user, boolean useJwtPermissions) {
         super(jwt, authorities, user.getUsername());
         this.user = Objects.requireNonNull(user, "user");
 

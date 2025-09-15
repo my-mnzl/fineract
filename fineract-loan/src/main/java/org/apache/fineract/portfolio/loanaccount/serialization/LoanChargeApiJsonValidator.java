@@ -285,6 +285,13 @@ public final class LoanChargeApiJsonValidator {
                         errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     }
                 break;
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
+                    if (loanCharge.isInstalmentFee()) {
+                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
+                    } else if (loanCharge.isSpecifiedDueDate()) {
+                        errorcode = "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                    }
+                break;
 
                 default:
                 break;
@@ -379,7 +386,8 @@ public final class LoanChargeApiJsonValidator {
 
                     if (!loanProduct.hasCurrencyCodeOf(chargeCurrencyCode)) {
                         final String errorMessage = "Charge and Loan must have the same currency.";
-                        // TODO: GeneralPlatformDomainRuleException vs PlatformApiDataValidationException
+                        // TODO: GeneralPlatformDomainRuleException vs
+                        // PlatformApiDataValidationException
                         throw new InvalidCurrencyException("loanCharge", "attach.to.loan", errorMessage);
                     }
                     if (chargeDefinition.isOverdueInstallment()) {
@@ -432,6 +440,14 @@ public final class LoanChargeApiJsonValidator {
                     }
                 break;
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
+                    if (chargeTime.isInstalmentFee()) {
+                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
+                    } else if (chargeTime.isSpecifiedDueDate()) {
+                        errorcode = "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                    }
+                break;
+
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
                     if (chargeTime.isInstalmentFee()) {
                         errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
                     } else if (chargeTime.isSpecifiedDueDate()) {
