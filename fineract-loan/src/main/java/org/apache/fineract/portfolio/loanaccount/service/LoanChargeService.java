@@ -178,7 +178,8 @@ public class LoanChargeService {
             transactionDate = loanCharge.getDueLocalDate();
             final LocalDate currentDate = DateUtils.getBusinessLocalDate();
 
-            // if loan charge is to be applied on a future date, the loan transaction would show today's date as applied
+            // if loan charge is to be applied on a future date, the loan transaction would
+            // show today's date as applied
             // date
             if (transactionDate == null || DateUtils.isAfter(transactionDate, currentDate)) {
                 transactionDate = currentDate;
@@ -233,7 +234,8 @@ public class LoanChargeService {
         loan.getLoanCharges().add(loanCharge);
         loan.setSummary(loan.updateSummaryWithTotalFeeChargesDueAtDisbursement(loan.deriveSumTotalOfChargesDueAtDisbursement()));
 
-        // store Id's of existing loan transactions and existing reversed loan transactions
+        // store Id's of existing loan transactions and existing reversed loan
+        // transactions
         final SingleLoanChargeRepaymentScheduleProcessingWrapper wrapper = new SingleLoanChargeRepaymentScheduleProcessingWrapper();
         wrapper.reprocess(loan.getCurrency(), loan.getDisbursementDate(), loan.getRepaymentScheduleInstallments(), loanCharge);
         loanBalanceService.updateLoanSummaryDerivedFields(loan);
@@ -249,6 +251,14 @@ public class LoanChargeService {
         return switch (loanCharge.getChargeCalculation()) {
             case PERCENT_OF_AMOUNT -> getDerivedAmountForCharge(loan, loanCharge);
             case PERCENT_OF_AMOUNT_AND_INTEREST -> {
+                final BigDecimal totalInterestCharged = loan.getTotalInterest();
+                if (loan.isMultiDisburmentLoan() && loanCharge.isDisbursementCharge()) {
+                    yield getTotalAllTrancheDisbursementAmount(loan).getAmount().add(totalInterestCharged);
+                } else {
+                    yield loan.getPrincipal().getAmount().add(totalInterestCharged);
+                }
+            }
+            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES -> {
                 final BigDecimal totalInterestCharged = loan.getTotalInterest();
                 if (loan.isMultiDisburmentLoan() && loanCharge.isDisbursementCharge()) {
                     yield getTotalAllTrancheDisbursementAmount(loan).getAmount().add(totalInterestCharged);
@@ -365,6 +375,7 @@ public class LoanChargeService {
                 break;
                 case PERCENT_OF_AMOUNT:
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
                 case PERCENT_OF_INTEREST:
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
                     loanCharge.setPercentage(newValue);
@@ -419,6 +430,7 @@ public class LoanChargeService {
             break;
             case PERCENT_OF_AMOUNT:
             case PERCENT_OF_AMOUNT_AND_INTEREST:
+            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
             case PERCENT_OF_INTEREST:
             case PERCENT_OF_DISBURSEMENT_AMOUNT:
                 loanCharge.setPercentage(chargeAmount);
@@ -445,7 +457,8 @@ public class LoanChargeService {
             switch (loanCharge.getChargeCalculation()) {
                 case PERCENT_OF_AMOUNT:
                     // If charge type is specified due date and loan is multi disburment loan.
-                    // Then we need to get as of this loan charge due date how much amount disbursed.
+                    // Then we need to get as of this loan charge due date how much amount
+                    // disbursed.
                     if (loanCharge.getLoan().isMultiDisburmentLoan() && loanCharge.isSpecifiedDueDate()) {
                         for (final LoanDisbursementDetails loanDisbursementDetails : loanCharge.getLoan().getDisbursementDetails()) {
                             if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), loanCharge.getDueDate())) {
@@ -765,6 +778,8 @@ public class LoanChargeService {
             case PERCENT_OF_AMOUNT -> installment.getPrincipalOutstanding(loan.getCurrency());
             case PERCENT_OF_AMOUNT_AND_INTEREST ->
                 installment.getPrincipalOutstanding(loan.getCurrency()).plus(installment.getInterestOutstanding(loan.getCurrency()));
+            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES ->
+                installment.getPrincipalOutstanding(loan.getCurrency()).plus(installment.getInterestOutstanding(loan.getCurrency()));
             case PERCENT_OF_INTEREST -> installment.getInterestOutstanding(loan.getCurrency());
             default -> Money.zero(loan.getCurrency());
         };
@@ -792,6 +807,7 @@ public class LoanChargeService {
                 break;
                 case PERCENT_OF_AMOUNT:
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
                 case PERCENT_OF_INTEREST:
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
                     loanCharge.setPercentage(amount);
@@ -832,6 +848,7 @@ public class LoanChargeService {
                 break;
                 case PERCENT_OF_AMOUNT:
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
                 case PERCENT_OF_INTEREST:
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
                     loanCharge.setPercentage(amount);
@@ -874,6 +891,8 @@ public class LoanChargeService {
             case PERCENT_OF_AMOUNT -> installment.getPrincipal(loan.getCurrency());
             case PERCENT_OF_AMOUNT_AND_INTEREST ->
                 installment.getPrincipal(loan.getCurrency()).plus(installment.getInterestCharged(loan.getCurrency()));
+            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES ->
+                installment.getPrincipal(loan.getCurrency()).plus(installment.getInterestCharged(loan.getCurrency()));
             case PERCENT_OF_INTEREST -> installment.getInterestCharged(loan.getCurrency());
             case PERCENT_OF_DISBURSEMENT_AMOUNT, INVALID, FLAT -> Money.zero(loan.getCurrency());
 
@@ -888,7 +907,8 @@ public class LoanChargeService {
             amount = loan.getApprovedPrincipal();
         } else {
             // If charge type is specified due date and loan is multi disburment loan.
-            // Then we need to get as of this loan charge due date how much amount disbursed.
+            // Then we need to get as of this loan charge due date how much amount
+            // disbursed.
             if (loanCharge.isSpecifiedDueDate() && loan.isMultiDisburmentLoan()) {
                 for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
                     if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), loanCharge.getDueDate())) {

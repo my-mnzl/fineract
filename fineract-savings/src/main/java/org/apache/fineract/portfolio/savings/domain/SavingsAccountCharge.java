@@ -289,6 +289,15 @@ public class SavingsAccountCharge extends AbstractAuditableWithUTCDateTimeCustom
                 this.amountWaived = null;
                 this.amountWrittenOff = null;
             break;
+            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
+                this.percentage = null;
+                this.amount = null;
+                this.amountPercentageAppliedTo = null;
+                this.amountPaid = null;
+                this.amountOutstanding = BigDecimal.ZERO;
+                this.amountWaived = null;
+                this.amountWrittenOff = null;
+            break;
             case PERCENT_OF_INTEREST:
                 this.percentage = null;
                 this.amount = null;
@@ -429,6 +438,12 @@ public class SavingsAccountCharge extends AbstractAuditableWithUTCDateTimeCustom
                     this.amountPercentageAppliedTo = null;
                     this.amountOutstanding = null;
                 break;
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
+                    this.percentage = amount;
+                    this.amount = null;
+                    this.amountPercentageAppliedTo = null;
+                    this.amountOutstanding = null;
+                break;
                 case PERCENT_OF_INTEREST:
                     this.percentage = amount;
                     this.amount = null;
@@ -499,6 +514,12 @@ public class SavingsAccountCharge extends AbstractAuditableWithUTCDateTimeCustom
                     this.amountOutstanding = calculateOutstanding();
                 break;
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
+                    this.percentage = newValue;
+                    this.amount = null;
+                    this.amountPercentageAppliedTo = null;
+                    this.amountOutstanding = null;
+                break;
+                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
                     this.percentage = newValue;
                     this.amount = null;
                     this.amountPercentageAppliedTo = null;

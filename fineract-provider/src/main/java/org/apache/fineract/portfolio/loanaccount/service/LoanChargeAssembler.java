@@ -48,6 +48,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanCharge;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanChargeRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanDisbursementDetails;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment; // pragma: allowlist secret
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTrancheDisbursementCharge;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
@@ -257,6 +258,11 @@ public class LoanChargeAssembler {
 
     public LoanCharge createNewFromJson(final Loan loan, final Charge chargeDefinition, final JsonCommand command,
             final LocalDate dueDate) {
+        return createNewFromJson(loan, chargeDefinition, command, dueDate, null);
+    }
+
+    public LoanCharge createNewFromJson(final Loan loan, final Charge chargeDefinition, final JsonCommand command, final LocalDate dueDate,
+            final LoanRepaymentScheduleInstallment installment) {
         final Locale locale = command.extractLocale();
         final BigDecimal amount = command.bigDecimalValueOfParameterNamed("amount", locale);
 
@@ -278,6 +284,27 @@ public class LoanChargeAssembler {
                             .add(command.bigDecimalValueOfParameterNamed("interest"));
                 } else {
                     amountPercentageAppliedTo = loan.getPrincipal().getAmount().add(loan.getTotalInterest());
+                }
+            break;
+            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
+                if (command.hasParameter("principal") && command.hasParameter("interest")) {
+                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("principal")
+                            .add(command.bigDecimalValueOfParameterNamed("interest"));
+                } else if (installment != null) {
+                    // For overdue installment charges, use installment-specific outstanding
+                    amountPercentageAppliedTo = installment.getPrincipalOutstanding(loan.getCurrency()).getAmount()
+                            .add(installment.getInterestOutstanding(loan.getCurrency()).getAmount());
+                } else {
+                    // For non-overdue charges, use loan totals
+                    amountPercentageAppliedTo = loan.getPrincipal().getAmount().add(loan.getTotalInterest());
+                }
+                // Add installment-specific penalty charges if installment is provided
+                if (installment != null) {
+                    amountPercentageAppliedTo = amountPercentageAppliedTo
+                            .add(installment.getPenaltyChargesOutstanding(loan.getCurrency()).getAmount());
+                } else {
+                    // Fallback to loan total penalties for non-overdue charges
+                    amountPercentageAppliedTo = amountPercentageAppliedTo.add(loan.getSummary().getTotalPenaltyChargesOutstanding());
                 }
             break;
             case PERCENT_OF_INTEREST:

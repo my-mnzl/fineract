@@ -20,13 +20,12 @@
 package org.apache.fineract.infrastructure.security.data;
 
 import java.util.Collection;
-import java.util.Objects;
-import java.util.HashSet;
 import java.util.Collections;
-
 import org.apache.fineract.useradministration.domain.AppUser; // pragma: allowlist secret
 import org.apache.fineract.useradministration.domain.Role; // pragma: allowlist secret
 import org.apache.fineract.useradministration.domain.Permission; // pragma: allowlist secret
+import java.util.HashSet;
+import java.util.Objects;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.jwt.Jwt;
