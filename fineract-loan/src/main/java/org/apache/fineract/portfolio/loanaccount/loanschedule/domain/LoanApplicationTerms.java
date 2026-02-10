@@ -19,6 +19,7 @@
 package org.apache.fineract.portfolio.loanaccount.loanschedule.domain;
 
 import jakarta.validation.constraints.NotNull;
+import java.math.RoundingMode;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -2241,6 +2242,19 @@ public final class LoanApplicationTerms {
 
     public void updateVariationDays(final long daysToAdd) {
         this.variationDays += daysToAdd;
+    }
+
+    /**
+     * Get the annual nominal interest rate divided by the number of days in the year.
+     */
+    public BigDecimal getDailyNominalInterestRate(RoundingMode roundingMode) {
+        double daysInYear = switch (daysInYearType) {
+            case DAYS_360 -> 360.0d;
+            case DAYS_364 -> 364.0d;
+            case DAYS_365 -> 365.0d;
+            default -> 365.0d;
+        };
+        return annualNominalInterestRate.divide(BigDecimal.valueOf(daysInYear), roundingMode);
     }
 
 }
