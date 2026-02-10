@@ -187,9 +187,15 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
         principalForThisInstallment = loanApplicationTerms.adjustPrincipalIfLastRepaymentPeriod(principalForThisInstallment,
                 totalCumulativePrincipalToDate, periodNumber);
 
-        // Handle cases where interest for first payment exceeds fixed EMI,
-        // and remaining principal causes final payment to exceed EMI as well.
-        // Adjust first payment to cover expected principal payment + all accrued interest.
+        // Handle cases where interest for first payment exceeds fixed EMI and
+        // - first period is extended and includes extra interest, and/or
+        // - remaining principal causes final payment to exceed EMI as well.
+        // Fix principal to the value it would be at if the first period were the normal length.
+        // Then apply a flat interest rate for the extra days:
+        // Adjusted first payment =
+        //   normal first period principal +
+        //   normal first period interest +
+        //   ((normal first period interest / normal first period days) * extra days)
         BigDecimal fixedEmiAmount = loanApplicationTerms.getFixedEmiAmount();
         if (periodNumber == 1 && fixedEmiAmount != null) {
             PrincipalInterest idealPrincipalInterest = getIdealPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
@@ -200,12 +206,61 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
             if (idealPrincipal.isGreaterThanZero()) {
                 principalForThisInstallment = idealPrincipal;
             }
+
+            LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
+            LocalDate interestChargedFromDate = loanApplicationTerms.getInterestChargedFromDate();
+            if (interestChargedFromDate != null) {
+                // Add 1 to include the interest charged from date in the extra days
+                int extraDays = DateUtils.getExactDifferenceInDays(interestChargedFromDate, alignedFirstPeriodStart) + 1;
+                if (extraDays > 0) {
+                    PrincipalInterest alignedPrincipalInterest = getAlignedPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
+                    Money alignedInterest = alignedPrincipalInterest.interest();
+                    BigDecimal dailyInterestRatePercentage = loanApplicationTerms.getDailyNominalInterestRate(mc.getRoundingMode());
+                    BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100.0d));
+                    Money interestPerDay = loanApplicationTerms.getPrincipal().multipliedBy(dailyInterestRate);
+                    Money extraInterest = interestPerDay.multipliedBy(extraDays);
+                    interestForThisInstallment = alignedInterest.plus(extraInterest);
+                }
+            }
         }
 
         PrincipalInterest principalInterest = new PrincipalInterest(principalForThisInstallment, interestForThisInstallment,
                 interestBroughtFowardDueToGrace);
         principalInterest.setRescheduleInterestPortion(loanApplicationTerms.getInterestTobeApproppriated());
         return principalInterest;
+    }
+
+    /**
+     * Get the aligned first period start date.
+     *
+     * Aligned in this context means that the disbursement date is exactly one
+     */
+    private LocalDate getAlignedFirstPeriodStart(final LoanApplicationTerms loanApplicationTerms) {
+        LocalDate alignedFirstPeriodEnd = loanApplicationTerms.getRepaymentsStartingFromLocalDate();
+        LocalDate alignedFirstPeriodStart = switch (loanApplicationTerms.getRepaymentPeriodFrequencyType()) {
+            case DAYS -> alignedFirstPeriodEnd.minusDays(loanApplicationTerms.getRepaymentEvery());
+            case WEEKS -> alignedFirstPeriodEnd.minusWeeks(loanApplicationTerms.getRepaymentEvery());
+            case MONTHS -> alignedFirstPeriodEnd.minusMonths(loanApplicationTerms.getRepaymentEvery());
+            case YEARS -> alignedFirstPeriodEnd.minusYears(loanApplicationTerms.getRepaymentEvery());
+            default -> alignedFirstPeriodEnd.minusMonths(loanApplicationTerms.getRepaymentEvery());
+        };
+        return alignedFirstPeriodStart;
+    }
+
+    /**
+     * Calculate the aligned principal and interest for the first payment period.
+     *
+     * Aligned in this context means that the disbursement date is exactly one
+     * period prior to the first payment date.
+     */
+    private PrincipalInterest getAlignedPrincipalInterest(final LoanApplicationTerms loanApplicationTerms,
+            final PaymentPeriodsInOneYearCalculator calculator, final MathContext mc, final Money outstandingBalance) {
+        LocalDate alignedFirstPeriodEnd = loanApplicationTerms.getRepaymentsStartingFromLocalDate();
+        LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
+
+        PrincipalInterest alignedPrincipalInterest = loanApplicationTerms.calculateTotalInterestForPeriod(calculator, BigDecimal.ZERO, 1, mc,
+                Money.zero(loanApplicationTerms.getCurrency()), outstandingBalance, alignedFirstPeriodStart, alignedFirstPeriodEnd);
+        return alignedPrincipalInterest;
     }
 
     /**
