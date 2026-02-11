@@ -207,18 +207,19 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
                 principalForThisInstallment = idealPrincipal;
             }
 
-            LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
             LocalDate interestChargedFromDate = loanApplicationTerms.getInterestChargedFromDate();
             if (interestChargedFromDate != null) {
-                // Add 1 to include the interest charged from date in the extra days
-                int extraDays = DateUtils.getExactDifferenceInDays(interestChargedFromDate, alignedFirstPeriodStart) + 1;
+                // Subtract 1 day to include the interest charged from date itself in the extra days
+                LocalDate extraPeriodStartDate = interestChargedFromDate.minusDays(1);
+                LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
+                int extraDays = DateUtils.getExactDifferenceInDays(extraPeriodStartDate, alignedFirstPeriodStart);
                 if (extraDays > 0) {
                     PrincipalInterest alignedPrincipalInterest = getAlignedPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
                     Money alignedInterest = alignedPrincipalInterest.interest();
-                    BigDecimal dailyInterestRatePercentage = loanApplicationTerms.getDailyNominalInterestRate(mc.getRoundingMode());
-                    BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100.0d));
-                    Money interestPerDay = loanApplicationTerms.getPrincipal().multipliedBy(dailyInterestRate);
-                    Money extraInterest = interestPerDay.multipliedBy(extraDays);
+
+                    Money extraInterest = calculateExtraInterestWithRateChanges(loanApplicationTerms, calculator, mc,
+                            outstandingBalance, extraPeriodStartDate, alignedFirstPeriodStart, termVariations);
+
                     interestForThisInstallment = alignedInterest.plus(extraInterest);
                 }
             }
@@ -283,5 +284,80 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
         PrincipalInterest idealPrincipalInterest = loanApplicationTerms.calculateTotalInterestForPeriod(calculator, BigDecimal.ZERO, 1, mc,
                 Money.zero(loanApplicationTerms.getCurrency()), outstandingBalance, idealFirstPeriodStart, idealFirstPeriodEnd);
         return idealPrincipalInterest;
+    }
+
+    /**
+     * Calculate extra interest for extended first periods, reflecting rate changes during the extra days period.
+     *
+     * Splits the extra days period at any interest rate change dates and
+     * calculates interest for each segment using the appropriate rate,
+     * ensuring accurate calculation when floating rates change during the
+     * extended period.
+     */
+    private Money calculateExtraInterestWithRateChanges(final LoanApplicationTerms loanApplicationTerms,
+            final PaymentPeriodsInOneYearCalculator calculator, final MathContext mc, final Money outstandingBalance,
+            final LocalDate extraPeriodStart, final LocalDate extraPeriodEnd,
+            final Collection<LoanTermVariationsData> termVariations) {
+
+        Money extraInterest = outstandingBalance.zero();
+
+        // Interest rate changes that apply during the extra days period
+        TreeMap<LocalDate, BigDecimal> interestRates = new TreeMap<>();
+        BigDecimal currentRate = loanApplicationTerms.getAnnualNominalInterestRate();
+
+        for (LoanTermVariationsData loanTermVariation : termVariations) {
+            if (loanTermVariation.getTermVariationType().isInterestRateVariation()
+                    && loanTermVariation.isApplicable(extraPeriodStart, extraPeriodEnd)) {
+                LocalDate fromDate = loanTermVariation.getTermVariationApplicableFrom();
+                if (fromDate == null) {
+                    fromDate = extraPeriodStart;
+                }
+                if (!DateUtils.isBefore(fromDate, extraPeriodStart) && !DateUtils.isAfter(fromDate, extraPeriodEnd)) {
+                    interestRates.put(fromDate, loanTermVariation.getDecimalValue());
+                }
+            }
+        }
+
+        LocalDate segmentStart = extraPeriodStart;
+        BigDecimal segmentRate = currentRate;
+        BigDecimal originalRate = loanApplicationTerms.getAnnualNominalInterestRate();
+
+        try {
+            for (Map.Entry<LocalDate, BigDecimal> rateChange : interestRates.entrySet()) {
+                LocalDate rateChangeDate = rateChange.getKey();
+
+                if (DateUtils.isBefore(segmentStart, rateChangeDate)) {
+                    int daysInSegment = DateUtils.getExactDifferenceInDays(segmentStart, rateChangeDate);
+                    if (daysInSegment > 0) {
+                        loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
+                        Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, daysInSegment);
+                        extraInterest = extraInterest.plus(segmentInterest);
+                    }
+                }
+
+                segmentStart = rateChangeDate;
+                segmentRate = rateChange.getValue();
+            }
+
+            if (!DateUtils.isAfter(segmentStart, extraPeriodEnd)) {
+                int daysInSegment = DateUtils.getExactDifferenceInDays(segmentStart, extraPeriodEnd);
+                if (daysInSegment > 0) {
+                    loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
+                    Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, daysInSegment);
+                    extraInterest = extraInterest.plus(segmentInterest);
+                }
+            }
+        } finally {
+            loanApplicationTerms.updateAnnualNominalInterestRate(originalRate);
+        }
+
+        return extraInterest;
+    }
+
+    private Money calculateInterestForSegment(final LoanApplicationTerms loanApplicationTerms, final MathContext mc, final int daysInSegment) {
+        BigDecimal dailyInterestRatePercentage = loanApplicationTerms.getDailyNominalInterestRate(mc.getRoundingMode());
+        BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100.0d), mc);
+        Money interestPerDay = loanApplicationTerms.getPrincipal().multipliedBy(dailyInterestRate);
+        return interestPerDay.multipliedBy(BigDecimal.valueOf(daysInSegment));
     }
 }
