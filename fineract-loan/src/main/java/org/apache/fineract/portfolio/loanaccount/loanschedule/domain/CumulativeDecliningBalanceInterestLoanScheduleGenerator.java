@@ -236,7 +236,7 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
      * Aligned in this context means that the disbursement date is exactly one
      */
     private LocalDate getAlignedFirstPeriodStart(final LoanApplicationTerms loanApplicationTerms) {
-        LocalDate alignedFirstPeriodEnd = loanApplicationTerms.getRepaymentsStartingFromLocalDate();
+        LocalDate alignedFirstPeriodEnd = loanApplicationTerms.getSeedDate();
         LocalDate alignedFirstPeriodStart = switch (loanApplicationTerms.getRepaymentPeriodFrequencyType()) {
             case DAYS -> alignedFirstPeriodEnd.minusDays(loanApplicationTerms.getRepaymentEvery());
             case WEEKS -> alignedFirstPeriodEnd.minusWeeks(loanApplicationTerms.getRepaymentEvery());
@@ -255,7 +255,7 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
      */
     private PrincipalInterest getAlignedPrincipalInterest(final LoanApplicationTerms loanApplicationTerms,
             final PaymentPeriodsInOneYearCalculator calculator, final MathContext mc, final Money outstandingBalance) {
-        LocalDate alignedFirstPeriodEnd = loanApplicationTerms.getRepaymentsStartingFromLocalDate();
+        LocalDate alignedFirstPeriodEnd = loanApplicationTerms.getSeedDate();
         LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
 
         PrincipalInterest alignedPrincipalInterest = loanApplicationTerms.calculateTotalInterestForPeriod(calculator, BigDecimal.ZERO, 1, mc,
