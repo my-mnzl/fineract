@@ -197,7 +197,10 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
         //   normal first period interest +
         //   ((normal first period interest / normal first period days) * extra days)
         BigDecimal fixedEmiAmount = loanApplicationTerms.getFixedEmiAmount();
-        if (periodNumber == 1 && fixedEmiAmount != null) {
+        LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
+        boolean isExtendedFirstPeriod = periodNumber == 1
+                && DateUtils.isBefore(periodStartDate, alignedFirstPeriodStart);
+        if (periodNumber == 1 && fixedEmiAmount != null && isExtendedFirstPeriod) {
             PrincipalInterest idealPrincipalInterest = getIdealPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
             Money normalEmi = loanApplicationTerms.pmtForInstallment(calculator, outstandingBalance, 1, mc);
             Money idealInterest = idealPrincipalInterest.interest();
@@ -211,7 +214,6 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
             if (interestChargedFromDate != null) {
                 // Subtract 1 day to include the interest charged from date itself in the extra days
                 LocalDate extraPeriodStartDate = interestChargedFromDate.minusDays(1);
-                LocalDate alignedFirstPeriodStart = getAlignedFirstPeriodStart(loanApplicationTerms);
                 int extraDays = DateUtils.getExactDifferenceInDays(extraPeriodStartDate, alignedFirstPeriodStart);
                 if (extraDays > 0) {
                     PrincipalInterest alignedPrincipalInterest = getAlignedPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
