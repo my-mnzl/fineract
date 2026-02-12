@@ -23,6 +23,7 @@ import java.math.RoundingMode;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
+import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -1170,9 +1171,18 @@ public final class LoanApplicationTerms {
                             CalendarUtils.getMeetingFrequencyFromPeriodFrequencyType(getLoanTermPeriodFrequencyType()),
                             this.holidayDetailDTO.getWorkingDays(), isSkipRepaymentOnFirstDayOfMonth, numberOfDays);
                 }
-                int daysLeftAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths, endDate) + diffDays;
-                int daysInPeriodAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths,
-                        endDateAfterConsideringMonths);
+                int daysLeftAfterMonths;
+                int daysInPeriodAfterMonths;
+
+                if (this.daysInMonthType.isDaysInMonth_30()) {
+                    daysInPeriodAfterMonths = 30;
+                    daysLeftAfterMonths = getDifferenceInDaysFor30DayMonth(startDateAfterConsideringMonths, endDate) + diffDays;
+                } else {
+                    daysLeftAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths, endDate) + diffDays;
+                    daysInPeriodAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths,
+                            endDateAfterConsideringMonths);
+                }
+
                 numberOfPeriods = numberOfPeriods.add(BigDecimal.valueOf(numberOfMonths))
                         .add(BigDecimal.valueOf((double) daysLeftAfterMonths / daysInPeriodAfterMonths));
             break;
@@ -2268,6 +2278,44 @@ public final class LoanApplicationTerms {
             default -> 365.0d;
         };
         return annualNominalInterestRate.divide(BigDecimal.valueOf(daysInYear), roundingMode);
+    }
+
+    public DaysInMonthType getDaysInMonthType() {
+        return daysInMonthType;
+    }
+
+    /**
+     * Calculate the number of days between two dates using the 30-day month convention.
+     * This method treats every month as having exactly 30 days, regardless of the actual
+     * calendar days in the month.
+     */
+    public static int getDifferenceInDaysFor30DayMonth(final LocalDate startDate, final LocalDate endDate) {
+        if (startDate.isAfter(endDate) || startDate.equals(endDate)) {
+            return 0;
+        }
+
+        int startDay = startDate.getDayOfMonth();
+        int endDay = endDate.getDayOfMonth();
+
+        // Same month
+        if (startDate.getMonthValue() == endDate.getMonthValue() && startDate.getYear() == endDate.getYear()) {
+            return Math.min(30, endDay) - startDay;
+        }
+
+        int daysRemainingInStartMonth = Math.max(0, 30 - startDay);
+
+        LocalDate startOfNextMonth = startDate.withDayOfMonth(1).plusMonths(1);
+        LocalDate endOfStartMonth = endDate.withDayOfMonth(1);
+
+        int fullMonthsBetween = 0;
+        if (!startOfNextMonth.isAfter(endOfStartMonth)) {
+            Period period = Period.between(startOfNextMonth, endOfStartMonth);
+            fullMonthsBetween = period.getYears() * 12 + period.getMonths();
+        }
+
+        int daysIntoEndMonth = endDay == 1 ? 0 : endDay - 1;
+
+        return Math.max(0, daysRemainingInStartMonth + (fullMonthsBetween * 30) + daysIntoEndMonth);
     }
 
 }
