@@ -187,12 +187,8 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
         principalForThisInstallment = loanApplicationTerms.adjustPrincipalIfLastRepaymentPeriod(principalForThisInstallment,
                 totalCumulativePrincipalToDate, periodNumber);
 
-        // Lock the principal to what it would be for a full-length first period,
-        // and lock the interest to a full first period's interest + a flat interest rate for any extra days:
-        // Adjusted first payment =
-        //   normal first period principal +
-        //   normal first period interest +
-        //   ((normal first period interest / normal first period days) * extra days)
+        // Lock the principal to what it would be for a full-length first period.
+        // Apply flat interest for any days between disbursement and first payment.
         BigDecimal fixedEmiAmount = loanApplicationTerms.getFixedEmiAmount();
         if (periodNumber == 1 && fixedEmiAmount != null) {
             PrincipalInterest idealPrincipalInterest = getIdealPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
@@ -207,9 +203,9 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
             if (interestChargedFromDate != null) {
                 int interestPeriodDays = getDifferenceInDays(interestChargedFromDate, periodEndDate, loanApplicationTerms);
                 if (interestPeriodDays > 0) {
-                    Money extraInterest = calculateExtraInterestWithRateChanges(loanApplicationTerms, calculator, mc,
+                    Money fixedInterest = calculateFixedInterestWithRateChanges(loanApplicationTerms, calculator, mc,
                         outstandingBalance, interestChargedFromDate, periodEndDate, termVariations);
-                    interestForThisInstallment = interestForThisInstallment.plus(extraInterest);
+                    interestForThisInstallment = fixedInterest;
                 }
             }
         }
@@ -243,16 +239,16 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
     }
 
     /**
-     * Calculate extra interest for extended first periods, reflecting rate changes during the extra days period.
+     * Calculate fixed interest for extended first periods, reflecting rate changes during the period.
      *
      * Splits the extra days period at any interest rate change dates and
      * calculates interest for each segment using the appropriate rate,
      * ensuring accurate calculation when floating rates change during the
      * extended period.
      */
-    private Money calculateExtraInterestWithRateChanges(final LoanApplicationTerms loanApplicationTerms,
+    private Money calculateFixedInterestWithRateChanges(final LoanApplicationTerms loanApplicationTerms,
             final PaymentPeriodsInOneYearCalculator calculator, final MathContext mc, final Money outstandingBalance,
-            final LocalDate extraPeriodStart, final LocalDate extraPeriodEnd,
+            final LocalDate periodStart, final LocalDate periodEnd,
             final Collection<LoanTermVariationsData> termVariations) {
 
         Money extraInterest = outstandingBalance.zero();
@@ -263,18 +259,18 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
 
         for (LoanTermVariationsData loanTermVariation : termVariations) {
             if (loanTermVariation.getTermVariationType().isInterestRateVariation()
-                    && loanTermVariation.isApplicable(extraPeriodStart, extraPeriodEnd)) {
+                    && loanTermVariation.isApplicable(periodStart, periodEnd)) {
                 LocalDate fromDate = loanTermVariation.getTermVariationApplicableFrom();
                 if (fromDate == null) {
-                    fromDate = extraPeriodStart;
+                    fromDate = periodStart;
                 }
-                if (!DateUtils.isBefore(fromDate, extraPeriodStart) && !DateUtils.isAfter(fromDate, extraPeriodEnd)) {
+                if (!DateUtils.isBefore(fromDate, periodStart) && !DateUtils.isAfter(fromDate, periodEnd)) {
                     interestRates.put(fromDate, loanTermVariation.getDecimalValue());
                 }
             }
         }
 
-        LocalDate segmentStart = extraPeriodStart;
+        LocalDate segmentStart = periodStart;
         BigDecimal segmentRate = currentRate;
         BigDecimal originalRate = loanApplicationTerms.getAnnualNominalInterestRate();
 
@@ -295,8 +291,8 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
                 segmentRate = rateChange.getValue();
             }
 
-            if (!DateUtils.isAfter(segmentStart, extraPeriodEnd)) {
-                int daysInSegment = getDifferenceInDays(segmentStart, extraPeriodEnd, loanApplicationTerms);
+            if (!DateUtils.isAfter(segmentStart, periodEnd)) {
+                int daysInSegment = getDifferenceInDays(segmentStart, periodEnd, loanApplicationTerms);
                 if (daysInSegment > 0) {
                     loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
                     Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, daysInSegment);
