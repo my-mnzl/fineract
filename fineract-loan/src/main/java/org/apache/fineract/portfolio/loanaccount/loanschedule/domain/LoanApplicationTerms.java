@@ -2255,7 +2255,7 @@ public final class LoanApplicationTerms {
     }
 
     /**
-     * Get the annual nominal interest rate divided by the number of days in the year.
+     * Get the annual nominal interest rate divided by the number of days in the year (as percentage).
      */
     public BigDecimal getDailyNominalInterestRate(RoundingMode roundingMode) {
         double daysInYear = switch (daysInYearType) {
@@ -2265,6 +2265,20 @@ public final class LoanApplicationTerms {
             default -> 365.0d;
         };
         return annualNominalInterestRate.divide(BigDecimal.valueOf(daysInYear), roundingMode);
+    }
+
+    /**
+     * Get the annual nominal interest rate divided by the number of days in the year (as percentage),
+     * using MathContext for full precision.
+     */
+    public BigDecimal getDailyNominalInterestRate(MathContext mc) {
+        BigDecimal daysInYear = BigDecimal.valueOf(switch (daysInYearType) {
+            case DAYS_360 -> 360;
+            case DAYS_364 -> 364;
+            case DAYS_365 -> 365;
+            default -> 365;
+        });
+        return annualNominalInterestRate.divide(daysInYear, mc);
     }
 
     public DaysInMonthType getDaysInMonthType() {

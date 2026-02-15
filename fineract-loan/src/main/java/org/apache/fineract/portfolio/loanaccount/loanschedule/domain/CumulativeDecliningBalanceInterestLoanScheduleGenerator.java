@@ -314,9 +314,11 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
     }
 
     private Money calculateInterestForSegment(final LoanApplicationTerms loanApplicationTerms, final MathContext mc, final int daysInSegment) {
-        BigDecimal dailyInterestRatePercentage = loanApplicationTerms.getDailyNominalInterestRate(mc.getRoundingMode());
-        BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100.0d), mc);
-        Money interestPerDay = loanApplicationTerms.getPrincipal().multipliedBy(dailyInterestRate);
-        return interestPerDay.multipliedBy(BigDecimal.valueOf(daysInSegment));
+        BigDecimal dailyInterestRatePercentage = loanApplicationTerms.getDailyNominalInterestRate(mc);
+        BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100), mc);
+        BigDecimal totalInterest = loanApplicationTerms.getPrincipal().getAmount()
+                .multiply(dailyInterestRate, mc)
+                .multiply(BigDecimal.valueOf(daysInSegment), mc);
+        return Money.of(loanApplicationTerms.getCurrency(), totalInterest, mc);
     }
 }
