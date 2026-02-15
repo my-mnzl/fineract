@@ -187,26 +187,34 @@ public class CumulativeDecliningBalanceInterestLoanScheduleGenerator extends Abs
         principalForThisInstallment = loanApplicationTerms.adjustPrincipalIfLastRepaymentPeriod(principalForThisInstallment,
                 totalCumulativePrincipalToDate, periodNumber);
 
-        // Lock the principal to what it would be for a full-length first period.
-        // Apply flat interest for any days between disbursement and first payment.
         BigDecimal fixedEmiAmount = loanApplicationTerms.getFixedEmiAmount();
         if (periodNumber == 1 && fixedEmiAmount != null) {
             PrincipalInterest idealPrincipalInterest = getIdealPrincipalInterest(loanApplicationTerms, calculator, mc, outstandingBalance);
             Money normalEmi = loanApplicationTerms.pmtForInstallment(calculator, outstandingBalance, 1, mc);
+            Money idealPrincipal = normalEmi.minus(idealPrincipalInterest.interest());
             Money idealInterest = idealPrincipalInterest.interest();
-            Money idealPrincipal = normalEmi.minus(idealInterest);
 
             principalForThisInstallment = idealPrincipal;
             interestForThisInstallment = idealInterest;
 
             LocalDate interestChargedFromDate = loanApplicationTerms.getInterestChargedFromDate();
-            if (interestChargedFromDate != null) {
-                int interestPeriodDays = getDifferenceInDays(interestChargedFromDate, periodEndDate, loanApplicationTerms);
-                if (interestPeriodDays > 0) {
-                    Money fixedInterest = calculateFixedInterestWithRateChanges(loanApplicationTerms, calculator, mc,
-                        outstandingBalance, interestChargedFromDate, periodEndDate, termVariations);
-                    interestForThisInstallment = fixedInterest;
-                }
+            LocalDate interestStartForFirstPeriod = interestChargedFromDate != null
+                    ? interestChargedFromDate
+                    : loanApplicationTerms.getExpectedDisbursementDate();
+            LocalDate idealFirstPeriodStart = loanApplicationTerms.getExpectedDisbursementDate();
+            LocalDate idealFirstPeriodEnd = switch (loanApplicationTerms.getRepaymentPeriodFrequencyType()) {
+                case DAYS -> idealFirstPeriodStart.plusDays(loanApplicationTerms.getRepaymentEvery());
+                case WEEKS -> idealFirstPeriodStart.plusWeeks(loanApplicationTerms.getRepaymentEvery());
+                case MONTHS -> idealFirstPeriodStart.plusMonths(loanApplicationTerms.getRepaymentEvery());
+                case YEARS -> idealFirstPeriodStart.plusYears(loanApplicationTerms.getRepaymentEvery());
+                default -> idealFirstPeriodStart.plusMonths(loanApplicationTerms.getRepaymentEvery());
+            };
+            int idealPeriodDays = getDifferenceInDays(idealFirstPeriodStart, idealFirstPeriodEnd, loanApplicationTerms);
+            int actualPeriodDays = getDifferenceInDays(interestStartForFirstPeriod, periodEndDate, loanApplicationTerms);
+            if (actualPeriodDays != idealPeriodDays && actualPeriodDays > 0) {
+                Money fixedInterest = calculateFixedInterestWithRateChanges(loanApplicationTerms, calculator, mc,
+                    outstandingBalance, interestStartForFirstPeriod, periodEndDate, termVariations);
+                interestForThisInstallment = fixedInterest;
             }
         }
 
