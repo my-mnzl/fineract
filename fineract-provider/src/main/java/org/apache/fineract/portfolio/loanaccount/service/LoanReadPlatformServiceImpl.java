@@ -1837,10 +1837,10 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 -- this is to identify the applicable rates when base rate is changed
                 LEFT JOIN m_floating_rates bfr ON bfr.is_base_lending_rate = TRUE
                 LEFT JOIN m_floating_rates_periods bfrp ON bfr.id = bfrp.floating_rates_id AND bfrp.created_date >= ?
-                WHERE l.loan_status_id = ?
+                WHERE l.loan_status_id IN (?, ?, ?)
                   AND l.is_npa = FALSE
                   AND l.is_charged_off = FALSE
-                  AND dd.is_reversed = FALSE
+                  AND (dd.is_reversed = FALSE OR dd.is_reversed IS NULL)
                   AND (
                         (l.interest_recalculation_enabled = TRUE
                             AND (l.interest_recalcualated_on IS NULL OR l.interest_recalcualated_on <> ?)
@@ -1863,8 +1863,9 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
             LocalDate currentdate = DateUtils.getBusinessLocalDate();
             // will look only for yesterday modified rates
             LocalDate yesterday = DateUtils.getBusinessLocalDate().minusDays(1);
-            return this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday, LoanStatus.ACTIVE.getValue(), currentdate,
-                    currentdate, currentdate);
+            return this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday,
+                LoanStatus.SUBMITTED_AND_PENDING_APPROVAL.getValue(), LoanStatus.APPROVED.getValue(), LoanStatus.ACTIVE.getValue(),
+                currentdate, currentdate, currentdate);
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }
@@ -1896,7 +1897,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 -- this is to identify the applicable rates when base rate is changed
                 LEFT JOIN m_floating_rates bfr ON bfr.is_base_lending_rate = TRUE
                 LEFT JOIN m_floating_rates_periods bfrp ON bfr.id = bfrp.floating_rates_id AND bfrp.created_date >= ?
-                WHERE l.loan_status_id = ?
+                WHERE l.loan_status_id IN (?, ?, ?)
                     AND l.is_npa = FALSE
                     AND l.is_charged_off = FALSE
                     AND (
@@ -1921,7 +1922,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
                 """;
         try {
             return Collections.synchronizedList(this.jdbcTemplate.queryForList(sql, Long.class, currentdate, yesterday,
-                    LoanStatus.ACTIVE.getValue(), currentdate, currentdate, currentdate, maxLoanIdInList, officeHierarchy, pageSize));
+                    LoanStatus.SUBMITTED_AND_PENDING_APPROVAL.getValue(), LoanStatus.APPROVED.getValue(), LoanStatus.ACTIVE.getValue(),
+                    currentdate, currentdate, currentdate, maxLoanIdInList, officeHierarchy, pageSize));
         } catch (final EmptyResultDataAccessException e) {
             return null;
         }
