@@ -531,8 +531,8 @@ public class FineractProperties {
 
             private boolean enabled;
             private boolean useJwtPermissions;
-            private String jwtPermissionsClaimName;
-            private boolean fallbackToDatabasePermissions;
+            private String jwtPermissionsClaimName = "permissions";
+            private boolean fallbackToDatabasePermissions = true;
             private ClientProperties client;
 
             @Getter
