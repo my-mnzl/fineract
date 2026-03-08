@@ -20,7 +20,6 @@ package org.apache.fineract.portfolio.charge.service;
 
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.portfolio.charge.domain.ChargeAppliesTo;
-import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
@@ -133,45 +132,6 @@ public final class ChargeEnumerations {
             default:
                 optionData = new EnumOptionData(ChargeAppliesTo.INVALID.getValue().longValue(), ChargeAppliesTo.INVALID.getCode(),
                         "Invalid");
-            break;
-        }
-        return optionData;
-    }
-
-    public static EnumOptionData chargeCalculationType(final int id) {
-        return chargeCalculationType(ChargeCalculationType.fromInt(id));
-    }
-
-    public static EnumOptionData chargeCalculationType(final ChargeCalculationType type) {
-        EnumOptionData optionData = null;
-        switch (type) {
-            case FLAT:
-                optionData = new EnumOptionData(ChargeCalculationType.FLAT.getValue().longValue(), ChargeCalculationType.FLAT.getCode(),
-                        "Flat");
-            break;
-            case PERCENT_OF_AMOUNT:
-                optionData = new EnumOptionData(ChargeCalculationType.PERCENT_OF_AMOUNT.getValue().longValue(),
-                        ChargeCalculationType.PERCENT_OF_AMOUNT.getCode(), "% Amount");
-            break;
-            case PERCENT_OF_AMOUNT_AND_INTEREST:
-                optionData = new EnumOptionData(ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST.getValue().longValue(),
-                        ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST.getCode(), "% Loan Amount + Interest");
-            break;
-            case PERCENT_OF_INTEREST:
-                optionData = new EnumOptionData(ChargeCalculationType.PERCENT_OF_INTEREST.getValue().longValue(),
-                        ChargeCalculationType.PERCENT_OF_INTEREST.getCode(), "% Interest");
-            break;
-            case PERCENT_OF_DISBURSEMENT_AMOUNT:
-                optionData = new EnumOptionData(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue().longValue(),
-                        ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getCode(), "% Disbursement Amount");
-            break;
-            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
-                optionData = new EnumOptionData(ChargeCalculationType.PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES.getValue().longValue(),
-                        ChargeCalculationType.PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES.getCode(), "% Amount + Interest + Penalties");
-            break;
-            default:
-                optionData = new EnumOptionData(ChargeCalculationType.INVALID.getValue().longValue(),
-                        ChargeCalculationType.INVALID.getCode(), "Invalid");
             break;
         }
         return optionData;

@@ -19,9 +19,9 @@
 
 package org.apache.fineract.infrastructure.jobs.exception;
 
-import java.util.List;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -37,13 +37,12 @@ public class TruncatedJobExecutionException extends JobExecutionException {
     public String getMessage() {
         String truncated = truncateMessage(super.getMessage());
         int totalErrors = getCauses().size();
-        return truncated + "\n\n[ERROR LOG TRUNCATED - Total errors: " + totalErrors +
-                " - Full details logged separately]";
+        return truncated + "\n\n[ERROR LOG TRUNCATED - Total errors: " + totalErrors + " - Full details logged separately]";
     }
 
     @Override
     public void printStackTrace() {
-        log.error("{}", getMessage());
+        log.error("Truncated job execution error: {}", getMessage());
     }
 
     @Override
@@ -64,7 +63,8 @@ public class TruncatedJobExecutionException extends JobExecutionException {
         } else {
             // Find the largest substring whose UTF-8 bytes fit within the limit
             int end = message.length();
-            int low = 0, high = end;
+            int low = 0;
+            int high = end;
             while (low < high) {
                 int mid = (low + high + 1) / 2;
                 String sub = message.substring(0, mid);

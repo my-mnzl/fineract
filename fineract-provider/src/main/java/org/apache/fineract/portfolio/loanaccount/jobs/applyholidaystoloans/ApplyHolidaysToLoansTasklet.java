@@ -40,8 +40,8 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
-import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.DefaultScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.springframework.batch.core.StepContribution;
@@ -61,6 +61,7 @@ public class ApplyHolidaysToLoansTasklet implements Tasklet {
     private final LoanUtilService loanUtilService;
     private final BusinessEventNotifierService businessEventNotifierService;
     private final LoanTermVariationsMapper loanTermVariationsMapper;
+    private final ScheduledDateGenerator scheduledDateGenerator;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
@@ -120,7 +121,6 @@ public class ApplyHolidaysToLoansTasklet implements Tasklet {
     }
 
     private void adjustRepaymentSchedules(Loan loan, Holiday holiday, LocalDate adjustedRescheduleToDate) {
-        final DefaultScheduledDateGenerator scheduledDateGenerator = new DefaultScheduledDateGenerator();
         ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, holiday.getFromDate());
         final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO,
                 loan);
@@ -153,7 +153,6 @@ public class ApplyHolidaysToLoansTasklet implements Tasklet {
     }
 
     private void adjustAllRepaymentSchedules(Loan loan, Holiday holiday, LocalDate adjustedRescheduleToDate) {
-        final DefaultScheduledDateGenerator scheduledDateGenerator = new DefaultScheduledDateGenerator();
         ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loan, holiday.getFromDate());
         final LoanApplicationTerms loanApplicationTerms = loanTermVariationsMapper.constructLoanApplicationTerms(scheduleGeneratorDTO,
                 loan);

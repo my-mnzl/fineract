@@ -34,6 +34,7 @@ import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 import org.apache.fineract.portfolio.charge.exception.SavingsAccountChargeNotFoundException;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeDropdownReadPlatformService;
 import org.apache.fineract.portfolio.charge.service.ChargeEnumerations;
 import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
@@ -51,22 +52,25 @@ public class SavingsAccountChargeReadPlatformServiceImpl implements SavingsAccou
     private final ChargeDropdownReadPlatformService chargeDropdownReadPlatformService;
     private final DropdownReadPlatformService dropdownReadPlatformService;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
+    private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
 
     // mappers
     private final SavingsAccountChargeDueMapper chargeDueMapper;
 
     public SavingsAccountChargeReadPlatformServiceImpl(final PlatformSecurityContext context,
             final ChargeDropdownReadPlatformService chargeDropdownReadPlatformService, final JdbcTemplate jdbcTemplate,
-            final DropdownReadPlatformService dropdownReadPlatformService, DatabaseSpecificSQLGenerator sqlGenerator) {
+            final DropdownReadPlatformService dropdownReadPlatformService, DatabaseSpecificSQLGenerator sqlGenerator,
+            ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
         this.context = context;
         this.chargeDropdownReadPlatformService = chargeDropdownReadPlatformService;
         this.jdbcTemplate = jdbcTemplate;
         this.sqlGenerator = sqlGenerator;
         this.chargeDueMapper = new SavingsAccountChargeDueMapper();
         this.dropdownReadPlatformService = dropdownReadPlatformService;
+        this.chargeCalculationOptionDataService = chargeCalculationOptionDataService;
     }
 
-    private static final class SavingsAccountChargeMapper implements RowMapper<SavingsAccountChargeData> {
+    private final class SavingsAccountChargeMapper implements RowMapper<SavingsAccountChargeData> {
 
         public String schema() {
             return "sc.id as id, c.id as chargeId, sc.savings_account_id as accountId, c.name as name, " + "sc.amount as amountDue, "
@@ -123,7 +127,7 @@ public class SavingsAccountChargeReadPlatformServiceImpl implements SavingsAccou
             }
 
             final int chargeCalculation = rs.getInt("chargeCalculation");
-            final EnumOptionData chargeCalculationType = ChargeEnumerations.chargeCalculationType(chargeCalculation);
+            final EnumOptionData chargeCalculationType = chargeCalculationOptionDataService.optionData(chargeCalculation);
             final boolean penalty = rs.getBoolean("penalty");
             final Boolean isActive = rs.getBoolean("isActive");
             final LocalDate inactivationDate = JdbcSupport.getLocalDate(rs, "inactivationDate");

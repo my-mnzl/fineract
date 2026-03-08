@@ -22,6 +22,23 @@ apply plugin: 'java'
 apply plugin: 'com.google.cloud.tools.jib'
 apply from: "${rootDir}/buildSrc/src/main/groovy/org.apache.fineract.dependencies.gradle"
 
+def customDockerProjects = []
+file("${rootDir}/custom").eachDir { companyDir ->
+    if (!['build', 'docker', 'acme'].contains(companyDir.name)) {
+        file("${rootDir}/custom/${companyDir.name}").eachDir { categoryDir ->
+            if ('build' != categoryDir.name) {
+                file("${rootDir}/custom/${companyDir.name}/${categoryDir.name}").eachDir { moduleDir ->
+                    if ('build' != moduleDir.name && file("${moduleDir}/build.gradle").exists()) {
+                        customDockerProjects << project(":custom:${companyDir.name}:${categoryDir.name}:${moduleDir.name}")
+                    }
+                }
+            }
+        }
+    }
+}
+def customDockerJarTasks = customDockerProjects.collect { it.tasks.named('jar') }
+def customDockerJars = files(customDockerJarTasks.collect { it.flatMap { task -> task.archiveFile } })
+
 jib {
     from {
         image = 'azul/zulu-openjdk-alpine:21'
@@ -60,20 +77,7 @@ jib {
     dependencies {
         implementation project(':fineract-core')
         implementation project(':fineract-provider')
-        // NOTE: dynamically load all custom modules
-        file("${rootDir}/custom").eachDir { companyDir ->
-            if('build' != companyDir.name && 'docker' != companyDir.name) {
-                file("${rootDir}/custom/${companyDir.name}").eachDir { categoryDir ->
-                    if('build' != categoryDir.name) {
-                        file("${rootDir}/custom/${companyDir.name}/${categoryDir.name}").eachDir { moduleDir ->
-                            if('build' != moduleDir.name) {
-                                implementation project(":custom:${companyDir.name}:${categoryDir.name}:${moduleDir.name}")
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        implementation customDockerJars
         // NOTE: other custom dependencies
         implementation 'org.mariadb.jdbc:mariadb-java-client'
         implementation 'com.mysql:mysql-connector-j'
@@ -95,3 +99,6 @@ jib {
         }
     }
 }
+
+tasks.jib.dependsOn(customDockerJarTasks)
+tasks.jibDockerBuild.dependsOn(customDockerJarTasks)

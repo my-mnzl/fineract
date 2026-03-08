@@ -34,11 +34,12 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRescheduleRequestToT
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTermVariations;
 import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.LoanRepaymentScheduleTransactionProcessor;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.data.LoanScheduleDTO;
-import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.DefaultScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanRescheduleRequest;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.domain.LoanRescheduleRequestRepositoryWrapper;
@@ -52,12 +53,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class LoanReschedulePreviewPlatformServiceImpl implements LoanReschedulePreviewPlatformService {
 
-    private static final DefaultScheduledDateGenerator DEFAULT_SCHEDULED_DATE_GENERATOR = new DefaultScheduledDateGenerator();
     private final LoanRescheduleRequestRepositoryWrapper loanRescheduleRequestRepository;
     private final LoanUtilService loanUtilService;
     private final LoanRepaymentScheduleTransactionProcessorFactory loanRepaymentScheduleTransactionProcessorFactory;
     private final LoanScheduleGeneratorFactory loanScheduleFactory;
     private final LoanTermVariationsMapper loanTermVariationsMapper;
+    private final ScheduledDateGenerator scheduledDateGenerator;
 
     @Override
     public LoanScheduleModel previewLoanReschedule(Long requestId) {
@@ -106,11 +107,11 @@ public class LoanReschedulePreviewPlatformServiceImpl implements LoanRescheduleP
 
         for (LoanTermVariationsData loanTermVariation : loanApplicationTerms.getLoanTermVariations().getDueDateVariation()) {
             if (DateUtils.isBefore(rescheduleFromDate, loanTermVariation.getTermVariationApplicableFrom())) {
-                LocalDate applicableDate = DEFAULT_SCHEDULED_DATE_GENERATOR.generateNextRepaymentDate(rescheduleFromDate,
-                        loanApplicationTerms, false);
+                LocalDate applicableDate = scheduledDateGenerator.generateNextRepaymentDate(rescheduleFromDate, loanApplicationTerms,
+                        false);
                 if (DateUtils.isEqual(loanTermVariation.getTermVariationApplicableFrom(), applicableDate)) {
-                    LocalDate adjustedDate = DEFAULT_SCHEDULED_DATE_GENERATOR.generateNextRepaymentDate(adjustedApplicableDate,
-                            loanApplicationTerms, false);
+                    LocalDate adjustedDate = scheduledDateGenerator.generateNextRepaymentDate(adjustedApplicableDate, loanApplicationTerms,
+                            false);
                     loanTermVariation.setApplicableFromDate(adjustedDate);
                     loanTermVariationsData.add(loanTermVariation);
                 }
@@ -122,8 +123,9 @@ public class LoanReschedulePreviewPlatformServiceImpl implements LoanRescheduleP
         final MathContext mathContext = MoneyHelper.getMathContext();
         final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = this.loanRepaymentScheduleTransactionProcessorFactory
                 .determineProcessor(loan.transactionProcessingStrategy());
-        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                loanApplicationTerms.getInterestMethod());
+        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(LoanScheduleSelectionContext.builder()
+                .loanScheduleType(loanApplicationTerms.getLoanScheduleType()).interestMethod(loanApplicationTerms.getInterestMethod())
+                .loanId(loan.getId()).loanProductId(loan.productId()).build());
         final LoanScheduleDTO loanSchedule = loanScheduleGenerator.rescheduleNextInstallments(mathContext, loanApplicationTerms, loan,
                 loanApplicationTerms.getHolidayDetailDTO(), loanRepaymentScheduleTransactionProcessor, rescheduleFromDate);
         final LoanScheduleModel loanScheduleModel = loanSchedule.getLoanScheduleModel();

@@ -22,6 +22,7 @@ import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecific
 import org.apache.fineract.infrastructure.jobs.service.JobName;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
 import org.apache.fineract.portfolio.account.service.StandingInstructionReadPlatformService;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -29,11 +30,12 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 public class ExecuteStandingInstructionsConfig {
@@ -51,23 +53,25 @@ public class ExecuteStandingInstructionsConfig {
     @Autowired
     private AccountTransfersWritePlatformService accountTransfersWritePlatformService;
     @Autowired
-    private TransactionTemplate transactionTemplate;
+    private ScheduledDateGenerator scheduledDateGenerator;
 
     @Bean
-    protected Step executeStandingInstructionsStep() {
-        return new StepBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository)
-                .tasklet(executeStandingInstructionsTasklet(), transactionManager).build();
+    @ConditionalOnMissingBean(name = "executeStandingInstructionsStep")
+    protected Step executeStandingInstructionsStep(ExecuteStandingInstructionsTasklet tasklet) {
+        return new StepBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository).tasklet(tasklet, transactionManager).build();
     }
 
     @Bean
-    public Job executeStandingInstructionsJob() {
-        return new JobBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository).start(executeStandingInstructionsStep())
+    @ConditionalOnMissingBean(name = "executeStandingInstructionsJob")
+    public Job executeStandingInstructionsJob(@Qualifier("executeStandingInstructionsStep") Step executeStandingInstructionsStep) {
+        return new JobBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository).start(executeStandingInstructionsStep)
                 .incrementer(new RunIdIncrementer()).build();
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "executeStandingInstructionsTasklet")
     public ExecuteStandingInstructionsTasklet executeStandingInstructionsTasklet() {
         return new ExecuteStandingInstructionsTasklet(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator,
-                accountTransfersWritePlatformService, transactionTemplate);
+                accountTransfersWritePlatformService, scheduledDateGenerator);
     }
 }

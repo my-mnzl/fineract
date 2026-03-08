@@ -445,6 +445,7 @@ public class DefaultScheduledDateGenerator implements ScheduledDateGenerator {
         return adjustedDate;
     }
 
+    @Override
     public LocalDate generateNextRepaymentDateWhenHolidayApply(final LocalDate lastRepaymentDate,
             final LoanApplicationTerms loanApplicationTerms) {
         LocalDate seedDate;

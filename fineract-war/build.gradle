@@ -22,6 +22,12 @@ apply plugin: 'war'
 apply plugin: 'distribution'
 apply from: "${rootDir}/buildSrc/src/main/groovy/org.apache.fineract.dependencies.gradle"
 
+def customWarProjects = rootProject.subprojects.findAll {
+    it.path.startsWith(':custom:') && !it.path.startsWith(':custom:acme:') && it.path != ':custom:docker' && it.tasks.findByName('jar') != null
+}
+def customWarJarTasks = customWarProjects.collect { it.tasks.named('jar') }
+def customWarJars = files(customWarJarTasks.collect { it.flatMap { task -> task.archiveFile } })
+
 war {
     description = 'Assembles a WAR archive containing the web application'
     archiveFileName = 'fineract-provider.war'
@@ -89,6 +95,11 @@ dependencies {
     implementation project(':fineract-progressive-loan')
     implementation project(':fineract-savings')
     implementation project(':fineract-provider')
+    runtimeOnly customWarJars
+}
+
+tasks.named('war') {
+    dependsOn customWarJarTasks
 }
 
 tasks.withType(Tar) {

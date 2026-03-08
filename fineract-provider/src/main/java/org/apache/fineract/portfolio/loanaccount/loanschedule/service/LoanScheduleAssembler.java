@@ -114,6 +114,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanSchedul
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModelDisbursementPeriod;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModelPeriod;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleProcessingType;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleType;
 import org.apache.fineract.portfolio.loanaccount.serialization.VariableLoanScheduleFromApiJsonValidator;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAccrualsProcessingService;
@@ -739,26 +740,26 @@ public class LoanScheduleAssembler {
         Set<LoanCharge> loanCharges = this.loanChargeAssembler.fromParsedJson(element, disbursementDetails);
         final Set<LoanCharge> nonCompoundingCharges = validateDisbursementPercentageCharges(loanCharges);
         loanCharges.removeAll(nonCompoundingCharges);
+        final Long loanProductId = this.fromApiJsonHelper.extractLongNamed(LoanApiConstants.productIdParameterName, element);
 
         final MathContext mc = MoneyHelper.getMathContext();
         HolidayDetailDTO detailDTO = new HolidayDetailDTO(isHolidayEnabled, holidays, workingDays);
 
-        LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                loanApplicationTerms.getInterestMethod());
+        LoanScheduleGenerator loanScheduleGenerator;
         if (loanApplicationTerms.isEqualAmortization()) {
             if (loanApplicationTerms.getInterestMethod().isDecliningBalance()) {
                 final LoanScheduleGenerator decliningLoanScheduleGenerator = this.loanScheduleFactory
-                        .create(loanApplicationTerms.getLoanScheduleType(), InterestMethod.DECLINING_BALANCE);
+                        .create(loanSelectionContext(loanApplicationTerms, null, loanProductId, InterestMethod.DECLINING_BALANCE));
                 LoanScheduleModel loanSchedule = decliningLoanScheduleGenerator.generate(mc, loanApplicationTerms, loanCharges, detailDTO);
 
                 loanApplicationTerms
                         .updateTotalInterestDue(Money.of(loanApplicationTerms.getCurrency(), loanSchedule.getTotalInterestCharged()));
 
             }
-            loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(), InterestMethod.FLAT);
+            loanScheduleGenerator = this.loanScheduleFactory
+                    .create(loanSelectionContext(loanApplicationTerms, null, loanProductId, InterestMethod.FLAT));
         } else {
-            loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                    loanApplicationTerms.getInterestMethod());
+            loanScheduleGenerator = this.loanScheduleFactory.create(loanSelectionContext(loanApplicationTerms, null, loanProductId));
         }
 
         LoanScheduleModel loanScheduleModel = loanScheduleGenerator.generate(mc, loanApplicationTerms, loanCharges, detailDTO);
@@ -780,8 +781,8 @@ public class LoanScheduleAssembler {
                 loanApplicationTerms.getExpectedDisbursementDate(), HolidayStatusType.ACTIVE.getValue());
         final WorkingDays workingDays = this.workingDaysRepository.findOne();
 
-        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                loanApplicationTerms.getInterestMethod());
+        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory
+                .create(loanSelectionContext(loanApplicationTerms, loan));
         HolidayDetailDTO detailDTO = new HolidayDetailDTO(isHolidayEnabled, holidays, workingDays);
         return loanScheduleGenerator.rescheduleNextInstallments(mc, loanApplicationTerms, loan, detailDTO,
                 loanRepaymentScheduleTransactionProcessor, rescheduleFrom).getLoanScheduleModel();
@@ -790,8 +791,8 @@ public class LoanScheduleAssembler {
     public OutstandingAmountsDTO calculatePrepaymentAmount(MonetaryCurrency currency, LocalDate onDate,
             LoanApplicationTerms loanApplicationTerms, Loan loan, final Long officeId,
             final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor) {
-        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                loanApplicationTerms.getInterestMethod());
+        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory
+                .create(loanSelectionContext(loanApplicationTerms, loan));
 
         final MathContext mc = MoneyHelper.getMathContext();
 
@@ -1577,6 +1578,21 @@ public class LoanScheduleAssembler {
             }
         }
         return interestCharges;
+    }
+
+    private LoanScheduleSelectionContext loanSelectionContext(final LoanApplicationTerms loanApplicationTerms, final Loan loan) {
+        return loanSelectionContext(loanApplicationTerms, loan, loan == null ? null : loan.productId());
+    }
+
+    private LoanScheduleSelectionContext loanSelectionContext(final LoanApplicationTerms loanApplicationTerms, final Loan loan,
+            final Long loanProductId) {
+        return loanSelectionContext(loanApplicationTerms, loan, loanProductId, loanApplicationTerms.getInterestMethod());
+    }
+
+    private LoanScheduleSelectionContext loanSelectionContext(final LoanApplicationTerms loanApplicationTerms, final Loan loan,
+            final Long loanProductId, final InterestMethod interestMethod) {
+        return LoanScheduleSelectionContext.builder().loanScheduleType(loanApplicationTerms.getLoanScheduleType())
+                .interestMethod(interestMethod).loanId(loan == null ? null : loan.getId()).loanProductId(loanProductId).build();
     }
 
     private void updateDisbursementWithCharges(final BigDecimal principal, final Collection<LoanScheduleModelPeriod> periods,

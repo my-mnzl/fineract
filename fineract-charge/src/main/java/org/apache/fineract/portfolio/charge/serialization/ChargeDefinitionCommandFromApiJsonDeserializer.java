@@ -39,6 +39,7 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.charge.api.ChargesApiConstants;
 import org.apache.fineract.portfolio.charge.domain.ChargeAppliesTo;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationRegistry;
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
@@ -82,10 +83,13 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
             ENABLE_FREE_WITHDRAWAL_CHARGE, FREE_WITHDRAWAL_FREQUENCY, RESTART_COUNT_FREQUENCY, COUNT_FREQUENCY_TYPE, PAYMENT_TYPE_ID,
             ENABLE_PAYMENT_TYPE, ChargesApiConstants.glAccountIdParamName, ChargesApiConstants.taxGroupIdParamName));
     private final FromJsonHelper fromApiJsonHelper;
+    private final ChargeCalculationRegistry chargeCalculationRegistry;
 
     @Autowired
-    public ChargeDefinitionCommandFromApiJsonDeserializer(final FromJsonHelper fromApiJsonHelper) {
+    public ChargeDefinitionCommandFromApiJsonDeserializer(final FromJsonHelper fromApiJsonHelper,
+            final ChargeCalculationRegistry chargeCalculationRegistry) {
         this.fromApiJsonHelper = fromApiJsonHelper;
+        this.chargeCalculationRegistry = chargeCalculationRegistry;
     }
 
     public void validateForCreate(final String json) {
@@ -175,7 +179,7 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
 
             if (chargeCalculationType != null) {
                 baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                        .isOneOfTheseValues(ChargeCalculationType.validValuesForLoan());
+                        .isOneOfTheseValues(chargeCalculationRegistry.loanDescriptors().stream().map(d -> d.id()).toArray());
             }
 
             if (chargeTimeType != null && chargeCalculationType != null) {
@@ -213,7 +217,7 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
 
             if (chargeCalculationType != null) {
                 baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                        .isOneOfTheseValues(ChargeCalculationType.validValuesForSavings());
+                        .isOneOfTheseValues(chargeCalculationRegistry.savingsDescriptors().stream().map(d -> d.id()).toArray());
             }
 
         } else if (appliesTo.isClientCharge()) {
@@ -227,7 +231,7 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
 
             if (chargeCalculationType != null) {
                 baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                        .isOneOfTheseValues(ChargeCalculationType.validValuesForClients());
+                        .isOneOfTheseValues(chargeCalculationRegistry.clientDescriptors().stream().map(d -> d.id()).toArray());
             }
 
             // GL Account can be linked to clients
@@ -247,13 +251,13 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
 
             if (chargeCalculationType != null) {
                 baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                        .isOneOfTheseValues(ChargeCalculationType.validValuesForShares());
+                        .isOneOfTheseValues(chargeCalculationRegistry.sharesDescriptors().stream().map(d -> d.id()).toArray());
             }
 
             if (chargeTimeType != null && chargeTimeType.equals(ChargeTimeType.SHAREACCOUNT_ACTIVATION.getValue())
                     && chargeCalculationType != null) {
-                baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                        .isOneOfTheseValues(ChargeCalculationType.validValuesForShareAccountActivation());
+                baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType).isOneOfTheseValues(
+                        chargeCalculationRegistry.shareAccountActivationDescriptors().stream().map(d -> d.id()).toArray());
             }
         }
 
@@ -467,12 +471,12 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
             final Integer chargeCalculationType) {
         if (chargeTimeType.equals(ChargeTimeType.SHAREACCOUNT_ACTIVATION.getValue())) {
             baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                    .isOneOfTheseValues(ChargeCalculationType.validValuesForShareAccountActivation());
+                    .isOneOfTheseValues(chargeCalculationRegistry.shareAccountActivationDescriptors().stream().map(d -> d.id()).toArray());
         }
 
         if (chargeTimeType.equals(ChargeTimeType.TRANCHE_DISBURSEMENT.getValue())) {
             baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
-                    .isOneOfTheseValues(ChargeCalculationType.validValuesForTrancheDisbursement());
+                    .isOneOfTheseValues(chargeCalculationRegistry.trancheDisbursementDescriptors().stream().map(d -> d.id()).toArray());
         } else {
             baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
                     .isNotOneOfTheseValues(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue());

@@ -29,17 +29,17 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.security.constants.TwoFactorConstants;
-import org.apache.fineract.infrastructure.security.data.FineractJwtAuthenticationToken;
+import org.apache.fineract.infrastructure.security.data.FineractJwtAuthentication;
 import org.apache.fineract.infrastructure.security.domain.TFAccessToken;
 import org.apache.fineract.infrastructure.security.service.TwoFactorService;
 import org.apache.fineract.useradministration.domain.AppUser;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.filter.GenericFilterBean;
 
 /**
@@ -112,10 +112,8 @@ public class TwoFactorAuthenticationFilter extends GenericFilterBean {
             UsernamePasswordAuthenticationToken updatedAuthentication = new UsernamePasswordAuthenticationToken(
                     currentAuthentication.getPrincipal(), currentAuthentication.getCredentials(), updatedAuthorities);
             return updatedAuthentication;
-        } else if (currentAuthentication instanceof FineractJwtAuthenticationToken) {
-            FineractJwtAuthenticationToken fineractJwtAuthenticationToken = (FineractJwtAuthenticationToken) currentAuthentication;
-            FineractJwtAuthenticationToken updatedAuthentication = new FineractJwtAuthenticationToken(
-                    fineractJwtAuthenticationToken.getToken(), updatedAuthorities, (UserDetails) currentAuthentication.getPrincipal());
+        } else if (currentAuthentication instanceof FineractJwtAuthentication fineractJwtAuthentication) {
+            AbstractAuthenticationToken updatedAuthentication = fineractJwtAuthentication.withAuthorities(updatedAuthorities);
             return updatedAuthentication;
         } else {
             throw new ServletException("Unknown authentication type: " + currentAuthentication.getClass().getName());

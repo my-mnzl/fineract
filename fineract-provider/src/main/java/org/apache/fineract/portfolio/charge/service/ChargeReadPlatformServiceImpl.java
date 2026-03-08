@@ -68,11 +68,12 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
     private final TaxReadPlatformService taxReadPlatformService;
     private final ConfigurationDomainServiceJpa configurationDomainServiceJpa;
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
 
     @Override
     @Cacheable(value = "charges", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('ch')")
     public List<ChargeData> retrieveAllCharges() {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false ";
 
@@ -85,7 +86,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveAllChargesForCurrency(String currencyCode) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.currency_code= ? ";
 
@@ -98,7 +99,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
     @Override
     public ChargeData retrieveCharge(final Long chargeId) {
         try {
-            final ChargeMapper rm = new ChargeMapper();
+            final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
             String sql = "select " + rm.chargeSchema() + " where c.id = ? and c.is_deleted=false ";
 
@@ -156,7 +157,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveLoanProductCharges(final Long loanProductId) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.loanProductChargeSchema() + " where c.is_deleted=false and c.is_active=true and plc.product_loan_id=? ";
 
@@ -168,7 +169,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
     @Override
     public List<ChargeData> retrieveLoanProductCharges(final Long loanProductId, final ChargeTimeType chargeTime) {
 
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.loanProductChargeSchema()
                 + " where c.is_deleted=false and c.is_active=true and plc.product_loan_id=? and c.charge_time_enum=? ";
@@ -179,7 +180,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveLoanApplicableFees() {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
         Object[] params = new Object[] { ChargeAppliesTo.LOAN.getValue() };
         String sql = "select " + rm.chargeSchema()
                 + " where c.is_deleted=false and c.is_active=true and c.is_penalty=false and c.charge_applies_to_enum=? ";
@@ -191,7 +192,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveLoanAccountApplicableCharges(final Long loanId, ChargeTimeType[] excludeChargeTimes) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
         StringBuilder excludeClause = new StringBuilder("");
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("loanId", loanId);
@@ -226,7 +227,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveLoanProductApplicableCharges(final Long loanProductId, ChargeTimeType[] excludeChargeTimes) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
         StringBuilder excludeClause = new StringBuilder("");
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("productId", loanProductId);
@@ -243,7 +244,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveLoanApplicablePenalties() {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.chargeSchema()
                 + " where c.is_deleted=false and c.is_active=true and c.is_penalty=true and c.charge_applies_to_enum=? ";
@@ -268,6 +269,12 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
     }
 
     private static final class ChargeMapper implements RowMapper<ChargeData> {
+
+        private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
+
+        private ChargeMapper(ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
+            this.chargeCalculationOptionDataService = chargeCalculationOptionDataService;
+        }
 
         public String chargeSchema() {
             return "c.id as id, c.name as name, c.amount as amount, c.currency_code as currencyCode, "
@@ -321,7 +328,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
             final EnumOptionData chargeTimeType = ChargeEnumerations.chargeTimeType(chargeTime);
 
             final int chargeCalculation = rs.getInt("chargeCalculation");
-            final EnumOptionData chargeCalculationType = ChargeEnumerations.chargeCalculationType(chargeCalculation);
+            final EnumOptionData chargeCalculationType = chargeCalculationOptionDataService.optionData(chargeCalculation);
 
             final int paymentMode = rs.getInt("chargePaymentMode");
             final EnumOptionData chargePaymentMode = ChargeEnumerations.chargePaymentMode(paymentMode);
@@ -387,7 +394,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveSavingsProductApplicableCharges(final boolean feeChargesOnly) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? ";
         if (feeChargesOnly) {
@@ -402,7 +409,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveSavingsApplicablePenalties() {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.chargeSchema()
                 + " where c.is_deleted=false and c.is_active=true and c.is_penalty=true and c.charge_applies_to_enum=? ";
@@ -413,7 +420,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveSavingsProductCharges(final Long savingsProductId) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.savingsProductChargeSchema()
                 + " where c.is_deleted=false and c.is_active=true and spc.savings_product_id=? ";
@@ -424,7 +431,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveShareProductCharges(final Long shareProductId) {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.shareProductChargeSchema() + " where c.is_deleted=false and c.is_active=true and mspc.product_id=? ";
         sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
@@ -435,7 +442,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
     @Override
     public List<ChargeData> retrieveSavingsAccountApplicableCharges(Long savingsAccountId) {
 
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
 
         String sql = "select " + rm.chargeSchema() + " join m_savings_account sa on sa.currency_code = c.currency_code"
                 + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? " + " and sa.id = ?";
@@ -447,7 +454,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveAllChargesApplicableToClients() {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
         String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? ";
         sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
         sql += " order by c.name ";
@@ -457,7 +464,7 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveSharesApplicableCharges() {
-        final ChargeMapper rm = new ChargeMapper();
+        final ChargeMapper rm = new ChargeMapper(chargeCalculationOptionDataService);
         String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? ";
         sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
         sql += " order by c.name ";

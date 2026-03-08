@@ -28,6 +28,7 @@ import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
 import org.apache.fineract.portfolio.account.service.AccountNumberGenerator;
 import org.apache.fineract.portfolio.accounts.constants.AccountsApiConstants;
 import org.apache.fineract.portfolio.accounts.service.AccountsCommandsService;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
 import org.apache.fineract.portfolio.client.service.ClientReadPlatformService;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
@@ -69,8 +70,9 @@ public class ShareAccountsConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(ShareAccountChargeReadPlatformService.class)
-    public ShareAccountChargeReadPlatformService shareAccountChargeReadPlatformService(JdbcTemplate jdbcTemplate) {
-        return new ShareAccountChargeReadPlatformServiceImpl(jdbcTemplate);
+    public ShareAccountChargeReadPlatformService shareAccountChargeReadPlatformService(JdbcTemplate jdbcTemplate,
+            ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
+        return new ShareAccountChargeReadPlatformServiceImpl(jdbcTemplate, chargeCalculationOptionDataService);
     }
 
     @Bean(value = "SHAREACCOUNT_COMMANDSERVICE")

@@ -30,7 +30,7 @@ import org.apache.fineract.infrastructure.core.exception.AbstractPlatformService
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
-import org.apache.fineract.infrastructure.jobs.exception.TruncatedJobExecutionException;
+import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
 import org.apache.fineract.portfolio.account.data.StandingInstructionData;
 import org.apache.fineract.portfolio.account.data.StandingInstructionDuesData;
@@ -40,7 +40,6 @@ import org.apache.fineract.portfolio.account.domain.StandingInstructionType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
 import org.apache.fineract.portfolio.account.service.StandingInstructionReadPlatformService;
 import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
-import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.DefaultScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
 import org.apache.fineract.portfolio.savings.domain.SavingsAccount;
 import org.apache.fineract.portfolio.savings.exception.InsufficientAccountBalanceException;
@@ -49,11 +48,6 @@ import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.lang.NonNull;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -63,7 +57,7 @@ public class ExecuteStandingInstructionsTasklet implements Tasklet {
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-    private final TransactionTemplate transactionTemplate;
+    private final ScheduledDateGenerator scheduledDateGenerator;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
@@ -76,7 +70,6 @@ public class ExecuteStandingInstructionsTasklet implements Tasklet {
             StandingInstructionType instructionType = data.getInstructionType();
             LocalDate transactionDate = DateUtils.getBusinessLocalDate();
             if (recurrenceType.isPeriodicRecurrence()) {
-                final ScheduledDateGenerator scheduledDateGenerator = new DefaultScheduledDateGenerator();
                 PeriodFrequencyType frequencyType = data.getRecurrenceFrequency();
                 LocalDate startDate = data.getValidFrom();
                 if (frequencyType.isMonthly()) {
@@ -125,29 +118,16 @@ public class ExecuteStandingInstructionsTasklet implements Tasklet {
             }
         }
         if (!errors.isEmpty()) {
-            log.error("ExecuteStandingInstructions job completed with {} errors out of {} total instructions",
-                    errors.size(), instructionData != null ? instructionData.size() : 0);
-            throw new TruncatedJobExecutionException(errors);
+            throw new JobExecutionException(errors);
         }
         return RepeatStatus.FINISHED;
     }
 
     private boolean transferAmount(final List<Throwable> errors, final AccountTransferDTO accountTransferDTO, final Long instructionId) {
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        boolean transferCompleted = false;
+        boolean transferCompleted = true;
         StringBuilder errorLog = new StringBuilder();
-
         try {
-            transactionTemplate.execute(new TransactionCallbackWithoutResult() {
-                @Override
-                protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {
-                    accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
-                    log.debug("Successfully transferred standing instruction {} for amount {}",
-                            instructionId, accountTransferDTO.getTransactionAmount());
-                }
-            });
-            transferCompleted = true;
+            accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
         } catch (final PlatformApiDataValidationException e) {
             errors.add(new Exception("Validation exception while transfering funds for standing Instruction id" + instructionId + " from "
                     + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId(), e));
@@ -165,27 +145,26 @@ public class ExecuteStandingInstructionsTasklet implements Tasklet {
                     + " from " + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId(), e));
             errorLog.append("Exception while trasfering funds ").append(e.getMessage());
         }
-
-        logTransferHistory(instructionId, accountTransferDTO.getTransactionAmount(), transferCompleted, errorLog.toString());
-
+        StringBuilder updateQuery = new StringBuilder(
+                "INSERT INTO m_account_transfer_standing_instructions_history (standing_instruction_id, " + sqlGenerator.escape("status")
+                        + ", amount,execution_time, error_log) VALUES (");
+        updateQuery.append(instructionId).append(",");
+        if (errorLog.length() > 0) {
+            transferCompleted = false;
+            updateQuery.append("'failed'").append(",");
+        } else {
+            updateQuery.append("'success'").append(",");
+        }
+        updateQuery.append(accountTransferDTO.getTransactionAmount().doubleValue());
+        updateQuery.append(", now(),");
+        updateQuery.append("'").append(errorLog).append("')");
+        jdbcTemplate.update(updateQuery.toString());
         return transferCompleted;
     }
 
     private void updateLastRunDate(LocalDate transactionDate, Long instructionId) {
         final String updateQuery = "UPDATE m_account_transfer_standing_instructions SET last_run_date = ? where id = ?";
         jdbcTemplate.update(updateQuery, transactionDate, instructionId);
-    }
-
-    private void logTransferHistory(Long instructionId, BigDecimal amount, boolean success, String errorLog) {
-        StringBuilder updateQuery = new StringBuilder(
-                "INSERT INTO m_account_transfer_standing_instructions_history (standing_instruction_id, " + sqlGenerator.escape("status")
-                        + ", amount,execution_time, error_log) VALUES (");
-        updateQuery.append(instructionId).append(",");
-        updateQuery.append(success ? "'success'" : "'failed'").append(",");
-        updateQuery.append(amount.doubleValue());
-        updateQuery.append(", now(),");
-        updateQuery.append("'").append(errorLog).append("')");
-        jdbcTemplate.update(updateQuery.toString());
     }
 
     public boolean isDueForTransfer(StandingInstructionDuesData standingInstructionDuesData) {

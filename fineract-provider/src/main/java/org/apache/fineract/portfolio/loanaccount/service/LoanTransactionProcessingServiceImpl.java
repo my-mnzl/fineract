@@ -49,6 +49,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.imp
 import org.apache.fineract.portfolio.loanaccount.loanschedule.data.LoanScheduleDTO;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper;
 import org.apache.fineract.portfolio.loanproduct.calc.data.ProgressiveLoanInterestScheduleModel;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
@@ -136,7 +137,7 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
         }
         final InterestMethod interestMethod = loan.getLoanRepaymentScheduleDetail().getInterestMethod();
         final LoanScheduleGenerator loanScheduleGenerator = generatorDTO.getLoanScheduleFactory()
-                .create(loan.getLoanRepaymentScheduleDetail().getLoanScheduleType(), interestMethod);
+                .create(loanSelectionContext(loan, interestMethod));
 
         final MathContext mc = MoneyHelper.getMathContext();
 
@@ -160,7 +161,7 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
             final LoanApplicationTerms loanApplicationTerms = loanMapper.constructLoanApplicationTerms(scheduleGeneratorDTO, loan);
 
             final LoanScheduleGenerator loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory()
-                    .create(loanApplicationTerms.getLoanScheduleType(), interestMethod);
+                    .create(loanSelectionContext(loan, interestMethod));
             final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = getTransactionProcessor(
                     loan.getTransactionProcessingStrategyCode());
             outstandingAmounts = loanScheduleGenerator.calculatePrepaymentAmount(loan.getCurrency(), onDate, loanApplicationTerms, mc, loan,
@@ -229,5 +230,10 @@ public class LoanTransactionProcessingServiceImpl implements LoanTransactionProc
         }
         return loan.getLoanTransactions().stream().filter(LoanTransaction::isNotReversed).filter(LoanTransaction::isInterestRefund)
                 .map(t -> t.getAmount(loan.getCurrency())).reduce(Money.zero(loan.getCurrency()), Money::add);
+    }
+
+    private LoanScheduleSelectionContext loanSelectionContext(final Loan loan, final InterestMethod interestMethod) {
+        return LoanScheduleSelectionContext.builder().loanScheduleType(loan.getLoanRepaymentScheduleDetail().getLoanScheduleType())
+                .interestMethod(interestMethod).loanId(loan.getId()).loanProductId(loan.productId()).build();
     }
 }

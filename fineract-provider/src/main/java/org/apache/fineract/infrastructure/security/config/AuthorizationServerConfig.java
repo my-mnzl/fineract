@@ -53,6 +53,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.Customizer;
@@ -65,6 +67,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
@@ -154,7 +157,8 @@ public class AuthorizationServerConfig {
 
     @Bean
     @Order(3)
-    public SecurityFilterChain protectedEndpoints(HttpSecurity http) throws Exception {
+    public SecurityFilterChain protectedEndpoints(HttpSecurity http, Converter<Jwt, AbstractAuthenticationToken> authenticationConverter)
+            throws Exception {
         http
                 // TODO: Make it configurable
                 .csrf(AbstractHttpConfigurer::disable).authorizeHttpRequests(auth -> {
@@ -163,8 +167,7 @@ public class AuthorizationServerConfig {
                         auth.anyRequest().hasAuthority("TWOFACTOR_AUTHENTICATED");
                     }
                 }).formLogin(form -> form.loginPage("/login").authenticationDetailsSource(tenantAuthDetailsSource()).permitAll())
-                .oauth2ResourceServer(
-                        resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))
+                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)))
                 .addFilterAfter(tenantAwareAuthenticationFilter(), SecurityContextHolderFilter.class)//
                 .addFilterAfter(businessDateFilter(), TenantAwareAuthenticationFilter.class) //
                 .addFilterAfter(requestResponseFilter(), ExceptionTranslationFilter.class) //
@@ -266,8 +269,8 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    public FineractJwtAuthenticationTokenConverter authenticationConverter() {
-        return new FineractJwtAuthenticationTokenConverter(userDetailsService, fineractProperties); // pragma: allowlist secret
+    public Converter<Jwt, AbstractAuthenticationToken> authenticationConverter() {
+        return new FineractJwtAuthenticationTokenConverter(userDetailsService);
     }
 
     public RequestResponseFilter requestResponseFilter() {

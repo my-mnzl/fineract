@@ -83,6 +83,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionType;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestRecalculationCompoundingMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -143,7 +144,7 @@ public class LoanAccrualsProcessingServiceImpl implements LoanAccrualsProcessing
     @Override
     @Transactional
     public void addPeriodicAccruals(@NonNull final LocalDate tillDate, @NonNull final Loan loan) {
-        if (loan.isClosed() || loan.getStatus().isOverpaid()) {
+        if (loan.isClosed() || loan.getStatus().isOverpaid() || loan.isChargedOff()) {
             return;
         }
         final boolean chargeOnDueDate = isChargeOnDueDate();
@@ -254,7 +255,7 @@ public class LoanAccrualsProcessingServiceImpl implements LoanAccrualsProcessing
      */
     @Override
     public void processIncomePostingAndAccruals(@NonNull final Loan loan, final boolean addEvent) {
-        if (isProgressiveAccrual(loan)) {
+        if (isProgressiveAccrual(loan) || loan.isChargedOff()) {
             return;
         }
         final LoanInterestRecalculationDetails recalculationDetails = loan.getLoanInterestRecalculationDetails();
@@ -439,8 +440,9 @@ public class LoanAccrualsProcessingServiceImpl implements LoanAccrualsProcessing
             final boolean isFinal, final boolean chargeOnDueDate) {
         final LoanProductRelatedDetail productDetail = loan.getLoanProductRelatedDetail();
         final MonetaryCurrency currency = productDetail.getCurrency();
-        final LoanScheduleGenerator scheduleGenerator = loanScheduleFactory.create(productDetail.getLoanScheduleType(),
-                productDetail.getInterestMethod());
+        final LoanScheduleGenerator scheduleGenerator = loanScheduleFactory
+                .create(LoanScheduleSelectionContext.builder().loanScheduleType(productDetail.getLoanScheduleType())
+                        .interestMethod(productDetail.getInterestMethod()).loanId(loan.getId()).loanProductId(loan.productId()).build());
         final int firstInstallmentNumber = fetchFirstNormalInstallmentNumber(loan.getRepaymentScheduleInstallments());
         final LocalDate interestCalculationTillDate = loan.isProgressiveSchedule()
                 && loan.getLoanProductRelatedDetail().isInterestRecognitionOnDisbursementDate() ? tillDate.plusDays(1L) : tillDate;
