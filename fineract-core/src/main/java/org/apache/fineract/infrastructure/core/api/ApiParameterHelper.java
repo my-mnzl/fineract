@@ -18,8 +18,8 @@
  */
 package org.apache.fineract.infrastructure.core.api;
 
+import com.google.common.base.Splitter;
 import jakarta.ws.rs.core.MultivaluedMap;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -29,6 +29,7 @@ import org.apache.fineract.infrastructure.core.serialization.JsonParserHelper;
 public final class ApiParameterHelper {
 
     private static final String GENERIC_RESULT_SET = "genericResultSet";
+    private static final Splitter COMMA_SEPARATED_PARAMETER_SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
 
     private ApiParameterHelper() {
 
@@ -51,7 +52,7 @@ public final class ApiParameterHelper {
         if (queryParams.getFirst("fields") != null) {
             commaSeparatedParameters = queryParams.getFirst("fields");
             if (StringUtils.isNotBlank(commaSeparatedParameters)) {
-                fields = new HashSet<>(Arrays.asList(commaSeparatedParameters.split("\\s*,\\s*"))); // NOSONAR
+                fields = splitCommaSeparatedParameters(commaSeparatedParameters);
             }
         }
         return fields;
@@ -63,7 +64,7 @@ public final class ApiParameterHelper {
         if (queryParams.getFirst("associations") != null) {
             commaSeparatedParameters = queryParams.getFirst("associations");
             if (StringUtils.isNotBlank(commaSeparatedParameters)) {
-                fields = new HashSet<>(Arrays.asList(commaSeparatedParameters.split("\\s*,\\s*"))); // NOSONAR
+                fields = splitCommaSeparatedParameters(commaSeparatedParameters);
             }
         }
         return fields;
@@ -71,7 +72,7 @@ public final class ApiParameterHelper {
 
     public static void excludeAssociationsForResponseIfProvided(final String commaSeparatedParameters, Set<String> fields) {
         if (StringUtils.isNotBlank(commaSeparatedParameters)) {
-            fields.removeAll(new HashSet<>(Arrays.asList(commaSeparatedParameters.split("\\s*,\\s*")))); // NOSONAR
+            fields.removeAll(splitCommaSeparatedParameters(commaSeparatedParameters));
         }
     }
 
@@ -137,5 +138,13 @@ public final class ApiParameterHelper {
 
     public static boolean genericResultSetPassed(final MultivaluedMap<String, String> queryParams) {
         return queryParams.getFirst(GENERIC_RESULT_SET) != null;
+    }
+
+    private static Set<String> splitCommaSeparatedParameters(final String commaSeparatedParameters) {
+        Set<String> parameters = new HashSet<>();
+        for (String parameter : COMMA_SEPARATED_PARAMETER_SPLITTER.split(commaSeparatedParameters)) {
+            parameters.add(parameter);
+        }
+        return parameters;
     }
 }

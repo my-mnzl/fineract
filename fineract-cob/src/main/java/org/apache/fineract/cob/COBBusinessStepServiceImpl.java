@@ -20,6 +20,7 @@ package org.apache.fineract.cob;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -38,6 +39,7 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Primary;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
@@ -98,14 +100,24 @@ public class COBBusinessStepServiceImpl implements COBBusinessStepService {
             Class<T> businessStepClass, String cobJobName) {
         List<BatchBusinessStep> cobStepConfigs = batchBusinessStepRepository.findAllByJobName(cobJobName);
         List<String> businessSteps = Arrays.stream(beanFactory.getBeanNamesForType(businessStepClass)).toList();
-        Set<BusinessStepNameAndOrder> executionMap = new HashSet<>();
+        LinkedHashMap<String, BusinessStepNameAndOrder> executionMap = new LinkedHashMap<>();
         for (String businessStep : businessSteps) {
             COBBusinessStep<S> businessStepBean = (COBBusinessStep<S>) applicationContext.getBean(businessStep);
             Optional<BatchBusinessStep> businessStepConfig = cobStepConfigs.stream()
                     .filter(stepConfig -> businessStepBean.getEnumStyledName().equals(stepConfig.getStepName())).findFirst();
-            businessStepConfig.ifPresent(
-                    batchBusinessStep -> executionMap.add(new BusinessStepNameAndOrder(businessStep, batchBusinessStep.getStepOrder())));
+            businessStepConfig.ifPresent(batchBusinessStep -> {
+                BusinessStepNameAndOrder candidate = new BusinessStepNameAndOrder(businessStep, batchBusinessStep.getStepOrder());
+                String key = businessStepBean.getEnumStyledName();
+                BusinessStepNameAndOrder current = executionMap.get(key);
+                if (current == null || (!isPrimaryBean(current.getStepName()) && isPrimaryBean(businessStep))) {
+                    executionMap.put(key, candidate);
+                }
+            });
         }
-        return executionMap;
+        return new HashSet<>(executionMap.values());
+    }
+
+    private boolean isPrimaryBean(String beanName) {
+        return applicationContext.findAnnotationOnBean(beanName, Primary.class) != null;
     }
 }

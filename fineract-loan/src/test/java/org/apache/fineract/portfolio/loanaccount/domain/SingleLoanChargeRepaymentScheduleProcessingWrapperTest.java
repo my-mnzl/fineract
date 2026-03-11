@@ -47,6 +47,11 @@ import org.apache.fineract.portfolio.loanaccount.serialization.LoanChargeValidat
 import org.apache.fineract.portfolio.loanaccount.service.LoanBalanceService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionProcessingService;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfAmountAndInterestChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfAmountChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfDisbursementAmountChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfInterestChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.SimpleChargeAmountCalculatorRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -68,8 +73,13 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapperTest {
     private ArgumentCaptor<Money> penaltyChargesWaived = ArgumentCaptor.forClass(Money.class);
     private ArgumentCaptor<Money> penaltyChargesWrittenOff = ArgumentCaptor.forClass(Money.class);
 
+    private final org.apache.fineract.portfolio.loanaccount.service.AmountInterestPenaltiesChargeCalculator amountInterestPenaltiesChargeCalculator = mock(
+            org.apache.fineract.portfolio.loanaccount.service.AmountInterestPenaltiesChargeCalculator.class);
     private final LoanChargeService loanChargeService = new LoanChargeService(mock(LoanChargeValidator.class),
-            mock(LoanTransactionProcessingService.class), mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class));
+            mock(LoanTransactionProcessingService.class), mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class),
+            new SimpleChargeAmountCalculatorRegistry(List.of(new PercentOfAmountChargeAmountCalculator(),
+                    new PercentOfAmountAndInterestChargeAmountCalculator(), new PercentOfInterestChargeAmountCalculator(),
+                    new PercentOfDisbursementAmountChargeAmountCalculator(), amountInterestPenaltiesChargeCalculator)));
 
     @BeforeAll
     public static void init() {

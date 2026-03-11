@@ -34,6 +34,7 @@ import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecific
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeEnumerations;
 import org.apache.fineract.portfolio.client.api.ClientApiConstants;
 import org.apache.fineract.portfolio.client.data.ClientChargeData;
@@ -51,9 +52,10 @@ public class ClientChargeReadPlatformServiceImpl implements ClientChargeReadPlat
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final PlatformSecurityContext context;
+    private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
     private final ClientChargeMapper clientChargeMapper = new ClientChargeMapper();
 
-    public static final class ClientChargeMapper implements RowMapper<ClientChargeData> {
+    public final class ClientChargeMapper implements RowMapper<ClientChargeData> {
 
         @Override
         public ClientChargeData mapRow(ResultSet rs, @SuppressWarnings("unused") int rowNum) throws SQLException {
@@ -81,7 +83,7 @@ public class ClientChargeReadPlatformServiceImpl implements ClientChargeReadPlat
 
             final LocalDate dueDate = JdbcSupport.getLocalDate(rs, "dueAsOfDate");
             final int chargeCalculation = rs.getInt("chargeCalculation");
-            final EnumOptionData chargeCalculationType = ChargeEnumerations.chargeCalculationType(chargeCalculation);
+            final EnumOptionData chargeCalculationType = chargeCalculationOptionDataService.optionData(chargeCalculation);
             final boolean penalty = rs.getBoolean("penalty");
             final Boolean isPaid = rs.getBoolean("isPaid");
             final Boolean isWaived = rs.getBoolean("waived");

@@ -18,14 +18,21 @@
  */
 package org.apache.fineract.portfolio.charge.starter;
 
+import java.util.List;
 import org.apache.fineract.accounting.common.AccountingDropdownReadPlatformService;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepositoryWrapper;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainServiceJpa;
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.service.CurrencyReadPlatformService;
+import org.apache.fineract.portfolio.charge.domain.BasicChargeCalculationDescriptor;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationDescriptor;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationRegistry;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepository;
+import org.apache.fineract.portfolio.charge.domain.SimpleChargeCalculationRegistry;
 import org.apache.fineract.portfolio.charge.serialization.ChargeDefinitionCommandFromApiJsonDeserializer;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataLookup;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeDropdownReadPlatformService;
 import org.apache.fineract.portfolio.charge.service.ChargeDropdownReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.charge.service.ChargeReadPlatformService;
@@ -37,6 +44,7 @@ import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
 import org.apache.fineract.portfolio.paymenttype.domain.PaymentTypeRepositoryWrapper;
 import org.apache.fineract.portfolio.tax.domain.TaxGroupRepositoryWrapper;
 import org.apache.fineract.portfolio.tax.service.TaxReadPlatformService;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,9 +55,57 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 public class ChargeConfiguration {
 
     @Bean
+    public ChargeCalculationDescriptor flatChargeCalculationDescriptor() {
+        return new BasicChargeCalculationDescriptor(1, "chargeCalculationType.flat", "Flat", true, true, true, true, true, true);
+    }
+
+    @Bean
+    public ChargeCalculationDescriptor percentOfAmountChargeCalculationDescriptor() {
+        return new BasicChargeCalculationDescriptor(2, "chargeCalculationType.percent.of.amount", "% Amount", true, true, true, false,
+                false, false);
+    }
+
+    @Bean
+    public ChargeCalculationDescriptor percentOfAmountAndInterestChargeCalculationDescriptor() {
+        return new BasicChargeCalculationDescriptor(3, "chargeCalculationType.percent.of.amount.and.interest", "% Loan Amount + Interest",
+                true, false, false, false, false, false);
+    }
+
+    @Bean
+    public ChargeCalculationDescriptor percentOfInterestChargeCalculationDescriptor() {
+        return new BasicChargeCalculationDescriptor(4, "chargeCalculationType.percent.of.interest", "% Interest", true, false, false, false,
+                false, false);
+    }
+
+    @Bean
+    public ChargeCalculationDescriptor percentOfDisbursementAmountChargeCalculationDescriptor() {
+        return new BasicChargeCalculationDescriptor(5, "chargeCalculationType.percent.of.disbursement.amount", "% Disbursement Amount",
+                true, false, false, false, false, true);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ChargeCalculationRegistry.class)
+    public ChargeCalculationRegistry chargeCalculationRegistry(List<ChargeCalculationDescriptor> descriptors) {
+        return new SimpleChargeCalculationRegistry(descriptors);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ChargeCalculationOptionDataService.class)
+    public ChargeCalculationOptionDataService chargeCalculationOptionDataService(ChargeCalculationRegistry chargeCalculationRegistry) {
+        return new ChargeCalculationOptionDataService(chargeCalculationRegistry);
+    }
+
+    @Bean
+    public SmartInitializingSingleton chargeCalculationOptionDataLookup(
+            ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
+        return () -> ChargeCalculationOptionDataLookup.register(chargeCalculationOptionDataService::optionData);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(ChargeDropdownReadPlatformService.class)
-    public ChargeDropdownReadPlatformService chargeDropdownReadPlatformService() {
-        return new ChargeDropdownReadPlatformServiceImpl();
+    public ChargeDropdownReadPlatformService chargeDropdownReadPlatformService(ChargeCalculationRegistry chargeCalculationRegistry,
+            ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
+        return new ChargeDropdownReadPlatformServiceImpl(chargeCalculationRegistry, chargeCalculationOptionDataService);
     }
 
     @Bean
@@ -58,10 +114,11 @@ public class ChargeConfiguration {
             ChargeDropdownReadPlatformService chargeDropdownReadPlatformService, JdbcTemplate jdbcTemplate,
             DropdownReadPlatformService dropdownReadPlatformService, FineractEntityAccessUtil fineractEntityAccessUtil,
             AccountingDropdownReadPlatformService accountingDropdownReadPlatformService, TaxReadPlatformService taxReadPlatformService,
-            ConfigurationDomainServiceJpa configurationDomainServiceJpa, NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
+            ConfigurationDomainServiceJpa configurationDomainServiceJpa, NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+            ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
         return new ChargeReadPlatformServiceImpl(currencyReadPlatformService, chargeDropdownReadPlatformService, jdbcTemplate,
                 dropdownReadPlatformService, fineractEntityAccessUtil, accountingDropdownReadPlatformService, taxReadPlatformService,
-                configurationDomainServiceJpa, namedParameterJdbcTemplate);
+                configurationDomainServiceJpa, namedParameterJdbcTemplate, chargeCalculationOptionDataService);
     }
 
     @Bean

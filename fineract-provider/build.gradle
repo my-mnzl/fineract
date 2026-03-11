@@ -228,6 +228,17 @@ bootRun {
     }
 }
 
+def customRuntimeProjects = rootProject.subprojects.findAll {
+    it.path.startsWith(':custom:') && !it.path.startsWith(':custom:acme:') && it.path != ':custom:docker' && it.tasks.findByName('jar') != null
+}
+def customRuntimeJarTasks = customRuntimeProjects.collect { it.tasks.named('jar') }
+def customRuntimeJars = files(customRuntimeJarTasks.collect { it.flatMap { task -> task.archiveFile } })
+
+tasks.named('bootRun') {
+    dependsOn customRuntimeJarTasks
+    classpath += customRuntimeJars
+}
+
 springBoot {
     mainClass = 'org.apache.fineract.ServerApplication'
 }
@@ -369,6 +380,7 @@ tasks.register('devRun', org.springframework.boot.gradle.tasks.run.BootRun) {
     }
 
     // Inherit all bootRun settings
+    dependsOn customRuntimeJarTasks
     classpath = bootRun.classpath
     mainClass = bootRun.mainClass
     jvmArgs = bootRun.jvmArgs

@@ -64,6 +64,7 @@ public class LoanChargeService {
     private final LoanTransactionProcessingService loanTransactionProcessingService;
     private final LoanLifecycleStateMachine loanLifecycleStateMachine;
     private final LoanBalanceService loanBalanceService;
+    private final ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry;
 
     public void recalculateAllCharges(final Loan loan) {
         Set<LoanCharge> charges = loan.getActiveCharges();
@@ -86,7 +87,7 @@ public class LoanChargeService {
         BigDecimal amount = BigDecimal.ZERO;
         BigDecimal chargeAmt;
         BigDecimal totalChargeAmt = BigDecimal.ZERO;
-        if (loanCharge.getChargeCalculation().isPercentageBased()) {
+        if (isPercentageCalculation(loanCharge)) {
             if (loanCharge.isOverdueInstallmentCharge()) {
                 amount = calculateOverdueAmountPercentageAppliedTo(loan, loanCharge, penaltyWaitPeriod);
             } else {
@@ -112,7 +113,7 @@ public class LoanChargeService {
         BigDecimal amount = BigDecimal.ZERO;
         BigDecimal chargeAmt;
         BigDecimal totalChargeAmt = BigDecimal.ZERO;
-        if (loanCharge.getChargeCalculation().isPercentageBased()) {
+        if (isPercentageCalculation(loanCharge)) {
             if (loanCharge.isOverdueInstallmentCharge()) {
                 amount = calculateOverdueAmountPercentageAppliedTo(loan, loanCharge, penaltyWaitPeriod);
             } else {
@@ -213,7 +214,7 @@ public class LoanChargeService {
         final BigDecimal amount = calculateAmountPercentageAppliedTo(loan, loanCharge);
         BigDecimal chargeAmt;
         BigDecimal totalChargeAmt = BigDecimal.ZERO;
-        if (loanCharge.getChargeCalculation().isPercentageBased()) {
+        if (isPercentageCalculation(loanCharge)) {
             chargeAmt = loanCharge.getPercentage();
             if (loanCharge.isInstalmentFee()) {
                 totalChargeAmt = calculatePerInstallmentChargeAmount(loan, loanCharge);
@@ -247,35 +248,8 @@ public class LoanChargeService {
         if (loanCharge.isOverdueInstallmentCharge()) {
             return loanCharge.getAmountPercentageAppliedTo();
         }
-
-        return switch (loanCharge.getChargeCalculation()) {
-            case PERCENT_OF_AMOUNT -> getDerivedAmountForCharge(loan, loanCharge);
-            case PERCENT_OF_AMOUNT_AND_INTEREST -> {
-                final BigDecimal totalInterestCharged = loan.getTotalInterest();
-                if (loan.isMultiDisburmentLoan() && loanCharge.isDisbursementCharge()) {
-                    yield getTotalAllTrancheDisbursementAmount(loan).getAmount().add(totalInterestCharged);
-                } else {
-                    yield loan.getPrincipal().getAmount().add(totalInterestCharged);
-                }
-            }
-            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES -> {
-                final BigDecimal totalInterestCharged = loan.getTotalInterest();
-                if (loan.isMultiDisburmentLoan() && loanCharge.isDisbursementCharge()) {
-                    yield getTotalAllTrancheDisbursementAmount(loan).getAmount().add(totalInterestCharged);
-                } else {
-                    yield loan.getPrincipal().getAmount().add(totalInterestCharged);
-                }
-            }
-            case PERCENT_OF_INTEREST -> loan.getTotalInterest();
-            case PERCENT_OF_DISBURSEMENT_AMOUNT -> {
-                if (loanCharge.getTrancheDisbursementCharge() != null) {
-                    yield loanCharge.getTrancheDisbursementCharge().getloanDisbursementDetails().principal();
-                } else {
-                    yield loan.getPrincipal().getAmount();
-                }
-            }
-            case INVALID, FLAT -> BigDecimal.ZERO;
-        };
+        return chargeAmountCalculatorRegistry.find(loanCharge.getChargeCalculation().getValue())
+                .map(calculator -> calculator.calculateAmountPercentageAppliedTo(loan, loanCharge)).orElse(BigDecimal.ZERO);
     }
 
     public void updateLoanCharges(final Loan loan, final Set<LoanCharge> loanCharges) {
@@ -308,7 +282,7 @@ public class LoanChargeService {
             final BigDecimal amount = calculateAmountPercentageAppliedTo(loan, loanCharge);
             BigDecimal chargeAmt;
             BigDecimal totalChargeAmt = BigDecimal.ZERO;
-            if (loanCharge.getChargeCalculation().isPercentageBased()) {
+            if (isPercentageCalculation(loanCharge)) {
                 chargeAmt = loanCharge.getPercentage();
                 if (loanCharge.isInstalmentFee()) {
                     totalChargeAmt = calculatePerInstallmentChargeAmount(loan, loanCharge);
@@ -361,36 +335,27 @@ public class LoanChargeService {
             BigDecimal loanChargeAmount;
             actualChanges.put(amountParamName, newValue);
             actualChanges.put("locale", localeAsInput);
-            switch (loanCharge.getChargeCalculation()) {
-                case INVALID:
-                break;
-                case FLAT:
-                    if (loanCharge.isInstalmentFee()) {
-                        loanCharge.setAmount(
-                                newValue.multiply(BigDecimal.valueOf(loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions())));
-                    } else {
-                        loanCharge.setAmount(newValue);
-                    }
-                    loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
-                break;
-                case PERCENT_OF_AMOUNT:
-                case PERCENT_OF_AMOUNT_AND_INTEREST:
-                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
-                case PERCENT_OF_INTEREST:
-                case PERCENT_OF_DISBURSEMENT_AMOUNT:
-                    loanCharge.setPercentage(newValue);
-                    loanCharge.setAmountPercentageAppliedTo(amount);
-                    loanChargeAmount = BigDecimal.ZERO;
-                    if (loanCharge.isInstalmentFee()) {
-                        loanChargeAmount = calculatePerInstallmentChargeAmount(loanCharge.getLoan(), loanCharge.getChargeCalculation(),
-                                loanCharge.getPercentage());
-                    }
-                    if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
-                        loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
-                    }
-                    loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
-                    loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
-                break;
+            if (ChargeCalculationType.FLAT.equals(loanCharge.getChargeCalculation())) {
+                if (loanCharge.isInstalmentFee()) {
+                    loanCharge.setAmount(
+                            newValue.multiply(BigDecimal.valueOf(loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions())));
+                } else {
+                    loanCharge.setAmount(newValue);
+                }
+                loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
+            } else if (isPercentageCalculation(loanCharge.getChargeCalculation())) {
+                loanCharge.setPercentage(newValue);
+                loanCharge.setAmountPercentageAppliedTo(amount);
+                loanChargeAmount = BigDecimal.ZERO;
+                if (loanCharge.isInstalmentFee()) {
+                    loanChargeAmount = calculatePerInstallmentChargeAmount(loanCharge.getLoan(), loanCharge.getChargeCalculation(),
+                            loanCharge.getPercentage());
+                }
+                if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
+                    loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
+                }
+                loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
+                loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
             }
             loanCharge.setAmountOrPercentage(newValue);
             if (loanCharge.isInstalmentFee()) {
@@ -402,48 +367,40 @@ public class LoanChargeService {
 
     public void populateDerivedFields(final LoanCharge loanCharge, final BigDecimal amountPercentageAppliedTo,
             final BigDecimal chargeAmount, Integer numberOfRepayments, BigDecimal loanChargeAmount) {
-        switch (loanCharge.getChargeCalculation()) {
-            case INVALID:
-                loanCharge.setPercentage(null);
-                loanCharge.setAmount(null);
-                loanCharge.setAmountPercentageAppliedTo(null);
-                loanCharge.setAmountPaid(null);
-                loanCharge.setAmountOutstanding(BigDecimal.ZERO);
-                loanCharge.setAmountWaived(null);
-                loanCharge.setAmountWrittenOff(null);
-            break;
-            case FLAT:
-                loanCharge.setPercentage(null);
-                loanCharge.setAmountPercentageAppliedTo(null);
-                loanCharge.setAmountPaid(null);
-                if (loanCharge.isInstalmentFee()) {
-                    if (numberOfRepayments == null) {
-                        numberOfRepayments = loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions();
-                    }
-                    loanCharge.setAmount(chargeAmount.multiply(BigDecimal.valueOf(numberOfRepayments)));
-                } else {
-                    loanCharge.setAmount(chargeAmount);
+        if (ChargeCalculationType.INVALID.equals(loanCharge.getChargeCalculation())) {
+            loanCharge.setPercentage(null);
+            loanCharge.setAmount(null);
+            loanCharge.setAmountPercentageAppliedTo(null);
+            loanCharge.setAmountPaid(null);
+            loanCharge.setAmountOutstanding(BigDecimal.ZERO);
+            loanCharge.setAmountWaived(null);
+            loanCharge.setAmountWrittenOff(null);
+        } else if (ChargeCalculationType.FLAT.equals(loanCharge.getChargeCalculation())) {
+            loanCharge.setPercentage(null);
+            loanCharge.setAmountPercentageAppliedTo(null);
+            loanCharge.setAmountPaid(null);
+            if (loanCharge.isInstalmentFee()) {
+                if (numberOfRepayments == null) {
+                    numberOfRepayments = loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions();
                 }
-                loanCharge.setAmountOutstanding(loanCharge.getAmount());
-                loanCharge.setAmountWaived(null);
-                loanCharge.setAmountWrittenOff(null);
-            break;
-            case PERCENT_OF_AMOUNT:
-            case PERCENT_OF_AMOUNT_AND_INTEREST:
-            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
-            case PERCENT_OF_INTEREST:
-            case PERCENT_OF_DISBURSEMENT_AMOUNT:
-                loanCharge.setPercentage(chargeAmount);
-                loanCharge.setAmountPercentageAppliedTo(amountPercentageAppliedTo);
-                if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
-                    loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
-                }
-                loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
-                loanCharge.setAmountPaid(null);
-                loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
-                loanCharge.setAmountWaived(null);
-                loanCharge.setAmountWrittenOff(null);
-            break;
+                loanCharge.setAmount(chargeAmount.multiply(BigDecimal.valueOf(numberOfRepayments)));
+            } else {
+                loanCharge.setAmount(chargeAmount);
+            }
+            loanCharge.setAmountOutstanding(loanCharge.getAmount());
+            loanCharge.setAmountWaived(null);
+            loanCharge.setAmountWrittenOff(null);
+        } else if (isPercentageCalculation(loanCharge.getChargeCalculation())) {
+            loanCharge.setPercentage(chargeAmount);
+            loanCharge.setAmountPercentageAppliedTo(amountPercentageAppliedTo);
+            if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
+                loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
+            }
+            loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
+            loanCharge.setAmountPaid(null);
+            loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
+            loanCharge.setAmountWaived(null);
+            loanCharge.setAmountWrittenOff(null);
         }
         loanCharge.setAmountOrPercentage(chargeAmount);
         if (loanCharge.getLoan() != null && loanCharge.isInstalmentFee()) {
@@ -453,35 +410,12 @@ public class LoanChargeService {
 
     public void update(final LoanCharge loanCharge, final BigDecimal amount, final LocalDate dueDate, final Integer numberOfRepayments) {
         BigDecimal amountPercentageAppliedTo = BigDecimal.ZERO;
+        if (dueDate != null) {
+            loanCharge.setDueDate(dueDate);
+        }
         if (loanCharge.getLoan() != null) {
-            switch (loanCharge.getChargeCalculation()) {
-                case PERCENT_OF_AMOUNT:
-                    // If charge type is specified due date and loan is multi disburment loan.
-                    // Then we need to get as of this loan charge due date how much amount
-                    // disbursed.
-                    if (loanCharge.getLoan().isMultiDisburmentLoan() && loanCharge.isSpecifiedDueDate()) {
-                        for (final LoanDisbursementDetails loanDisbursementDetails : loanCharge.getLoan().getDisbursementDetails()) {
-                            if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), loanCharge.getDueDate())) {
-                                amountPercentageAppliedTo = amountPercentageAppliedTo.add(loanDisbursementDetails.principal());
-                            }
-                        }
-                    } else {
-                        amountPercentageAppliedTo = loanCharge.getLoan().getPrincipal().getAmount();
-                    }
-                break;
-                case PERCENT_OF_AMOUNT_AND_INTEREST:
-                    amountPercentageAppliedTo = loanCharge.getLoan().getPrincipal().getAmount()
-                            .add(loanCharge.getLoan().getTotalInterest());
-                break;
-                case PERCENT_OF_INTEREST:
-                    amountPercentageAppliedTo = loanCharge.getLoan().getTotalInterest();
-                break;
-                case PERCENT_OF_DISBURSEMENT_AMOUNT:
-                    LoanTrancheDisbursementCharge loanTrancheDisbursementCharge = loanCharge.getLoanTrancheDisbursementCharge();
-                    amountPercentageAppliedTo = loanTrancheDisbursementCharge.getloanDisbursementDetails().principal();
-                break;
-                default:
-                break;
+            if (isPercentageCalculation(loanCharge.getChargeCalculation())) {
+                amountPercentageAppliedTo = calculateAmountPercentageAppliedTo(loanCharge.getLoan(), loanCharge);
             }
         }
         update(loanCharge, amount, dueDate, amountPercentageAppliedTo, numberOfRepayments, BigDecimal.ZERO);
@@ -774,15 +708,9 @@ public class LoanChargeService {
 
     private Money calculateOverdueAmountPercentageAppliedTo(final Loan loan, final LoanRepaymentScheduleInstallment installment,
             final ChargeCalculationType calculationType) {
-        return switch (calculationType) {
-            case PERCENT_OF_AMOUNT -> installment.getPrincipalOutstanding(loan.getCurrency());
-            case PERCENT_OF_AMOUNT_AND_INTEREST ->
-                installment.getPrincipalOutstanding(loan.getCurrency()).plus(installment.getInterestOutstanding(loan.getCurrency()));
-            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES ->
-                installment.getPrincipalOutstanding(loan.getCurrency()).plus(installment.getInterestOutstanding(loan.getCurrency()));
-            case PERCENT_OF_INTEREST -> installment.getInterestOutstanding(loan.getCurrency());
-            default -> Money.zero(loan.getCurrency());
-        };
+        return chargeAmountCalculatorRegistry.find(calculationType.getValue())
+                .map(calculator -> calculator.calculateOverdueAmountPercentageAppliedTo(loan, installment))
+                .orElse(Money.zero(loan.getCurrency()));
     }
 
     private void update(final LoanCharge loanCharge, final BigDecimal amount, final LocalDate dueDate, final BigDecimal loanPrincipal,
@@ -792,31 +720,22 @@ public class LoanChargeService {
         }
 
         if (amount != null) {
-            switch (loanCharge.getChargeCalculation()) {
-                case INVALID:
-                break;
-                case FLAT:
-                    if (loanCharge.isInstalmentFee()) {
-                        if (numberOfRepayments == null) {
-                            numberOfRepayments = loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions();
-                        }
-                        loanCharge.setAmount(amount.multiply(BigDecimal.valueOf(numberOfRepayments)));
-                    } else {
-                        loanCharge.setAmount(amount);
+            if (ChargeCalculationType.FLAT.equals(loanCharge.getChargeCalculation())) {
+                if (loanCharge.isInstalmentFee()) {
+                    if (numberOfRepayments == null) {
+                        numberOfRepayments = loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions();
                     }
-                break;
-                case PERCENT_OF_AMOUNT:
-                case PERCENT_OF_AMOUNT_AND_INTEREST:
-                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
-                case PERCENT_OF_INTEREST:
-                case PERCENT_OF_DISBURSEMENT_AMOUNT:
-                    loanCharge.setPercentage(amount);
-                    loanCharge.setAmountPercentageAppliedTo(loanPrincipal);
-                    if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
-                        loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
-                    }
-                    loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
-                break;
+                    loanCharge.setAmount(amount.multiply(BigDecimal.valueOf(numberOfRepayments)));
+                } else {
+                    loanCharge.setAmount(amount);
+                }
+            } else if (isPercentageCalculation(loanCharge.getChargeCalculation())) {
+                loanCharge.setPercentage(amount);
+                loanCharge.setAmountPercentageAppliedTo(loanPrincipal);
+                if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
+                    loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
+                }
+                loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
             }
             loanCharge.setAmountOrPercentage(amount);
             loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
@@ -833,31 +752,22 @@ public class LoanChargeService {
         }
 
         if (amount != null) {
-            switch (loanCharge.getChargeCalculation()) {
-                case INVALID:
-                break;
-                case FLAT:
-                    if (loanCharge.isInstalmentFee()) {
-                        if (numberOfRepayments == null) {
-                            numberOfRepayments = loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions();
-                        }
-                        loanCharge.setAmount(amount.multiply(BigDecimal.valueOf(numberOfRepayments)));
-                    } else {
-                        loanCharge.setAmount(amount);
+            if (ChargeCalculationType.FLAT.equals(loanCharge.getChargeCalculation())) {
+                if (loanCharge.isInstalmentFee()) {
+                    if (numberOfRepayments == null) {
+                        numberOfRepayments = loanCharge.getLoan().fetchNumberOfInstallmentsAfterExceptions();
                     }
-                break;
-                case PERCENT_OF_AMOUNT:
-                case PERCENT_OF_AMOUNT_AND_INTEREST:
-                case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
-                case PERCENT_OF_INTEREST:
-                case PERCENT_OF_DISBURSEMENT_AMOUNT:
-                    loanCharge.setPercentage(amount);
-                    loanCharge.setAmountPercentageAppliedTo(loanPrincipal);
-                    if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
-                        loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
-                    }
-                    loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
-                break;
+                    loanCharge.setAmount(amount.multiply(BigDecimal.valueOf(numberOfRepayments)));
+                } else {
+                    loanCharge.setAmount(amount);
+                }
+            } else if (isPercentageCalculation(loanCharge.getChargeCalculation())) {
+                loanCharge.setPercentage(amount);
+                loanCharge.setAmountPercentageAppliedTo(loanPrincipal);
+                if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
+                    loanChargeAmount = loanCharge.percentageOf(loanCharge.getAmountPercentageAppliedTo());
+                }
+                loanCharge.setAmount(loanCharge.minimumAndMaximumCap(loanChargeAmount));
             }
             loanCharge.setAmountOrPercentage(amount);
             loanCharge.setAmountOutstanding(loanCharge.calculateOutstanding());
@@ -865,16 +775,6 @@ public class LoanChargeService {
                 updateInstallmentCharges(loanCharge, transactionDate);
             }
         }
-    }
-
-    private Money getTotalAllTrancheDisbursementAmount(final Loan loan) {
-        Money amount = Money.zero(loan.getCurrency());
-        if (loan.isMultiDisburmentLoan()) {
-            for (final LoanDisbursementDetails loanDisbursementDetail : loan.getDisbursementDetails()) {
-                amount = amount.plus(loanDisbursementDetail.principal());
-            }
-        }
-        return amount;
     }
 
     private List<Long> fetchAllLoanChargeIds(final Loan loan) {
@@ -887,39 +787,17 @@ public class LoanChargeService {
 
     private Money calculateInstallmentChargeAmount(final Loan loan, final ChargeCalculationType calculationType,
             final BigDecimal percentage, final LoanRepaymentScheduleInstallment installment) {
-        Money percentOf = switch (calculationType) {
-            case PERCENT_OF_AMOUNT -> installment.getPrincipal(loan.getCurrency());
-            case PERCENT_OF_AMOUNT_AND_INTEREST ->
-                installment.getPrincipal(loan.getCurrency()).plus(installment.getInterestCharged(loan.getCurrency()));
-            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES ->
-                installment.getPrincipal(loan.getCurrency()).plus(installment.getInterestCharged(loan.getCurrency()));
-            case PERCENT_OF_INTEREST -> installment.getInterestCharged(loan.getCurrency());
-            case PERCENT_OF_DISBURSEMENT_AMOUNT, INVALID, FLAT -> Money.zero(loan.getCurrency());
-
-        };
-        return Money.zero(loan.getCurrency()) //
-                .plus(LoanCharge.percentageOf(percentOf.getAmount(), percentage));
+        return chargeAmountCalculatorRegistry.find(calculationType.getValue())
+                .map(calculator -> calculator.calculateInstallmentChargeAmount(loan, percentage, installment))
+                .orElse(Money.zero(loan.getCurrency()));
     }
 
-    private BigDecimal getDerivedAmountForCharge(final Loan loan, final LoanCharge loanCharge) {
-        BigDecimal amount = BigDecimal.ZERO;
-        if (loan.isMultiDisburmentLoan() && loanCharge.getCharge().getChargeTimeType().equals(ChargeTimeType.DISBURSEMENT.getValue())) {
-            amount = loan.getApprovedPrincipal();
-        } else {
-            // If charge type is specified due date and loan is multi disburment loan.
-            // Then we need to get as of this loan charge due date how much amount
-            // disbursed.
-            if (loanCharge.isSpecifiedDueDate() && loan.isMultiDisburmentLoan()) {
-                for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
-                    if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), loanCharge.getDueDate())) {
-                        amount = amount.add(loanDisbursementDetails.principal());
-                    }
-                }
-            } else {
-                amount = loan.getPrincipal().getAmount();
-            }
-        }
-        return amount;
+    private boolean isPercentageCalculation(final LoanCharge loanCharge) {
+        return isPercentageCalculation(loanCharge.getChargeCalculation());
+    }
+
+    private boolean isPercentageCalculation(final ChargeCalculationType calculationType) {
+        return calculationType != null && chargeAmountCalculatorRegistry.supports(calculationType.getValue());
     }
 
     public void removeLoanCharge(final Loan loan, final LoanCharge loanCharge) {

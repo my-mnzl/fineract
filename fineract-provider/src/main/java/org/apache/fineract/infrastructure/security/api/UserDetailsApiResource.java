@@ -36,13 +36,14 @@ import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.security.constants.TwoFactorConstants;
 import org.apache.fineract.infrastructure.security.data.AuthenticatedOauthUserData;
-import org.apache.fineract.infrastructure.security.data.FineractJwtAuthenticationToken;
+import org.apache.fineract.infrastructure.security.data.FineractJwtAuthentication;
 import org.apache.fineract.infrastructure.security.service.SpringSecurityPlatformSecurityContext;
 import org.apache.fineract.useradministration.data.RoleData;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.apache.fineract.useradministration.domain.Role;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -76,12 +77,12 @@ public class UserDetailsApiResource {
             return null;
         }
 
-        final FineractJwtAuthenticationToken authentication = (FineractJwtAuthenticationToken) context.getAuthentication();
-        if (authentication == null) {
+        final Authentication authentication = context.getAuthentication();
+        if (!(authentication instanceof FineractJwtAuthentication fineractJwtAuthentication)) {
             return null;
         }
 
-        final AppUser principal = (AppUser) authentication.getPrincipal();
+        final AppUser principal = (AppUser) fineractJwtAuthentication.getUserDetails();
         if (principal == null) {
             return null;
         }
@@ -112,13 +113,13 @@ public class UserDetailsApiResource {
                 && !principal.hasSpecificPermissionTo(TwoFactorConstants.BYPASS_TWO_FACTOR_PERMISSION);
         if (this.springSecurityPlatformSecurityContext.doesPasswordHasToBeRenewed(principal)) {
             authenticatedUserData = new AuthenticatedOauthUserData().setUsername(principal.getUsername()).setUserId(principal.getId())
-                    .setAccessToken(authentication.getToken().getTokenValue()).setAuthenticated(true).setShouldRenewPassword(true)
-                    .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
+                    .setAccessToken(fineractJwtAuthentication.getToken().getTokenValue()).setAuthenticated(true)
+                    .setShouldRenewPassword(true).setTwoFactorAuthenticationRequired(isTwoFactorRequired);
         } else {
             authenticatedUserData = new AuthenticatedOauthUserData().setUsername(principal.getUsername()).setOfficeId(officeId)
                     .setOfficeName(officeName).setStaffId(staffId).setStaffDisplayName(staffDisplayName)
                     .setOrganisationalRole(organisationalRole).setRoles(roles).setPermissions(permissions).setUserId(principal.getId())
-                    .setAccessToken(authentication.getToken().getTokenValue()).setAuthenticated(true)
+                    .setAccessToken(fineractJwtAuthentication.getToken().getTokenValue()).setAuthenticated(true)
                     .setTwoFactorAuthenticationRequired(isTwoFactorRequired);
         }
 

@@ -26,7 +26,7 @@ public enum ChargeCalculationType {
     PERCENT_OF_AMOUNT_AND_INTEREST(3, "chargeCalculationType.percent.of.amount.and.interest"), //
     PERCENT_OF_INTEREST(4, "chargeCalculationType.percent.of.interest"), //
     PERCENT_OF_DISBURSEMENT_AMOUNT(5, "chargeCalculationType.percent.of.disbursement.amount"), //
-    PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES(6, "chargeCalculationType.percent.of.amount.interest.and.penalties"); //
+    CUSTOM(6, "chargeCalculationType.custom"); //
 
     private final Integer value;
     private final String code;
@@ -47,8 +47,7 @@ public enum ChargeCalculationType {
     public static Object[] validValuesForLoan() {
         return new Integer[] { ChargeCalculationType.FLAT.getValue(), ChargeCalculationType.PERCENT_OF_AMOUNT.getValue(),
                 ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST.getValue(), ChargeCalculationType.PERCENT_OF_INTEREST.getValue(),
-                ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue(),
-                ChargeCalculationType.PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES.getValue() };
+                ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue() };
 
     }
 
@@ -79,7 +78,7 @@ public enum ChargeCalculationType {
             case 3 -> PERCENT_OF_AMOUNT_AND_INTEREST;
             case 4 -> PERCENT_OF_INTEREST;
             case 5 -> PERCENT_OF_DISBURSEMENT_AMOUNT;
-            case 6 -> PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES;
+            case 6 -> CUSTOM;
             default -> INVALID;
         };
     }
@@ -90,10 +89,6 @@ public enum ChargeCalculationType {
 
     public boolean isPercentageOfAmountAndInterest() {
         return this.value.equals(ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST.getValue());
-    }
-
-    public boolean isPercentageOfAmountInterestAndPenalties() {
-        return this.value.equals(ChargeCalculationType.PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES.getValue());
     }
 
     public boolean isPercentageOfInterest() {
@@ -113,15 +108,19 @@ public enum ChargeCalculationType {
     }
 
     public boolean isPercentageBased() {
-        return isPercentageOfAmount() || isPercentageOfAmountAndInterest() || isPercentageOfInterest()
-                || isPercentageOfDisbursementAmount();
+        return isPercentageOfAmount() || isPercentageOfAmountAndInterest() || isPercentageOfInterest() || isPercentageOfDisbursementAmount()
+                || isCustom();
     }
 
     public boolean hasInterest() {
-        return isPercentageOfInterest() || isPercentageOfAmountAndInterest();
+        return isPercentageOfInterest() || isPercentageOfAmountAndInterest() || isCustom();
     }
 
     public boolean isPercentageOfDisbursementAmount() {
         return this.value.equals(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue());
+    }
+
+    public boolean isCustom() {
+        return this.value.equals(ChargeCalculationType.CUSTOM.getValue());
     }
 }

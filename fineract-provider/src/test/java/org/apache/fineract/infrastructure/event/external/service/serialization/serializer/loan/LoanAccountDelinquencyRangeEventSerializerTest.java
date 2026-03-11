@@ -95,11 +95,17 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.loanaccount.serialization.LoanChargeValidator;
+import org.apache.fineract.portfolio.loanaccount.service.AmountInterestPenaltiesChargeCalculator;
 import org.apache.fineract.portfolio.loanaccount.service.LoanBalanceService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionProcessingService;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfAmountAndInterestChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfAmountChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfDisbursementAmountChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.PercentOfInterestChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.SimpleChargeAmountCalculatorRegistry;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
 import org.junit.jupiter.api.AfterEach;
@@ -130,8 +136,13 @@ public class LoanAccountDelinquencyRangeEventSerializerTest {
     @Mock
     private AvroDateTimeMapper mapper;
 
+    private final AmountInterestPenaltiesChargeCalculator amountInterestPenaltiesChargeCalculator = mock(
+            AmountInterestPenaltiesChargeCalculator.class);
     private final LoanChargeService loanChargeService = new LoanChargeService(mock(LoanChargeValidator.class),
-            mock(LoanTransactionProcessingService.class), mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class));
+            mock(LoanTransactionProcessingService.class), mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class),
+            new SimpleChargeAmountCalculatorRegistry(List.of(new PercentOfAmountChargeAmountCalculator(),
+                    new PercentOfAmountAndInterestChargeAmountCalculator(), new PercentOfInterestChargeAmountCalculator(),
+                    new PercentOfDisbursementAmountChargeAmountCalculator(), amountInterestPenaltiesChargeCalculator)));
 
     private MockedStatic<MoneyHelper> moneyHelper = Mockito.mockStatic(MoneyHelper.class);
 

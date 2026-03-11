@@ -71,17 +71,21 @@ public class LoanAccrualsProcessingServiceImplTest {
         when(loan.isClosed()).thenReturn(false);
         when(loan.getStatus()).thenReturn(loanStatus);
         when(loanStatus.isOverpaid()).thenReturn(false);
+        when(loan.isChargedOff()).thenReturn(false);
+        when(loan.isProgressiveSchedule()).thenReturn(false);
     }
 
     @ParameterizedTest
     @MethodSource("loanStatusTestCases")
-    void addPeriodicAccruals_ShouldNotProceed_WhenLoanIsClosedOrOverpaid(final boolean isClosed, final boolean isOverpaid) {
+    void addPeriodicAccruals_ShouldNotProceed_WhenLoanIsClosedOverpaidOrChargedOff(final boolean isClosed, final boolean isOverpaid,
+            final boolean isChargedOff) {
         // Given
         final LocalDate tillDate = LocalDate.now(ZoneId.systemDefault());
         when(loan.isClosed()).thenReturn(isClosed);
 
         when(loan.getStatus()).thenReturn(loanStatus);
         when(loanStatus.isOverpaid()).thenReturn(isOverpaid);
+        when(loan.isChargedOff()).thenReturn(isChargedOff);
 
         // When
         accrualsProcessingService.addPeriodicAccruals(tillDate, loan);
@@ -96,8 +100,21 @@ public class LoanAccrualsProcessingServiceImplTest {
     }
 
     private static Stream<Arguments> loanStatusTestCases() {
-        return Stream.of(Arguments.of(true, false), // Loan is closed
-                Arguments.of(false, true) // Loan is overpaid
+        return Stream.of(Arguments.of(true, false, false), // Loan is closed
+                Arguments.of(false, true, false), // Loan is overpaid
+                Arguments.of(false, false, true) // Loan is charged off
         );
+    }
+
+    @org.junit.jupiter.api.Test
+    void processIncomePostingAndAccruals_ShouldNotProceed_WhenLoanIsChargedOff() {
+        when(loan.isChargedOff()).thenReturn(true);
+
+        accrualsProcessingService.processIncomePostingAndAccruals(loan, true);
+
+        verify(loan, never()).getLoanInterestRecalculationDetails();
+        verifyNoInteractions(loanTransactionRepository);
+        verifyNoInteractions(journalEntryWritePlatformService);
+        verify(businessEventNotifierService, never()).notifyPostBusinessEvent(any());
     }
 }

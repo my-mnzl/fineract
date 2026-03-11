@@ -25,7 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
-import org.apache.fineract.infrastructure.jobs.exception.TruncatedJobExecutionException;
+import org.apache.fineract.infrastructure.jobs.exception.JobExecutionException;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
 import org.apache.fineract.portfolio.account.data.PortfolioAccountData;
@@ -42,11 +42,6 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
-import org.springframework.lang.NonNull;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -55,7 +50,6 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
     private final LoanChargeReadPlatformService loanChargeReadPlatformService;
     private final AccountAssociationsReadPlatformService accountAssociationsReadPlatformService;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-    private final TransactionTemplate transactionTemplate;
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
@@ -100,27 +94,14 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
             }
         }
         if (!errors.isEmpty()) {
-            log.error("TransferFeeChargeForLoans job completed with {} errors out of {} total charges",
-                    errors.size(), chargeDatas != null ? chargeDatas.size() : 0);
-            throw new TruncatedJobExecutionException(errors);
+            throw new JobExecutionException(errors);
         }
         return RepeatStatus.FINISHED;
     }
 
     private void transferFeeCharge(final AccountTransferDTO accountTransferDTO, List<Throwable> errors) {
-        // Configure transaction template to use REQUIRES_NEW propagation
-        // This ensures each transfer runs in its own transaction
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
         try {
-            transactionTemplate.execute(new TransactionCallbackWithoutResult() {
-                @Override
-                protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {
-                    accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
-                    log.debug("Successfully transferred fee charge {} for loan id {}",
-                            accountTransferDTO.getChargeId(), accountTransferDTO.getToAccountId());
-                }
-            });
+            accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
         } catch (RuntimeException e) {
             log.error("Exception while paying charge {} for loan id {}", accountTransferDTO.getChargeId(),
                     accountTransferDTO.getToAccountId(), e);

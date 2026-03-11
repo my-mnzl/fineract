@@ -54,4 +54,6 @@ public interface ScheduledDateGenerator {
 
     LocalDate generateNextScheduleDateStartingFromDisburseDateOrRescheduleDate(LocalDate lastRepaymentDate,
             LoanApplicationTerms loanApplicationTerms, HolidayDetailDTO holidayDetailDTO);
+
+    LocalDate generateNextRepaymentDateWhenHolidayApply(LocalDate lastRepaymentDate, LoanApplicationTerms loanApplicationTerms);
 }

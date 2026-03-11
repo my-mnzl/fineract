@@ -34,6 +34,7 @@ import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.charge.exception.LoanChargeNotFoundException;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeDropdownReadPlatformService;
 import org.apache.fineract.portfolio.charge.service.ChargeEnumerations;
 import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
@@ -55,8 +56,15 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
     private final ChargeDropdownReadPlatformService chargeDropdownReadPlatformService;
     private final DropdownReadPlatformService dropdownReadPlatformService;
     private final LoanChargeRepository loanChargeRepository;
+    private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
 
     private static final class LoanChargeMapper implements RowMapper<LoanChargeData> {
+
+        private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
+
+        private LoanChargeMapper(ChargeCalculationOptionDataService chargeCalculationOptionDataService) {
+            this.chargeCalculationOptionDataService = chargeCalculationOptionDataService;
+        }
 
         public String schema() {
             return "lc.id as id, lc.external_id as externalId, c.id as chargeId, c.name as name, lc.submitted_on_date as submittedOnDate, " //
@@ -107,7 +115,7 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
             LocalDate dueAsOfDate = JdbcSupport.getLocalDate(rs, "dueAsOfDate");
 
             final int chargeCalculation = rs.getInt("chargeCalculation");
-            final EnumOptionData chargeCalculationType = ChargeEnumerations.chargeCalculationType(chargeCalculation);
+            final EnumOptionData chargeCalculationType = chargeCalculationOptionDataService.optionData(chargeCalculation);
             final boolean penalty = rs.getBoolean("penalty");
 
             final int chargePaymentMode = rs.getInt("chargePaymentMode");
@@ -159,7 +167,7 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
     @Override
     public LoanChargeData retrieveLoanChargeDetails(final Long id, final Long loanId) {
         try {
-            final LoanChargeMapper rm = new LoanChargeMapper();
+            final LoanChargeMapper rm = new LoanChargeMapper(chargeCalculationOptionDataService);
             final String sql = "select " + rm.schema() + " where lc.id=? and lc.loan_id=?";
             return this.jdbcTemplate.queryForObject(sql, rm, id, loanId); // NOSONAR
         } catch (final EmptyResultDataAccessException e) {
@@ -169,7 +177,7 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
 
     @Override
     public Collection<LoanChargeData> retrieveLoanCharges(final Long loanId) {
-        final LoanChargeMapper rm = new LoanChargeMapper();
+        final LoanChargeMapper rm = new LoanChargeMapper(chargeCalculationOptionDataService);
         final String sql = "select " + rm.schema() + " where lc.loan_id=? AND lc.is_active = true"
                 + " order by coalesce(lc.due_for_collection_as_of_date,date(coalesce(dd.disbursedon_date,dd.expected_disburse_date))),lc.charge_time_enum ASC, lc.due_for_collection_as_of_date ASC, lc.is_penalty ASC";
         return this.jdbcTemplate.query(sql, rm, loanId); // NOSONAR

@@ -29,10 +29,11 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 public class TransferFeeChargeForLoansConfig {
@@ -47,26 +48,24 @@ public class TransferFeeChargeForLoansConfig {
     private AccountAssociationsReadPlatformService accountAssociationsReadPlatformService;
     @Autowired
     private AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-    @Autowired
-    private TransactionTemplate transactionTemplate;
 
     @Bean
-    protected Step transferFeeChargeForLoansStep() {
-        return new StepBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository)
-                .tasklet(transferFeeChargeForLoansTasklet(), transactionManager).build();
+    @ConditionalOnMissingBean(name = "transferFeeChargeForLoansStep")
+    protected Step transferFeeChargeForLoansStep(TransferFeeChargeForLoansTasklet tasklet) {
+        return new StepBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository).tasklet(tasklet, transactionManager).build();
     }
 
     @Bean
-    public Job transferFeeChargeForLoansJob() {
-        return new JobBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository)
-                .start(transferFeeChargeForLoansStep())
+    @ConditionalOnMissingBean(name = "transferFeeChargeForLoansJob")
+    public Job transferFeeChargeForLoansJob(@Qualifier("transferFeeChargeForLoansStep") Step transferFeeChargeForLoansStep) {
+        return new JobBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository).start(transferFeeChargeForLoansStep)
                 .incrementer(new RunIdIncrementer()).build();
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "transferFeeChargeForLoansTasklet")
     public TransferFeeChargeForLoansTasklet transferFeeChargeForLoansTasklet() {
-        return new TransferFeeChargeForLoansTasklet(loanChargeReadPlatformService,
-                accountAssociationsReadPlatformService,
-                accountTransfersWritePlatformService, transactionTemplate);
+        return new TransferFeeChargeForLoansTasklet(loanChargeReadPlatformService, accountAssociationsReadPlatformService,
+                accountTransfersWritePlatformService);
     }
 }

@@ -48,7 +48,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanCharge;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanChargeRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanDisbursementDetails;
-import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment; // pragma: allowlist secret
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTrancheDisbursementCharge;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
@@ -63,6 +63,7 @@ public class LoanChargeAssembler {
     private final LoanProductRepository loanProductRepository;
     private final ExternalIdFactory externalIdFactory;
     private final LoanChargeService loanChargeService;
+    private final ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry;
 
     public Set<LoanCharge> fromParsedJson(final JsonElement element, List<LoanDisbursementDetails> disbursementDetails) {
         JsonArray jsonDisbursement = this.fromApiJsonHelper.extractJsonArrayNamed("disbursementData", element);
@@ -269,54 +270,9 @@ public class LoanChargeAssembler {
         final ChargeTimeType chargeTime = null;
         final ChargeCalculationType chargeCalculation = null;
         final ChargePaymentMode chargePaymentMode = null;
-        BigDecimal amountPercentageAppliedTo = BigDecimal.ZERO;
-        switch (ChargeCalculationType.fromInt(chargeDefinition.getChargeCalculation())) {
-            case PERCENT_OF_AMOUNT:
-                if (command.hasParameter("principal")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("principal");
-                } else {
-                    amountPercentageAppliedTo = loan.getPrincipal().getAmount();
-                }
-            break;
-            case PERCENT_OF_AMOUNT_AND_INTEREST:
-                if (command.hasParameter("principal") && command.hasParameter("interest")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("principal")
-                            .add(command.bigDecimalValueOfParameterNamed("interest"));
-                } else {
-                    amountPercentageAppliedTo = loan.getPrincipal().getAmount().add(loan.getTotalInterest());
-                }
-            break;
-            case PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES:
-                if (command.hasParameter("principal") && command.hasParameter("interest")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("principal")
-                            .add(command.bigDecimalValueOfParameterNamed("interest"));
-                } else if (installment != null) {
-                    // For overdue installment charges, use installment-specific outstanding
-                    amountPercentageAppliedTo = installment.getPrincipalOutstanding(loan.getCurrency()).getAmount()
-                            .add(installment.getInterestOutstanding(loan.getCurrency()).getAmount());
-                } else {
-                    // For non-overdue charges, use loan totals
-                    amountPercentageAppliedTo = loan.getPrincipal().getAmount().add(loan.getTotalInterest());
-                }
-                // Add installment-specific penalty charges if installment is provided
-                if (installment != null) {
-                    amountPercentageAppliedTo = amountPercentageAppliedTo
-                            .add(installment.getPenaltyChargesOutstanding(loan.getCurrency()).getAmount());
-                } else {
-                    // Fallback to loan total penalties for non-overdue charges
-                    amountPercentageAppliedTo = amountPercentageAppliedTo.add(loan.getSummary().getTotalPenaltyChargesOutstanding());
-                }
-            break;
-            case PERCENT_OF_INTEREST:
-                if (command.hasParameter("interest")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("interest");
-                } else {
-                    amountPercentageAppliedTo = loan.getTotalInterest();
-                }
-            break;
-            default:
-            break;
-        }
+        BigDecimal amountPercentageAppliedTo = chargeAmountCalculatorRegistry.find(chargeDefinition.getChargeCalculation())
+                .map(calculator -> calculator.calculateCreationAmountPercentageAppliedTo(loan, command, installment))
+                .orElse(BigDecimal.ZERO);
 
         BigDecimal loanCharge = BigDecimal.ZERO;
         if (ChargeTimeType.fromInt(chargeDefinition.getChargeTimeType()).equals(ChargeTimeType.INSTALMENT_FEE)) {

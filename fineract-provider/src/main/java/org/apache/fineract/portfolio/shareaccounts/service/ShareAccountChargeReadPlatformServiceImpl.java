@@ -27,6 +27,7 @@ import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.portfolio.charge.data.ChargeData;
+import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeEnumerations;
 import org.apache.fineract.portfolio.shareaccounts.data.ShareAccountChargeData;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,6 +37,7 @@ import org.springframework.jdbc.core.RowMapper;
 public class ShareAccountChargeReadPlatformServiceImpl implements ShareAccountChargeReadPlatformService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
 
     @Override
     public Collection<ShareAccountChargeData> retrieveAccountCharges(Long accountId, String status) {
@@ -52,7 +54,7 @@ public class ShareAccountChargeReadPlatformServiceImpl implements ShareAccountCh
         return this.jdbcTemplate.query(sqlBuilder.toString(), rm, new Object[] { accountId });
     }
 
-    private static final class ShareAccountChargeMapper implements RowMapper<ShareAccountChargeData> {
+    private final class ShareAccountChargeMapper implements RowMapper<ShareAccountChargeData> {
 
         private final String schema;
 
@@ -102,7 +104,7 @@ public class ShareAccountChargeReadPlatformServiceImpl implements ShareAccountCh
             final EnumOptionData chargeTimeType = ChargeEnumerations.chargeTimeType(chargeTime);
 
             final int chargeCalculation = rs.getInt("chargeCalculation");
-            final EnumOptionData chargeCalculationType = ChargeEnumerations.chargeCalculationType(chargeCalculation);
+            final EnumOptionData chargeCalculationType = chargeCalculationOptionDataService.optionData(chargeCalculation);
             final Boolean isActive = rs.getBoolean("isActive");
             final BigDecimal chargeamountorpercentage = rs.getBigDecimal("charge_amount_or_percentage");
 

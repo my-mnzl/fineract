@@ -18,30 +18,29 @@
  */
 package org.apache.fineract.portfolio.charge.service;
 
-import static org.apache.fineract.portfolio.charge.service.ChargeEnumerations.chargeCalculationType;
 import static org.apache.fineract.portfolio.charge.service.ChargeEnumerations.chargePaymentMode;
 import static org.apache.fineract.portfolio.charge.service.ChargeEnumerations.chargeTimeType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.portfolio.charge.domain.ChargeAppliesTo;
-import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationDescriptor;
+import org.apache.fineract.portfolio.charge.domain.ChargeCalculationRegistry;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 
+@RequiredArgsConstructor
 public class ChargeDropdownReadPlatformServiceImpl implements ChargeDropdownReadPlatformService {
+
+    private final ChargeCalculationRegistry chargeCalculationRegistry;
+    private final ChargeCalculationOptionDataService chargeCalculationOptionDataService;
 
     @Override
     public List<EnumOptionData> retrieveCalculationTypes() {
-
-        return Arrays.asList(chargeCalculationType(ChargeCalculationType.FLAT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_INTEREST),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES));
+        return chargeCalculationRegistry.loanDescriptors().stream().map(this::chargeCalculationType).toList();
     }
 
     @Override
@@ -75,12 +74,7 @@ public class ChargeDropdownReadPlatformServiceImpl implements ChargeDropdownRead
 
     @Override
     public List<EnumOptionData> retrieveLoanCalculationTypes() {
-        return Arrays.asList(chargeCalculationType(ChargeCalculationType.FLAT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT_AND_INTEREST),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_INTEREST),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT_INTEREST_AND_PENALTIES));
+        return chargeCalculationRegistry.loanDescriptors().stream().map(this::chargeCalculationType).toList();
     }
 
     @Override
@@ -92,8 +86,7 @@ public class ChargeDropdownReadPlatformServiceImpl implements ChargeDropdownRead
 
     @Override
     public List<EnumOptionData> retrieveSavingsCalculationTypes() {
-        return Arrays.asList(chargeCalculationType(ChargeCalculationType.FLAT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT));
+        return chargeCalculationRegistry.savingsDescriptors().stream().map(this::chargeCalculationType).toList();
     }
 
     @Override
@@ -107,7 +100,7 @@ public class ChargeDropdownReadPlatformServiceImpl implements ChargeDropdownRead
 
     @Override
     public List<EnumOptionData> retrieveClientCalculationTypes() {
-        return Arrays.asList(chargeCalculationType(ChargeCalculationType.FLAT));
+        return chargeCalculationRegistry.clientDescriptors().stream().map(this::chargeCalculationType).toList();
     }
 
     @Override
@@ -117,13 +110,16 @@ public class ChargeDropdownReadPlatformServiceImpl implements ChargeDropdownRead
 
     @Override
     public List<EnumOptionData> retrieveSharesCalculationTypes() {
-        return Arrays.asList(chargeCalculationType(ChargeCalculationType.FLAT),
-                chargeCalculationType(ChargeCalculationType.PERCENT_OF_AMOUNT));
+        return chargeCalculationRegistry.sharesDescriptors().stream().map(this::chargeCalculationType).toList();
     }
 
     @Override
     public List<EnumOptionData> retrieveSharesCollectionTimeTypes() {
         return Arrays.asList(chargeTimeType(ChargeTimeType.SHAREACCOUNT_ACTIVATION), chargeTimeType(ChargeTimeType.SHARE_PURCHASE),
                 chargeTimeType(ChargeTimeType.SHARE_REDEEM));
+    }
+
+    private EnumOptionData chargeCalculationType(final ChargeCalculationDescriptor descriptor) {
+        return chargeCalculationOptionDataService.optionData(descriptor);
     }
 }
