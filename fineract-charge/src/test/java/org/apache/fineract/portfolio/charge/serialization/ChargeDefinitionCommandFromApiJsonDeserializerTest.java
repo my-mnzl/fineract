@@ -30,10 +30,10 @@ import org.apache.fineract.portfolio.charge.domain.BasicChargeCalculationDescrip
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.SimpleChargeCalculationRegistry;
 import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.api.Test;
 
 class ChargeDefinitionCommandFromApiJsonDeserializerTest {
 

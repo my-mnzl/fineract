@@ -42,8 +42,8 @@ import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.junit.jupiter.api.Test;
 
 public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
@@ -126,8 +126,8 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
             Integer createdFinancialActivityMappingId = ensureLiabilityTransferFinancialActivityMapping();
             SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
             try {
-                double accountBalanceBefore = ((Number) savingsAccountHelper.getSavingsSummary(context.savingsAccountId()).get("accountBalance"))
-                        .doubleValue();
+                double accountBalanceBefore = ((Number) savingsAccountHelper.getSavingsSummary(context.savingsAccountId())
+                        .get("accountBalance")).doubleValue();
 
                 schedulerJobHelper.executeAndAwaitJobByShortName(PERIODIC_JOB_SHORT_NAME);
                 schedulerJobHelper.executeAndAwaitJobByShortName(TRANSFER_FEE_JOB_SHORT_NAME);
@@ -138,8 +138,8 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
                 assertEquals(0.0, Utils.getDoubleValue(firstPeriod.getFeeChargesOutstanding()));
                 assertEquals(PERIODIC_CHARGE_AMOUNT, Utils.getDoubleValue(firstPeriod.getFeeChargesPaid()));
 
-                double accountBalanceAfter = ((Number) savingsAccountHelper.getSavingsSummary(context.savingsAccountId()).get("accountBalance"))
-                        .doubleValue();
+                double accountBalanceAfter = ((Number) savingsAccountHelper.getSavingsSummary(context.savingsAccountId())
+                        .get("accountBalance")).doubleValue();
                 assertEquals(accountBalanceBefore - PERIODIC_CHARGE_AMOUNT, accountBalanceAfter);
             } finally {
                 cleanupFinancialActivityMapping(createdFinancialActivityMappingId);
@@ -149,18 +149,20 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
 
     private PeriodicLoanContext createPeriodicLoan(final int numberOfRepayments) {
         Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
-        Long periodicChargeId = new ChargesHelper().createCharges(ChargesHelper.loanPeriodicChargeRequest(PERIODIC_CHARGE_AMOUNT,
-                ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, 1)).getResourceId();
+        Long periodicChargeId = new ChargesHelper()
+                .createCharges(ChargesHelper.loanPeriodicChargeRequest(PERIODIC_CHARGE_AMOUNT, ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, 1))
+                .getResourceId();
 
-        PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct().numberOfRepayments(numberOfRepayments)
-                .repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).multiDisburseLoan(false)
-                .disallowExpectedDisbursements(false).allowApprovedDisbursedAmountsOverApplied(false).overAppliedNumber(null)
-                .overAppliedCalculationType(null).charges(List.of(new LoanProductChargeData().id(periodicChargeId)));
+        PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct()
+                .numberOfRepayments(numberOfRepayments).repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L)
+                .multiDisburseLoan(false).disallowExpectedDisbursements(false).allowApprovedDisbursedAmountsOverApplied(false)
+                .overAppliedNumber(null).overAppliedCalculationType(null)
+                .charges(List.of(new LoanProductChargeData().id(periodicChargeId)));
 
         Long loanProductId = loanProductHelper.createLoanProduct(loanProduct).getResourceId();
-        Long loanId = applyAndApproveLoan(clientId, loanProductId, LOAN_DISBURSEMENT_DATE, 1000.0, numberOfRepayments, request -> request
-                .repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS).loanTermFrequency(numberOfRepayments)
-                .loanTermFrequencyType(RepaymentFrequencyType.MONTHS));
+        Long loanId = applyAndApproveLoan(clientId, loanProductId, LOAN_DISBURSEMENT_DATE, 1000.0, numberOfRepayments,
+                request -> request.repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS)
+                        .loanTermFrequency(numberOfRepayments).loanTermFrequencyType(RepaymentFrequencyType.MONTHS));
         disburseLoan(loanId, BigDecimal.valueOf(1000.0), LOAN_DISBURSEMENT_DATE);
 
         assertEquals(0, loanTransactionHelper.getLoanCharges(loanId).size());
@@ -177,15 +179,14 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
         savingsAccountHelper.depositToSavingsAccount(savingsAccountId, "10000", LOAN_DISBURSEMENT_DATE,
                 CommonConstants.RESPONSE_RESOURCE_ID);
 
-        Long periodicChargeId = new ChargesHelper()
-                .createCharges(ChargesHelper.loanPeriodicChargeRequest(PERIODIC_CHARGE_AMOUNT, ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS,
-                        1, ChargePaymentMode.ACCOUNT_TRANSFER.getValue()))
-                .getResourceId();
+        Long periodicChargeId = new ChargesHelper().createCharges(ChargesHelper.loanPeriodicChargeRequest(PERIODIC_CHARGE_AMOUNT,
+                ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, 1, ChargePaymentMode.ACCOUNT_TRANSFER.getValue())).getResourceId();
 
-        PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct().numberOfRepayments(numberOfRepayments)
-                .repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).multiDisburseLoan(false)
-                .disallowExpectedDisbursements(false).allowApprovedDisbursedAmountsOverApplied(false).overAppliedNumber(null)
-                .overAppliedCalculationType(null).charges(List.of(new LoanProductChargeData().id(periodicChargeId)));
+        PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct()
+                .numberOfRepayments(numberOfRepayments).repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L)
+                .multiDisburseLoan(false).disallowExpectedDisbursements(false).allowApprovedDisbursedAmountsOverApplied(false)
+                .overAppliedNumber(null).overAppliedCalculationType(null)
+                .charges(List.of(new LoanProductChargeData().id(periodicChargeId)));
 
         Long loanProductId = loanProductHelper.createLoanProduct(loanProduct).getResourceId();
         String loanApplicationJson = new LoanApplicationTestBuilder().withPrincipal("1000.0")
@@ -210,10 +211,10 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
 
     private Integer createSavingsAccountDailyPosting(final SavingsAccountHelper savingsAccountHelper, final Integer clientId,
             final String startDate) {
-        Integer savingsProductId = SavingsProductHelper.createSavingsProduct(new SavingsProductHelper()
-                .withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsMonthly()
-                .withInterestCalculationPeriodTypeAsDailyBalance().withMinimumOpenningBalance("10000.0").build(), requestSpec,
-                responseSpec);
+        Integer savingsProductId = SavingsProductHelper.createSavingsProduct(
+                new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsMonthly()
+                        .withInterestCalculationPeriodTypeAsDailyBalance().withMinimumOpenningBalance("10000.0").build(),
+                requestSpec, responseSpec);
         Integer savingsAccountId = savingsAccountHelper.applyForSavingsApplicationOnDate(clientId, savingsProductId,
                 SavingsAccountHelper.ACCOUNT_TYPE_INDIVIDUAL, startDate);
         savingsAccountHelper.approveSavingsOnDate(savingsAccountId, startDate);

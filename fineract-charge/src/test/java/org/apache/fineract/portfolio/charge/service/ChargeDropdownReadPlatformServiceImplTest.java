@@ -34,9 +34,9 @@ class ChargeDropdownReadPlatformServiceImplTest {
         ChargeDropdownReadPlatformServiceImpl underTest = new ChargeDropdownReadPlatformServiceImpl(
                 new SimpleChargeCalculationRegistry(List.of(new BasicChargeCalculationDescriptor(ChargeCalculationType.FLAT.getValue(),
                         ChargeCalculationType.FLAT.getCode(), "Flat", true, true, true, true, true, true))),
-                new ChargeCalculationOptionDataService(new SimpleChargeCalculationRegistry(List.of(new BasicChargeCalculationDescriptor(
-                        ChargeCalculationType.FLAT.getValue(), ChargeCalculationType.FLAT.getCode(), "Flat", true, true, true, true,
-                        true, true)))));
+                new ChargeCalculationOptionDataService(new SimpleChargeCalculationRegistry(
+                        List.of(new BasicChargeCalculationDescriptor(ChargeCalculationType.FLAT.getValue(),
+                                ChargeCalculationType.FLAT.getCode(), "Flat", true, true, true, true, true, true)))));
 
         assertThat(underTest.retrieveLoanCollectionTimeTypes()).extracting("id")
                 .contains(Long.valueOf(ChargeTimeType.LOAN_PERIODIC.getValue()));

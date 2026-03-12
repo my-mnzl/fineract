@@ -86,8 +86,8 @@ public final class ChargeEnumerations {
                         ChargeTimeType.TRANCHE_DISBURSEMENT.getCode(), "Tranche Disbursement");
             break;
             case LOAN_PERIODIC:
-                optionData = new EnumOptionData(ChargeTimeType.LOAN_PERIODIC.getValue().longValue(),
-                        ChargeTimeType.LOAN_PERIODIC.getCode(), "Periodic Loan Charge");
+                optionData = new EnumOptionData(ChargeTimeType.LOAN_PERIODIC.getValue().longValue(), ChargeTimeType.LOAN_PERIODIC.getCode(),
+                        "Periodic Loan Charge");
             break;
             case SHAREACCOUNT_ACTIVATION:
                 optionData = new EnumOptionData(ChargeTimeType.SHAREACCOUNT_ACTIVATION.getValue().longValue(),
