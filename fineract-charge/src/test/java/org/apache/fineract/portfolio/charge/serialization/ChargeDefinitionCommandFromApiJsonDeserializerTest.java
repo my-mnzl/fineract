@@ -80,23 +80,10 @@ class ChargeDefinitionCommandFromApiJsonDeserializerTest {
     private String periodicLoanChargeJson(final Integer feeFrequency, final Integer feeInterval, final String feeOnMonthDay) {
         final String feeFrequencyJson = feeFrequency == null ? "null" : feeFrequency.toString();
         final String feeOnMonthDayJson = feeOnMonthDay == null ? "null" : "\"" + feeOnMonthDay + "\"";
-        return """
-                {
-                  "name": "Periodic Insurance",
-                  "amount": 10,
-                  "locale": "en",
-                  "currencyCode": "USD",
-                  "chargeAppliesTo": 1,
-                  "chargeCalculationType": 1,
-                  "chargeTimeType": 17,
-                  "chargePaymentMode": 0,
-                  "penalty": false,
-                  "active": true,
-                  "monthDayFormat": "dd MMM",
-                  "feeFrequency": %s,
-                  "feeInterval": %d,
-                  "feeOnMonthDay": %s
-                }
-                """.formatted(feeFrequencyJson, feeInterval, feeOnMonthDayJson);
+        return String.join(System.lineSeparator(), "{", "  \"name\": \"Periodic Insurance\",", "  \"amount\": 10,", "  \"locale\": \"en\",",
+                "  \"currencyCode\": \"USD\",", "  \"chargeAppliesTo\": 1,", "  \"chargeCalculationType\": 1,", "  \"chargeTimeType\": 17,",
+                "  \"chargePaymentMode\": 0,", "  \"penalty\": false,", "  \"active\": true,", "  \"monthDayFormat\": \"dd MMM\",",
+                "  \"feeFrequency\": " + feeFrequencyJson + ",", "  \"feeInterval\": " + feeInterval + ",",
+                "  \"feeOnMonthDay\": " + feeOnMonthDayJson, "}");
     }
 }
