@@ -36,7 +36,8 @@ public enum ChargeTimeType {
     SHAREACCOUNT_ACTIVATION(13, "chargeTimeType.activation"), // only for shares
     SHARE_PURCHASE(14, "chargeTimeType.sharespurchase"), // only for shares
     SHARE_REDEEM(15, "chargeTimeType.sharesredeem"), // only for shares
-    SAVINGS_NOACTIVITY_FEE(16, "chargeTimeType.savingsNoActivityFee"); // only for savings
+    SAVINGS_NOACTIVITY_FEE(16, "chargeTimeType.savingsNoActivityFee"), // only for savings
+    LOAN_PERIODIC(17, "chargeTimeType.loanPeriodic"); // only for loans
 
     private final Integer value;
     private final String code;
@@ -57,7 +58,7 @@ public enum ChargeTimeType {
     public static Object[] validLoanValues() {
         return new Integer[] { ChargeTimeType.DISBURSEMENT.getValue(), ChargeTimeType.SPECIFIED_DUE_DATE.getValue(),
                 ChargeTimeType.INSTALMENT_FEE.getValue(), ChargeTimeType.OVERDUE_INSTALLMENT.getValue(),
-                ChargeTimeType.TRANCHE_DISBURSEMENT.getValue() };
+                ChargeTimeType.TRANCHE_DISBURSEMENT.getValue(), ChargeTimeType.LOAN_PERIODIC.getValue() };
     }
 
     public static Object[] validLoanChargeValues() {
@@ -133,6 +134,9 @@ public enum ChargeTimeType {
                 case 16:
                     chargeTimeType = SAVINGS_NOACTIVITY_FEE;
                 break;
+                case 17:
+                    chargeTimeType = LOAN_PERIODIC;
+                break;
                 default:
                     chargeTimeType = INVALID;
                 break;
@@ -190,7 +194,8 @@ public enum ChargeTimeType {
     }
 
     public boolean isAllowedLoanChargeTime() {
-        return isTimeOfDisbursement() || isOnSpecifiedDueDate() || isInstalmentFee() || isOverdueInstallment() || isTrancheDisbursement();
+        return isTimeOfDisbursement() || isOnSpecifiedDueDate() || isInstalmentFee() || isOverdueInstallment() || isTrancheDisbursement()
+                || isLoanPeriodic();
     }
 
     public boolean isAllowedClientChargeTime() {
@@ -208,6 +213,10 @@ public enum ChargeTimeType {
 
     public boolean isTrancheDisbursement() {
         return this.equals(ChargeTimeType.TRANCHE_DISBURSEMENT);
+    }
+
+    public boolean isLoanPeriodic() {
+        return this.equals(ChargeTimeType.LOAN_PERIODIC);
     }
 
     public boolean isShareAccountActivation() {

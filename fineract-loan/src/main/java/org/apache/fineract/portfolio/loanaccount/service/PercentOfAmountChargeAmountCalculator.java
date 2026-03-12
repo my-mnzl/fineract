@@ -50,7 +50,7 @@ public class PercentOfAmountChargeAmountCalculator implements ChargeAmountCalcul
         BigDecimal amount = BigDecimal.ZERO;
         if (loan.isMultiDisburmentLoan() && loanCharge.getCharge().getChargeTimeType().equals(ChargeTimeType.DISBURSEMENT.getValue())) {
             amount = loan.getApprovedPrincipal();
-        } else if (loanCharge.isSpecifiedDueDate() && loan.isMultiDisburmentLoan()) {
+        } else if ((loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic()) && loan.isMultiDisburmentLoan()) {
             for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
                 if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), loanCharge.getDueDate())) {
                     amount = amount.add(loanDisbursementDetails.principal());

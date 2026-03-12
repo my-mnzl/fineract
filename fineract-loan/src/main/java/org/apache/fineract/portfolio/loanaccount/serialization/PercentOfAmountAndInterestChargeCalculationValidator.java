@@ -38,7 +38,7 @@ public class PercentOfAmountAndInterestChargeCalculationValidator implements Cha
         if (loanCharge.isInstalmentFee()) {
             return "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
         }
-        if (loanCharge.isSpecifiedDueDate()) {
+        if (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic()) {
             return "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
         }
         return null;
@@ -49,7 +49,7 @@ public class PercentOfAmountAndInterestChargeCalculationValidator implements Cha
         if (chargeTime.isInstalmentFee()) {
             return "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
         }
-        if (chargeTime.isSpecifiedDueDate()) {
+        if (chargeTime.isSpecifiedDueDate() || chargeTime.isLoanPeriodic()) {
             return "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
         }
         return null;

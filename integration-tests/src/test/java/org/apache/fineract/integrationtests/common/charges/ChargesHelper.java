@@ -31,6 +31,7 @@ import org.apache.fineract.client.util.JSON;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +65,7 @@ public final class ChargesHelper {
     public static final Integer SHAREACCOUNT_ACTIVATION = 13;
     public static final Integer SHARE_PURCHASE = 14;
     public static final Integer SHARE_REDEEM = 15;
+    public static final Integer CHARGE_LOAN_PERIODIC = 17;
 
     public static final Integer CHARGE_CALCULATION_TYPE_FLAT = 1;
     public static final Integer CHARGE_CALCULATION_TYPE_PERCENTAGE_AMOUNT = 2;
@@ -810,5 +812,18 @@ public final class ChargesHelper {
 
     public GetChargesResponse retrieveCharge(final Long chargeId) {
         return Calls.ok(FineractClientHelper.getFineractClient().charges.retrieveCharge(chargeId));
+    }
+
+    public static ChargeRequest loanPeriodicChargeRequest(final Double amount, final Integer feeFrequency, final Integer feeInterval) {
+        return loanPeriodicChargeRequest(amount, feeFrequency, feeInterval, ChargePaymentMode.REGULAR.getValue());
+    }
+
+    public static ChargeRequest loanPeriodicChargeRequest(final Double amount, final Integer feeFrequency, final Integer feeInterval,
+            final Integer chargePaymentMode) {
+        return new ChargeRequest().active(true).amount(amount).chargeAppliesTo(CHARGE_APPLIES_TO_LOAN)
+                .chargeCalculationType(CHARGE_CALCULATION_TYPE_FLAT).chargeTimeType(CHARGE_LOAN_PERIODIC)
+                .chargePaymentMode(chargePaymentMode).currencyCode(CURRENCY_CODE).locale("en").penalty(false)
+                .feeFrequency(String.valueOf(feeFrequency)).feeInterval(String.valueOf(feeInterval))
+                .name(Utils.uniqueRandomStringGenerator("Charge_Loan_Periodic_", 6));
     }
 }

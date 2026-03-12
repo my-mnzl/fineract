@@ -37,7 +37,7 @@ public class PercentOfInterestChargeCalculationValidator implements ChargeCalcul
 
     @Override
     public String validateLoanCharge(LoanCharge loanCharge) {
-        if (loanCharge.isSpecifiedDueDate()) {
+        if (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic()) {
             return "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
         }
         if (loanCharge.isInstalmentFee() && loanCharge.getLoan().isProgressiveSchedule()) {
@@ -48,7 +48,7 @@ public class PercentOfInterestChargeCalculationValidator implements ChargeCalcul
 
     @Override
     public String validateLoanProductRestriction(ChargeTimeType chargeTime, LoanProduct loanProduct) {
-        if (chargeTime.isSpecifiedDueDate()) {
+        if (chargeTime.isSpecifiedDueDate() || chargeTime.isLoanPeriodic()) {
             return "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
         }
         LoanProductRelatedDetail detail = loanProduct.getLoanProductRelatedDetail();

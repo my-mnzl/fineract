@@ -1263,7 +1263,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         final BiFunction<LocalDate, LocalDate, LocalDate> earlierDate = (date1, date2) -> DateUtils.isBefore(date1, date2) ? date1 : date2;
 
         return this.charges.stream().filter(LoanCharge::isActive)
-                .filter(loanCharge -> loanCharge.isSpecifiedDueDate() || loanCharge.isOverdueInstallmentCharge())
+                .filter(loanCharge -> loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic() || loanCharge.isOverdueInstallmentCharge())
                 .filter(loanCharge -> loanCharge.getDueLocalDate() != null).anyMatch(loanCharge -> {
                     final LocalDate comparisonDate = earlierDate.apply(loanCharge.getDueLocalDate(), loanCharge.getSubmittedOnDate());
                     return comparisonDate != null && comparisonDate.isAfter(transaction.getTransactionDate());

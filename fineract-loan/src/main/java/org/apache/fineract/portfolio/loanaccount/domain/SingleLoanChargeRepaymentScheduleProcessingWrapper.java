@@ -45,7 +45,7 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
             totalPrincipal = totalPrincipal.plus(installment.getPrincipal(currency));
         }
         List<LoanChargePaidBy> accruals = null;
-        if (loanCharge.isSpecifiedDueDate()) {
+        if (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic()) {
             LoanRepaymentScheduleInstallment addedPeriod = addChargeOnlyRepaymentInstallmentIfRequired(loanCharge, installments);
             if (addedPeriod != null) {
                 addedPeriod.updateObligationsMet(currency, disbursementDate);
@@ -126,7 +126,8 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
         }
         BigDecimal baseAmount = BigDecimal.ZERO;
         Loan loan = loanCharge.getLoan();
-        if (loan != null && loanCharge.isFeeCharge() && !calculationType.hasInterest() && loanCharge.isSpecifiedDueDate()
+        if (loan != null && loanCharge.isFeeCharge() && !calculationType.hasInterest()
+                && (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic())
                 && loan.isMultiDisburmentLoan()) {
             // If charge type is specified due date and loan is multi disburment loan.
             // Then we need to get as of this loan charge due date how much amount disbursed.
@@ -211,7 +212,7 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
         if (installments == null) {
             return null;
         }
-        if (!loanCharge.isSpecifiedDueDate()) {
+        if (!(loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic())) {
             return null;
         }
         LocalDate chargeDueDate = loanCharge.getEffectiveDueDate();

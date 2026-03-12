@@ -44,4 +44,6 @@ public interface LoanChargeWritePlatformService {
     CommandProcessingResult deactivateOverdueLoanCharge(Long loanId, JsonCommand command);
 
     void applyOverdueChargesForLoan(Long loanId, Collection<OverdueLoanScheduleData> overdueLoanScheduleDataList);
+
+    void applyPeriodicChargesForLoan(Long loanId);
 }

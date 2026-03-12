@@ -865,6 +865,101 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
         }
     }
 
+    @Transactional
+    @Override
+    public void applyPeriodicChargesForLoan(final Long loanId) {
+        final Loan loan = this.loanAssembler.assembleFrom(loanId);
+        if (loan.isChargedOff() || !(loan.getStatus().isActive() || loan.getStatus().isOverpaid())) {
+            log.warn("Adding periodic charge to Loan: {} is not allowed. Loan Account is not open", loanId);
+            return;
+        }
+
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
+        final LocalDate anchorDate = determinePeriodicChargeAnchorDate(loan);
+        if (anchorDate == null || DateUtils.isAfter(anchorDate, businessDate) || loan.getLoanProduct() == null
+                || loan.getLoanProduct().getCharges() == null) {
+            return;
+        }
+
+        final List<Charge> periodicCharges = loan.getLoanProduct().getCharges().stream().filter(Charge::isActive).filter(Charge::isLoanCharge)
+                .filter(Charge::isLoanPeriodic).toList();
+        if (periodicCharges.isEmpty()) {
+            return;
+        }
+
+        boolean runInterestRecalculation = false;
+        boolean chargesAdded = false;
+        LocalDate recalculateFrom = businessDate;
+        LocalDate lastChargeDate = null;
+        final Collection<LoanCharge> existingCharges = loan.getCharges() == null ? List.of() : loan.getCharges();
+
+        for (final Charge chargeDefinition : periodicCharges) {
+            final Set<LocalDate> existingDueDates = existingCharges.stream()
+                    .filter(existingCharge -> existingCharge.getCharge() != null
+                            && chargeDefinition.getId().equals(existingCharge.getCharge().getId()))
+                    .map(LoanCharge::getDueLocalDate).filter(dueDate -> dueDate != null).collect(HashSet::new, HashSet::add, HashSet::addAll);
+
+            for (final LocalDate occurrenceDate : calculatePeriodicChargeDates(chargeDefinition, anchorDate, businessDate)) {
+                if (existingDueDates.contains(occurrenceDate)) {
+                    continue;
+                }
+                final LoanCharge loanCharge = loanChargeAssembler.createNewFromChargeDefinition(loan, chargeDefinition, occurrenceDate);
+                if (BigDecimal.ZERO.compareTo(loanCharge.amount()) == 0) {
+                    continue;
+                }
+
+                final boolean appliedOnBackDate = addCharge(loan, chargeDefinition, loanCharge);
+                runInterestRecalculation = runInterestRecalculation || appliedOnBackDate;
+                if (DateUtils.isAfter(recalculateFrom, occurrenceDate)) {
+                    recalculateFrom = occurrenceDate;
+                }
+                if (lastChargeDate == null || DateUtils.isAfter(occurrenceDate, lastChargeDate)) {
+                    lastChargeDate = occurrenceDate;
+                }
+                existingDueDates.add(occurrenceDate);
+                chargesAdded = true;
+            }
+        }
+
+        if (!chargesAdded) {
+            return;
+        }
+
+        boolean reprocessRequired = true;
+        LocalDate recalculatedTill = loan.fetchInterestRecalculateFromDate();
+        if (recalculatedTill != null && DateUtils.isAfter(recalculateFrom, recalculatedTill)) {
+            recalculateFrom = recalculatedTill;
+        }
+
+        Loan loanToSave = loan;
+        if (loan.isInterestBearingAndInterestRecalculationEnabled()) {
+            if (runInterestRecalculation && loan.isFeeCompoundingEnabledForInterestRecalculation()) {
+                loanToSave = runScheduleRecalculation(loan, recalculateFrom);
+                reprocessRequired = false;
+            }
+            this.loanWritePlatformService.updateOriginalSchedule(loanToSave);
+        }
+
+        if (reprocessRequired) {
+            if (loanToSave.isProgressiveSchedule()) {
+                final ScheduleGeneratorDTO scheduleGeneratorDTO = loanUtilService.buildScheduleGeneratorDTO(loanToSave, null);
+                loanScheduleService.regenerateRepaymentSchedule(loanToSave, scheduleGeneratorDTO);
+            }
+            reprocessLoanTransactionsService.reprocessTransactions(loanToSave);
+            if (lastChargeDate != null) {
+                loanLifecycleStateMachine.determineAndTransition(loanToSave, lastChargeDate);
+            }
+            loanAccountService.saveAndFlushLoanWithDataIntegrityViolationChecks(loanToSave);
+        }
+
+        if (loanToSave.isInterestBearingAndInterestRecalculationEnabled() && runInterestRecalculation
+                && loanToSave.isFeeCompoundingEnabledForInterestRecalculation()) {
+            loanAccrualsProcessingService.processAccrualsOnInterestRecalculation(loanToSave, true, true);
+        }
+        this.loanAccountDomainService.setLoanDelinquencyTag(loanToSave, businessDate);
+        businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loanToSave));
+    }
+
     private LoanTransaction applyChargeAdjustment(final Loan loan, final LoanCharge loanCharge, final BigDecimal transactionAmount,
             final LocalDate transactionDate, final ExternalId txnExternalId, PaymentDetail paymentDetail) {
         businessEventNotifierService.notifyPreBusinessEvent(new LoanChargeAdjustmentPreBusinessEvent(loan));
@@ -1172,6 +1267,38 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
                 loan.addLoanRepaymentScheduleInstallment(newEntry);
             }
         }
+    }
+
+    private LocalDate determinePeriodicChargeAnchorDate(final Loan loan) {
+        if (loan.getExpectedFirstRepaymentOnDate() != null) {
+            return loan.getExpectedFirstRepaymentOnDate();
+        }
+        if (loan.getRepaymentScheduleInstallments() == null) {
+            return null;
+        }
+        return loan.getRepaymentScheduleInstallments().stream().filter(installment -> !installment.isDownPayment())
+                .sorted((installment1, installment2) -> installment1.getInstallmentNumber()
+                        .compareTo(installment2.getInstallmentNumber()))
+                .map(LoanRepaymentScheduleInstallment::getDueDate).findFirst().orElse(null);
+    }
+
+    private List<LocalDate> calculatePeriodicChargeDates(final Charge chargeDefinition, final LocalDate anchorDate,
+            final LocalDate businessDate) {
+        if (chargeDefinition.feeInterval() == null || chargeDefinition.feeInterval() <= 0) {
+            return List.of();
+        }
+        final PeriodFrequencyType frequencyType = PeriodFrequencyType.fromInt(chargeDefinition.feeFrequency());
+        if (frequencyType.isInvalid() || frequencyType.isDaily() || frequencyType.isWholeTerm()) {
+            return List.of();
+        }
+
+        final List<LocalDate> occurrenceDates = new ArrayList<>();
+        LocalDate occurrenceDate = anchorDate;
+        while (!DateUtils.isAfter(occurrenceDate, businessDate)) {
+            occurrenceDates.add(occurrenceDate);
+            occurrenceDate = scheduledDateGenerator.getRepaymentPeriodDate(frequencyType, chargeDefinition.feeInterval(), occurrenceDate);
+        }
+        return occurrenceDates;
     }
 
     public Loan runScheduleRecalculation(Loan loan, final LocalDate recalculateFrom) {

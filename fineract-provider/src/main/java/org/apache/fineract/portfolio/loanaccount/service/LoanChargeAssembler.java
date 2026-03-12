@@ -249,7 +249,8 @@ public class LoanChargeAssembler {
 
     public LoanCharge createNewFromJson(final Loan loan, final Charge chargeDefinition, final JsonCommand command) {
         final LocalDate dueDate = command.localDateValueOfParameterNamed("dueDate");
-        if (chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue()) && dueDate == null) {
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && dueDate == null) {
             final String defaultUserMessage = "Loan charge is missing due date.";
             throw new LoanChargeWithoutMandatoryFieldException("loanCharge", "dueDate", defaultUserMessage, chargeDefinition.getId(),
                     chargeDefinition.getName());
@@ -288,7 +289,9 @@ public class LoanChargeAssembler {
         // loan.
         // Then we need to get as of this loan charge due date how much amount
         // disbursed.
-        if (chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue()) && loan.isMultiDisburmentLoan()) {
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue()))
+                && loan.isMultiDisburmentLoan()) {
             amountPercentageAppliedTo = BigDecimal.ZERO;
             for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
                 if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), dueDate)) {
@@ -310,5 +313,36 @@ public class LoanChargeAssembler {
             final ChargePaymentMode chargePaymentMode, final Integer numberOfRepayments, final ExternalId externalId) {
         return loanChargeService.create(null, chargeDefinition, loanPrincipal, amount, chargeTime, chargeCalculation, dueDate,
                 chargePaymentMode, numberOfRepayments, BigDecimal.ZERO, externalId);
+    }
+
+    public LoanCharge createNewFromChargeDefinition(final Loan loan, final Charge chargeDefinition, final LocalDate dueDate) {
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && dueDate == null) {
+            final String defaultUserMessage = "Loan charge is missing due date.";
+            throw new LoanChargeWithoutMandatoryFieldException("loanCharge", "dueDate", defaultUserMessage, chargeDefinition.getId(),
+                    chargeDefinition.getName());
+        }
+
+        final JsonCommand emptyCommand = JsonCommand.fromJsonElement(null, new JsonObject(), fromApiJsonHelper);
+        BigDecimal amountPercentageAppliedTo = chargeAmountCalculatorRegistry.find(chargeDefinition.getChargeCalculation())
+                .map(calculator -> calculator.calculateCreationAmountPercentageAppliedTo(loan, emptyCommand, null))
+                .orElse(BigDecimal.ZERO);
+        BigDecimal loanCharge = BigDecimal.ZERO;
+        if (ChargeTimeType.fromInt(chargeDefinition.getChargeTimeType()).equals(ChargeTimeType.INSTALMENT_FEE)) {
+            loanCharge = loanChargeService.calculatePerInstallmentChargeAmount(loan,
+                    ChargeCalculationType.fromInt(chargeDefinition.getChargeCalculation()), chargeDefinition.getAmount());
+        }
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue()))
+                && loan.isMultiDisburmentLoan()) {
+            amountPercentageAppliedTo = BigDecimal.ZERO;
+            for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
+                if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), dueDate)) {
+                    amountPercentageAppliedTo = amountPercentageAppliedTo.add(loanDisbursementDetails.principal());
+                }
+            }
+        }
+        return loanChargeService.create(loan, chargeDefinition, amountPercentageAppliedTo, null, null, null, dueDate, null, null,
+                loanCharge, externalIdFactory.create());
     }
 }
