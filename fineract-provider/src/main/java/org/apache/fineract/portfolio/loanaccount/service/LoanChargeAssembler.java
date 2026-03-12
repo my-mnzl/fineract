@@ -290,8 +290,7 @@ public class LoanChargeAssembler {
         // Then we need to get as of this loan charge due date how much amount
         // disbursed.
         if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
-                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue()))
-                && loan.isMultiDisburmentLoan()) {
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && loan.isMultiDisburmentLoan()) {
             amountPercentageAppliedTo = BigDecimal.ZERO;
             for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
                 if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), dueDate)) {
@@ -325,16 +324,14 @@ public class LoanChargeAssembler {
 
         final JsonCommand emptyCommand = JsonCommand.fromJsonElement(null, new JsonObject(), fromApiJsonHelper);
         BigDecimal amountPercentageAppliedTo = chargeAmountCalculatorRegistry.find(chargeDefinition.getChargeCalculation())
-                .map(calculator -> calculator.calculateCreationAmountPercentageAppliedTo(loan, emptyCommand, null))
-                .orElse(BigDecimal.ZERO);
+                .map(calculator -> calculator.calculateCreationAmountPercentageAppliedTo(loan, emptyCommand, null)).orElse(BigDecimal.ZERO);
         BigDecimal loanCharge = BigDecimal.ZERO;
         if (ChargeTimeType.fromInt(chargeDefinition.getChargeTimeType()).equals(ChargeTimeType.INSTALMENT_FEE)) {
             loanCharge = loanChargeService.calculatePerInstallmentChargeAmount(loan,
                     ChargeCalculationType.fromInt(chargeDefinition.getChargeCalculation()), chargeDefinition.getAmount());
         }
         if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
-                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue()))
-                && loan.isMultiDisburmentLoan()) {
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && loan.isMultiDisburmentLoan()) {
             amountPercentageAppliedTo = BigDecimal.ZERO;
             for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
                 if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), dueDate)) {

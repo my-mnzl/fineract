@@ -1492,9 +1492,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
             chargeOptions = this.chargeReadPlatformService.retrieveLoanProductApplicableCharges(productId,
                     new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.LOAN_PERIODIC });
         } else {
-            chargeOptions = this.chargeReadPlatformService.retrieveLoanProductApplicableCharges(productId,
-                    new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.TRANCHE_DISBURSEMENT,
-                            ChargeTimeType.LOAN_PERIODIC });
+            chargeOptions = this.chargeReadPlatformService.retrieveLoanProductApplicableCharges(productId, new ChargeTimeType[] {
+                    ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.TRANCHE_DISBURSEMENT, ChargeTimeType.LOAN_PERIODIC });
         }
 
         Integer loanCycleCounter = null;

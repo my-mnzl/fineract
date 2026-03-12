@@ -127,8 +127,7 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
         BigDecimal baseAmount = BigDecimal.ZERO;
         Loan loan = loanCharge.getLoan();
         if (loan != null && loanCharge.isFeeCharge() && !calculationType.hasInterest()
-                && (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic())
-                && loan.isMultiDisburmentLoan()) {
+                && (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic()) && loan.isMultiDisburmentLoan()) {
             // If charge type is specified due date and loan is multi disburment loan.
             // Then we need to get as of this loan charge due date how much amount disbursed.
             for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {

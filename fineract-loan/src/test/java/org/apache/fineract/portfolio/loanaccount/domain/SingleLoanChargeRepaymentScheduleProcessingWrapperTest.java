@@ -133,8 +133,7 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapperTest {
     @Test
     public void testPeriodicChargeAfterMaturityAddsAdditionalInstallment() {
         LocalDate disbursementDate = LocalDate.of(2023, 1, 1);
-        ThreadLocalContextUtil
-                .setBusinessDates(new HashMap<>(new EnumMap<>(Map.of(BusinessDateType.BUSINESS_DATE, disbursementDate))));
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(new EnumMap<>(Map.of(BusinessDateType.BUSINESS_DATE, disbursementDate))));
         Loan loan = mock(Loan.class);
         when(loan.isInterestBearing()).thenReturn(false);
         when(loan.getLoanRepaymentScheduleInstallmentsSize()).thenReturn(1);

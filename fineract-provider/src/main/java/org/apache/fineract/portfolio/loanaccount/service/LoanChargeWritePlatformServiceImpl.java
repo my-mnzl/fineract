@@ -881,8 +881,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             return;
         }
 
-        final List<Charge> periodicCharges = loan.getLoanProduct().getCharges().stream().filter(Charge::isActive).filter(Charge::isLoanCharge)
-                .filter(Charge::isLoanPeriodic).toList();
+        final List<Charge> periodicCharges = loan.getLoanProduct().getCharges().stream().filter(Charge::isActive)
+                .filter(Charge::isLoanCharge).filter(Charge::isLoanPeriodic).toList();
         if (periodicCharges.isEmpty()) {
             return;
         }
@@ -897,7 +897,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             final Set<LocalDate> existingDueDates = existingCharges.stream()
                     .filter(existingCharge -> existingCharge.getCharge() != null
                             && chargeDefinition.getId().equals(existingCharge.getCharge().getId()))
-                    .map(LoanCharge::getDueLocalDate).filter(dueDate -> dueDate != null).collect(HashSet::new, HashSet::add, HashSet::addAll);
+                    .map(LoanCharge::getDueLocalDate).filter(dueDate -> dueDate != null)
+                    .collect(HashSet::new, HashSet::add, HashSet::addAll);
 
             for (final LocalDate occurrenceDate : calculatePeriodicChargeDates(chargeDefinition, anchorDate, businessDate)) {
                 if (existingDueDates.contains(occurrenceDate)) {
@@ -1277,8 +1278,7 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
             return null;
         }
         return loan.getRepaymentScheduleInstallments().stream().filter(installment -> !installment.isDownPayment())
-                .sorted((installment1, installment2) -> installment1.getInstallmentNumber()
-                        .compareTo(installment2.getInstallmentNumber()))
+                .sorted((installment1, installment2) -> installment1.getInstallmentNumber().compareTo(installment2.getInstallmentNumber()))
                 .map(LoanRepaymentScheduleInstallment::getDueDate).findFirst().orElse(null);
     }
 
