@@ -497,7 +497,8 @@ public class LoanAssemblerImpl implements LoanAssembler {
             } else {
                 LoanChargeData chargeData = chargesMap.get(loanCharge.getId());
                 if (loanCharge.amountOrPercentage().compareTo(chargeData.getAmountOrPercentage()) != 0
-                        || (loanCharge.isSpecifiedDueDate() && !loanCharge.getDueLocalDate().equals(chargeData.getDueDate()))) {
+                        || ((loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic())
+                                && !loanCharge.getDueLocalDate().equals(chargeData.getDueDate()))) {
                     isChargeModified = true;
                 }
             }

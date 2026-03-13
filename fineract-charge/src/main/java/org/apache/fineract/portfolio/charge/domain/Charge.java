@@ -268,6 +268,7 @@ public class Charge extends AbstractPersistableCustom<Long> {
                 baseDataValidator.reset().parameter(CHARGE_TIME_PARAM_NAME).value(this.chargeTimeType)
                         .failWithCodeNoParameterAddedToErrorCode("not.allowed.charge.time.for.loan");
             }
+            validatePeriodicLoanChargeConfiguration(baseDataValidator, chargeTime, feeOnMonthDay, feeInterval, feeFrequency);
         }
 
         if (isPercentageOfDisbursementAmount() || isPercentageOfApprovedAmount()) {
@@ -588,6 +589,9 @@ public class Charge extends AbstractPersistableCustom<Long> {
             baseDataValidator.reset().parameter(FEE_INTERVAL_PARAM_NAME).value(this.feeInterval).notNull();
         }
 
+        validatePeriodicLoanChargeConfiguration(baseDataValidator, ChargeTimeType.fromInt(this.chargeTimeType), getFeeOnMonthDay(),
+                this.feeInterval, this.feeFrequency);
+
         final String penaltyParamName = "penalty";
         if (command.isChangeInBooleanParameterNamed(penaltyParamName, this.penalty)) {
             final boolean newValue = command.booleanPrimitiveValueOfParameterNamed(penaltyParamName);
@@ -711,6 +715,10 @@ public class Charge extends AbstractPersistableCustom<Long> {
         return ChargeTimeType.fromInt(this.chargeTimeType).isOverdueInstallment();
     }
 
+    public boolean isLoanPeriodic() {
+        return ChargeTimeType.fromInt(this.chargeTimeType).isLoanPeriodic();
+    }
+
     public MonthDay getFeeOnMonthDay() {
         MonthDay feeOnMonthDay = null;
         if (this.feeOnDay != null && this.feeOnMonth != null) {
@@ -754,6 +762,21 @@ public class Charge extends AbstractPersistableCustom<Long> {
     public boolean isDisbursementCharge() {
         return ChargeTimeType.fromInt(this.chargeTimeType).equals(ChargeTimeType.DISBURSEMENT)
                 || ChargeTimeType.fromInt(this.chargeTimeType).equals(ChargeTimeType.TRANCHE_DISBURSEMENT);
+    }
+
+    private void validatePeriodicLoanChargeConfiguration(final DataValidatorBuilder baseDataValidator, final ChargeTimeType chargeTime,
+            final MonthDay feeOnMonthDay, final Integer feeInterval, final Integer feeFrequency) {
+        if (!chargeTime.isLoanPeriodic()) {
+            return;
+        }
+
+        baseDataValidator.reset().parameter(FEE_FREQUENCY_PARAM_NAME).value(feeFrequency).notNull().isOneOfTheseValues(
+                PeriodFrequencyType.WEEKS.getValue(), PeriodFrequencyType.MONTHS.getValue(), PeriodFrequencyType.YEARS.getValue());
+        baseDataValidator.reset().parameter(FEE_INTERVAL_PARAM_NAME).value(feeInterval).notNull().integerGreaterThanZero();
+        if (feeOnMonthDay != null) {
+            baseDataValidator.reset().parameter(FEE_ON_MONTH_DAY_PARAM_NAME).value(feeOnMonthDay.toString())
+                    .failWithCode("must.be.blank.for.loan.periodic.charge");
+        }
     }
 
     public TaxGroup getTaxGroup() {

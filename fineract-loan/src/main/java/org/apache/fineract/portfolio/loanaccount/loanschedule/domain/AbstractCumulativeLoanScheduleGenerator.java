@@ -2064,7 +2064,7 @@ public abstract class AbstractCumulativeLoanScheduleGenerator implements LoanSch
     private Set<LoanCharge> separateTotalCompoundingPercentageCharges(final Set<LoanCharge> loanCharges) {
         Set<LoanCharge> interestCharges = new HashSet<>();
         for (final LoanCharge loanCharge : loanCharges) {
-            if (loanCharge.isSpecifiedDueDate() && (loanCharge.getChargeCalculation().isPercentageOfInterest()
+            if ((loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic()) && (loanCharge.getChargeCalculation().isPercentageOfInterest()
                     || loanCharge.getChargeCalculation().isPercentageOfAmountAndInterest())) {
                 interestCharges.add(loanCharge);
             }

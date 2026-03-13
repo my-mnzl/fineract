@@ -43,6 +43,7 @@ import org.apache.fineract.portfolio.charge.domain.ChargeCalculationRegistry;
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
+import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -185,6 +186,9 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
             if (chargeTimeType != null && chargeCalculationType != null) {
                 performChargeTimeNCalculationTypeValidation(baseDataValidator, chargeTimeType, chargeCalculationType);
             }
+
+            validatePeriodicLoanCharge(baseDataValidator, ChargeTimeType.fromInt(chargeTimeType), feeFrequency, feeInterval,
+                    this.fromApiJsonHelper.extractStringNamed(FEE_ON_MONTH_DAY, element));
 
         } else if (appliesTo.isSavingsCharge()) {
             // savings applicable validation
@@ -480,6 +484,21 @@ public final class ChargeDefinitionCommandFromApiJsonDeserializer {
         } else {
             baseDataValidator.reset().parameter(CHARGE_CALCULATION_TYPE).value(chargeCalculationType)
                     .isNotOneOfTheseValues(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue());
+        }
+    }
+
+    private void validatePeriodicLoanCharge(final DataValidatorBuilder baseDataValidator, final ChargeTimeType chargeTimeType,
+            final Integer feeFrequency, final Integer feeInterval, final String feeOnMonthDay) {
+        if (!chargeTimeType.isLoanPeriodic()) {
+            return;
+        }
+
+        baseDataValidator.reset().parameter(FEE_FREQUENCY).value(feeFrequency).notNull().isOneOfTheseValues(
+                PeriodFrequencyType.WEEKS.getValue(), PeriodFrequencyType.MONTHS.getValue(), PeriodFrequencyType.YEARS.getValue());
+        baseDataValidator.reset().parameter(FEE_INTERVAL).value(feeInterval).notNull().integerGreaterThanZero();
+        if (StringUtils.isNotBlank(feeOnMonthDay)) {
+            baseDataValidator.reset().parameter(FEE_ON_MONTH_DAY).value(feeOnMonthDay)
+                    .failWithCode("must.be.blank.for.loan.periodic.charge");
         }
     }
 

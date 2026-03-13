@@ -19,6 +19,7 @@
 package org.apache.fineract.portfolio.loanaccount.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -29,6 +30,7 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -128,6 +130,29 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapperTest {
         customVerify(period2, "0.0", "0.0", "0.0", "0.0", "0.0", "0.0");
     }
 
+    @Test
+    public void testPeriodicChargeAfterMaturityAddsAdditionalInstallment() {
+        LocalDate disbursementDate = LocalDate.of(2023, 1, 1);
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(new EnumMap<>(Map.of(BusinessDateType.BUSINESS_DATE, disbursementDate))));
+        Loan loan = mock(Loan.class);
+        when(loan.isInterestBearing()).thenReturn(false);
+        when(loan.getLoanRepaymentScheduleInstallmentsSize()).thenReturn(1);
+
+        LoanRepaymentScheduleInstallment existingInstallment = createPeriod(1, LocalDate.of(2023, 1, 1), LocalDate.of(2023, 1, 31));
+        List<LoanRepaymentScheduleInstallment> installments = new ArrayList<>(List.of(existingInstallment));
+
+        LoanCharge periodicCharge = createCharge(loan, ChargeTimeType.LOAN_PERIODIC, LocalDate.of(2023, 2, 15), false);
+
+        LoanRepaymentScheduleInstallment additionalInstallment = underTest.addChargeOnlyRepaymentInstallmentIfRequired(periodicCharge,
+                installments);
+
+        assertNotNull(additionalInstallment);
+        assertEquals(LocalDate.of(2023, 2, 15), additionalInstallment.getDueDate());
+        assertEquals(LocalDate.of(2023, 1, 31), additionalInstallment.getFromDate());
+        assertEquals(true, additionalInstallment.isAdditional());
+        verify(loan, times(1)).addLoanRepaymentScheduleInstallment(additionalInstallment);
+    }
+
     private void customVerify(LoanRepaymentScheduleInstallment period, String expectedFeeChargesDue, String expectedFeeChargesWaived,
             String expectedFeeChargesWrittenOff, String expectedPenaltyChargesDue, String expectedPenaltyChargesWaived,
             String expectedPenaltyChargesWrittenOff) {
@@ -151,16 +176,21 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapperTest {
 
     @NonNull
     private LoanCharge createCharge(boolean penalty) {
+        Loan loan = mock(Loan.class);
+        when(loan.isInterestBearing()).thenReturn(false);
+        return createCharge(loan, ChargeTimeType.SPECIFIED_DUE_DATE, LocalDate.of(2023, 1, 15), penalty);
+    }
+
+    @NonNull
+    private LoanCharge createCharge(Loan loan, ChargeTimeType chargeTimeType, LocalDate dueDate, boolean penalty) {
         Charge charge = mock(Charge.class);
         when(charge.getId()).thenReturn(1L);
         when(charge.getName()).thenReturn("charge a");
         when(charge.getCurrencyCode()).thenReturn("UDS");
         when(charge.isPenalty()).thenReturn(penalty);
-        Loan loan = mock(Loan.class);
-        when(loan.isInterestBearing()).thenReturn(false);
 
-        return loanChargeService.create(loan, charge, new BigDecimal(1000), new BigDecimal(10), ChargeTimeType.SPECIFIED_DUE_DATE,
-                ChargeCalculationType.FLAT, LocalDate.of(2023, 1, 15), ChargePaymentMode.REGULAR, 1, null, null);
+        return loanChargeService.create(loan, charge, new BigDecimal(1000), new BigDecimal(10), chargeTimeType, ChargeCalculationType.FLAT,
+                dueDate, ChargePaymentMode.REGULAR, 1, null, null);
     }
 
     @NonNull

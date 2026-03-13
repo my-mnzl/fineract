@@ -239,6 +239,10 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         return ChargeTimeType.fromInt(this.chargeTime).equals(ChargeTimeType.SPECIFIED_DUE_DATE);
     }
 
+    public boolean isPeriodic() {
+        return ChargeTimeType.fromInt(this.chargeTime).equals(ChargeTimeType.LOAN_PERIODIC);
+    }
+
     public boolean isInstalmentFee() {
         return ChargeTimeType.fromInt(this.chargeTime).equals(ChargeTimeType.INSTALMENT_FEE);
     }
