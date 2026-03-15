@@ -47,6 +47,7 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
+import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
@@ -714,15 +715,17 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         EnumOptionData chargeCalculationTypeData = ChargeCalculationOptionDataLookup.optionData(this.chargeCalculation);
         EnumOptionData chargePaymentModeData = new EnumOptionData((long) getChargePaymentMode().ordinal(), getChargePaymentMode().getCode(),
                 String.valueOf(getChargePaymentMode().getValue()));
+        ChargeData chargeData = getCharge().toData();
         List<LoanInstallmentChargeData> loanInstallmentChargeDataList = installmentCharges().stream().map(LoanInstallmentCharge::toData)
                 .toList();
 
         return LoanChargeData.builder().id(getId()).chargeId(getCharge().getId()).name(getCharge().getName())
-                .currency(getCharge().toData().getCurrency()).amount(amount).amountPaid(amountPaid).amountWaived(amountWaived)
+                .currency(chargeData.getCurrency()).amount(amount).amountPaid(amountPaid).amountWaived(amountWaived)
                 .amountWrittenOff(amountWrittenOff).amountOutstanding(amountOutstanding).chargeTimeType(chargeTimeTypeData)
                 .submittedOnDate(submittedOnDate).dueDate(dueDate).chargeCalculationType(chargeCalculationTypeData).percentage(percentage)
                 .amountPercentageAppliedTo(amountPercentageAppliedTo).amountOrPercentage(amountOrPercentage).penalty(penaltyCharge)
                 .chargePaymentMode(chargePaymentModeData).paid(paid).waived(waived).loanId(loan.getId()).minCap(minCap).maxCap(maxCap)
+                .feeInterval(chargeData.getFeeInterval()).feeFrequency(chargeData.getFeeFrequency())
                 .installmentChargeData(loanInstallmentChargeDataList).externalId(externalId).build();
     }
 
