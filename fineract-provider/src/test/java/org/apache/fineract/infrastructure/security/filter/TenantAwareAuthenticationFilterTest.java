@@ -86,6 +86,26 @@ class TenantAwareAuthenticationFilterTest {
     }
 
     @Test
+    void shouldFallBackToTenantIdRequestParameterWhenJwtClaimAndHeaderAreMissing() throws Exception {
+        BearerTokenResolver resolver = mock(BearerTokenResolver.class);
+        AuthTenantDetailsService tenantDetailsService = mock(AuthTenantDetailsService.class);
+        FineractPlatformTenant tenant = tenant("default");
+        when(resolver.resolve(any())).thenReturn(null);
+        when(tenantDetailsService.loadTenantById("default", false)).thenReturn(tenant);
+
+        TenantAwareAuthenticationFilter filter = new TenantAwareAuthenticationFilter(resolver, tenantDetailsService);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/fineract-provider/login");
+        request.addParameter("tenantId", "default");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<FineractPlatformTenant> tenantInsideChain = new AtomicReference<>();
+
+        filter.doFilter(request, response, (req, res) -> tenantInsideChain.set(ThreadLocalContextUtil.getTenant()));
+
+        assertThat(tenantInsideChain.get()).isEqualTo(tenant);
+        verify(tenantDetailsService).loadTenantById("default", false);
+    }
+
+    @Test
     void shouldContinueFilterChainOnceWhenTenantResolutionFails() throws Exception {
         BearerTokenResolver resolver = mock(BearerTokenResolver.class);
         AuthTenantDetailsService tenantDetailsService = mock(AuthTenantDetailsService.class);
