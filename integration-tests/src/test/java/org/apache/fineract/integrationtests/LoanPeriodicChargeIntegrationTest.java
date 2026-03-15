@@ -21,6 +21,7 @@ package org.apache.fineract.integrationtests;
 import static org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity.LIABILITY_TRANSFER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.restassured.path.json.JsonPath;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -76,6 +77,31 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
 
             schedulerJobHelper.executeAndAwaitJobByShortName(PERIODIC_JOB_SHORT_NAME);
             assertEquals(1, loanTransactionHelper.getLoanCharges(context.loanId()).size());
+        });
+    }
+
+    @Test
+    public void testPeriodicLoanChargeResponsesIncludeRecurrenceMetadata() {
+        AtomicReference<PeriodicLoanContext> contextRef = new AtomicReference<>();
+
+        runAt(LOAN_DISBURSEMENT_DATE, () -> contextRef.set(createPeriodicLoan(6)));
+
+        PeriodicLoanContext context = contextRef.get();
+        JsonPath templateJson = JsonPath.from(Utils.performServerGet(requestSpec, responseSpec,
+                "/fineract-provider/api/v1/loans/template?templateType=individual&clientId=" + context.clientId() + "&productId="
+                        + context.loanProductId() + "&" + Utils.TENANT_IDENTIFIER));
+        assertEquals(1, templateJson.getList("charges").size());
+        assertEquals(1, templateJson.getInt("charges[0].feeInterval"));
+        assertEquals(ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, templateJson.getInt("charges[0].feeFrequency.id"));
+
+        runAt(formatDate(context.firstRepaymentDate()), () -> {
+            schedulerJobHelper.executeAndAwaitJobByShortName(PERIODIC_JOB_SHORT_NAME);
+
+            JsonPath loanChargesJson = JsonPath.from(Utils.performServerGet(requestSpec, responseSpec,
+                    "/fineract-provider/api/v1/loans/" + context.loanId() + "/charges?" + Utils.TENANT_IDENTIFIER));
+            assertEquals(1, loanChargesJson.getList("$").size());
+            assertEquals(1, loanChargesJson.getInt("[0].feeInterval"));
+            assertEquals(ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, loanChargesJson.getInt("[0].feeFrequency.id"));
         });
     }
 
@@ -169,7 +195,7 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
 
         GetLoansLoanIdResponse loanDetails = loanTransactionHelper.getLoanDetails(loanId);
         LocalDate firstRepaymentDate = repaymentPeriod(loanDetails, 1).getDueDate();
-        return new PeriodicLoanContext(loanId, firstRepaymentDate, null);
+        return new PeriodicLoanContext(clientId, loanProductId, loanId, firstRepaymentDate, null);
     }
 
     private PeriodicLoanContext createPeriodicLoanWithLinkedSavings(final int numberOfRepayments) {
@@ -206,7 +232,7 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
 
         GetLoansLoanIdResponse loanDetails = loanTransactionHelper.getLoanDetails(loanId);
         LocalDate firstRepaymentDate = repaymentPeriod(loanDetails, 1).getDueDate();
-        return new PeriodicLoanContext(loanId, firstRepaymentDate, savingsAccountId);
+        return new PeriodicLoanContext(clientId, loanProductId, loanId, firstRepaymentDate, savingsAccountId);
     }
 
     private Integer createSavingsAccountDailyPosting(final SavingsAccountHelper savingsAccountHelper, final Integer clientId,
@@ -257,6 +283,7 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
                 CommonConstants.RESPONSE_RESOURCE_ID);
     }
 
-    private record PeriodicLoanContext(Long loanId, LocalDate firstRepaymentDate, Integer savingsAccountId) {
+    private record PeriodicLoanContext(Long clientId, Long loanProductId, Long loanId, LocalDate firstRepaymentDate,
+            Integer savingsAccountId) {
     }
 }

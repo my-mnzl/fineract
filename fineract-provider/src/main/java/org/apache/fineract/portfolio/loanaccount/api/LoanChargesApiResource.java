@@ -82,7 +82,7 @@ public class LoanChargesApiResource {
     private static final Set<String> RESPONSE_DATA_PARAMETERS = new HashSet<>(
             Arrays.asList("id", "chargeId", "name", "penalty", "chargeTimeType", "dueAsOfDate", "chargeCalculationType", "percentage",
                     "amountPercentageAppliedTo", "currency", "amountWaived", "amountWrittenOff", "amountOutstanding", "amountOrPercentage",
-                    "amount", "amountPaid", "chargeOptions", "installmentChargeData", "externalId"));
+                    "amount", "amountPaid", "chargeOptions", "feeInterval", "feeFrequency", "installmentChargeData", "externalId"));
     private static final String RESOURCE_NAME_FOR_PERMISSIONS = "LOAN";
     private final PlatformSecurityContext context;
     private final ChargeReadPlatformService chargeReadPlatformService;

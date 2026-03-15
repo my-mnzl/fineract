@@ -37,6 +37,7 @@ import org.apache.fineract.portfolio.charge.exception.LoanChargeNotFoundExceptio
 import org.apache.fineract.portfolio.charge.service.ChargeCalculationOptionDataService;
 import org.apache.fineract.portfolio.charge.service.ChargeDropdownReadPlatformService;
 import org.apache.fineract.portfolio.charge.service.ChargeEnumerations;
+import org.apache.fineract.portfolio.common.service.CommonEnumerations;
 import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargeData;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargePaidByData;
@@ -73,7 +74,8 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
                     + "lc.calculation_percentage as percentageOf, lc.calculation_on_amount as amountPercentageAppliedTo, " //
                     + "lc.charge_time_enum as chargeTime, lc.is_penalty as penalty, " //
                     + "lc.due_for_collection_as_of_date as dueAsOfDate, lc.charge_calculation_enum as chargeCalculation, " //
-                    + "lc.charge_payment_mode_enum as chargePaymentMode, lc.is_paid_derived as paid, lc.waived as waived, " //
+                    + "lc.charge_payment_mode_enum as chargePaymentMode, c.fee_interval as feeInterval, c.fee_frequency as feeFrequency, "
+                    + "lc.is_paid_derived as paid, lc.waived as waived, " //
                     + "lc.min_cap as minCap, lc.max_cap as maxCap, lc.charge_amount_or_percentage as amountOrPercentage, " //
                     + "lc.loan_id as loanId, c.currency_code as currencyCode, oc.name as currencyName, " //
                     + "date(coalesce(dd.disbursedon_date,dd.expected_disburse_date)) as disbursementDate, " //
@@ -120,6 +122,12 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
 
             final int chargePaymentMode = rs.getInt("chargePaymentMode");
             final EnumOptionData paymentMode = ChargeEnumerations.chargePaymentMode(chargePaymentMode);
+            final Integer feeInterval = JdbcSupport.getInteger(rs, "feeInterval");
+            EnumOptionData feeFrequencyType = null;
+            final Integer feeFrequency = JdbcSupport.getInteger(rs, "feeFrequency");
+            if (feeFrequency != null) {
+                feeFrequencyType = CommonEnumerations.termFrequencyType(feeFrequency, "feeFrequency");
+            }
             final boolean paid = rs.getBoolean("paid");
             final boolean waived = rs.getBoolean("waived");
             final BigDecimal minCap = rs.getBigDecimal("minCap");
@@ -138,7 +146,8 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
 
             return new LoanChargeData(id, chargeId, name, currency, amount, amountPaid, amountWaived, amountWrittenOff, amountOutstanding,
                     chargeTimeType, submittedOnDate, dueAsOfDate, chargeCalculationType, percentageOf, amountPercentageAppliedTo, penalty,
-                    paymentMode, paid, waived, loanId, externalLoanId, minCap, maxCap, amountOrPercentage, null, externalId);
+                    paymentMode, paid, waived, loanId, externalLoanId, minCap, maxCap, feeInterval, feeFrequencyType, amountOrPercentage,
+                    null, externalId);
         }
     }
 

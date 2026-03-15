@@ -711,6 +711,6 @@ public class LoanAccountData {
         return LoanChargeData.newLoanChargeDetails(chargeData.getId(), chargeData.getName(), chargeData.getCurrency(),
                 chargeData.getAmount(), percentage, chargeData.getChargeTimeType(), chargeData.getChargeCalculationType(),
                 chargeData.isPenalty(), chargeData.getChargePaymentMode(), chargeData.getMinCap(), chargeData.getMaxCap(),
-                ExternalId.empty());
+                chargeData.getFeeInterval(), chargeData.getFeeFrequency(), ExternalId.empty());
     }
 }
