@@ -18,6 +18,7 @@
  */
 package co.mnzl.fineract.custom.loan.job;
 
+import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.transaction.TransactionDefinition;
@@ -57,6 +59,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class MnzlExecuteStandingInstructionsTasklet extends ExecuteStandingInstructionsTasklet {
 
     private static final Logger LOG = LoggerFactory.getLogger(MnzlExecuteStandingInstructionsTasklet.class);
+    private static final int MAX_TRANSFER_ATTEMPTS = 6;
+    private static final int MAX_ERROR_LOG_LENGTH = 500;
 
     private final StandingInstructionReadPlatformService standingInstructionReadPlatformService;
     private final JdbcTemplate jdbcTemplate;
@@ -128,11 +132,7 @@ public class MnzlExecuteStandingInstructionsTasklet extends ExecuteStandingInstr
                         data.getName() + " Standing instruction trasfer ", null, null, null, null, data.toTransferType(), null, null,
                         data.getTransferType().getValue(), null, null, ExternalId.empty(), null, null, fromSavingsAccount,
                         isRegularTransaction, isExceptionForBalanceCheck);
-                final boolean transferCompleted = transferAmount(errors, accountTransferDTO, data.getId());
-
-                if (transferCompleted) {
-                    updateLastRunDate(transactionDate, data.getId());
-                }
+                transferAmount(errors, accountTransferDTO, data.getId());
             }
         }
         if (!errors.isEmpty()) {
@@ -144,42 +144,117 @@ public class MnzlExecuteStandingInstructionsTasklet extends ExecuteStandingInstr
     }
 
     private boolean transferAmount(final List<Throwable> errors, final AccountTransferDTO accountTransferDTO, final Long instructionId) {
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        boolean transferCompleted = false;
-        StringBuilder errorLog = new StringBuilder();
-
-        try {
-            transactionTemplate.execute(new TransactionCallbackWithoutResult() {
-
-                @Override
-                protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {
+        for (int attempt = 1; attempt <= MAX_TRANSFER_ATTEMPTS; attempt++) {
+            try {
+                executeInNewTransaction(() -> {
                     accountTransfersWritePlatformService.transferFunds(accountTransferDTO);
+                    updateLastRunDate(accountTransferDTO.getTransactionDate(), instructionId);
+                    logTransferHistory(instructionId, accountTransferDTO.getTransactionAmount(), true, "");
                     LOG.debug("Successfully transferred standing instruction {} for amount {}", instructionId,
                             accountTransferDTO.getTransactionAmount());
+                });
+                return true;
+            } catch (Exception e) {
+                if (isRetryableOptimisticLock(e) && attempt < MAX_TRANSFER_ATTEMPTS) {
+                    long retryDelayMillis = calculateRetryDelayMillis(attempt);
+                    LOG.warn("Retrying standing instruction {} after optimistic lock on attempt {}/{} in {} ms: {}", instructionId, attempt,
+                            MAX_TRANSFER_ATTEMPTS, retryDelayMillis, e.getMessage());
+                    try {
+                        sleepBeforeRetry(attempt, instructionId);
+                    } catch (RuntimeException retryException) {
+                        e.addSuppressed(retryException);
+                        return recordTerminalFailure(errors, accountTransferDTO, instructionId, attempt, e);
+                    }
+                    continue;
                 }
-            });
-            transferCompleted = true;
-        } catch (final PlatformApiDataValidationException e) {
-            errors.add(new Exception("Validation exception while transfering funds for standing Instruction id" + instructionId + " from "
-                    + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId(), e));
-            errorLog.append("Validation exception while trasfering funds ").append(e.getDefaultUserMessage());
-        } catch (final InsufficientAccountBalanceException e) {
-            errors.add(new Exception("InsufficientAccountBalance Exception while trasfering funds for standing Instruction id"
-                    + instructionId + " from " + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId(), e));
-            errorLog.append("InsufficientAccountBalance Exception ");
-        } catch (final AbstractPlatformServiceUnavailableException e) {
-            errors.add(new Exception("Platform exception while trasfering funds for standing Instruction id" + instructionId + " from "
-                    + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId(), e));
-            errorLog.append("Platform exception while trasfering funds ").append(e.getDefaultUserMessage());
-        } catch (Exception e) {
-            errors.add(new Exception("Unhandled System Exception while trasfering funds for standing Instruction id" + instructionId
-                    + " from " + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId(), e));
-            errorLog.append("Exception while trasfering funds ").append(e.getMessage());
+                return recordTerminalFailure(errors, accountTransferDTO, instructionId, attempt, e);
+            }
         }
+        return false;
+    }
 
-        logTransferHistory(instructionId, accountTransferDTO.getTransactionAmount(), transferCompleted, errorLog.toString());
-        return transferCompleted;
+    void sleepBeforeRetry(int attempt, Long instructionId) {
+        try {
+            Thread.sleep(calculateRetryDelayMillis(attempt));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while retrying standing instruction " + instructionId, e);
+        }
+    }
+
+    private long calculateRetryDelayMillis(int attempt) {
+        return attempt * 1000L;
+    }
+
+    private boolean recordTerminalFailure(final List<Throwable> errors, final AccountTransferDTO accountTransferDTO,
+            final Long instructionId, final int attempts, final Exception cause) {
+        Exception transferFailure = wrapTransferException(accountTransferDTO, instructionId, attempts, cause);
+        errors.add(transferFailure);
+
+        try {
+            executeInNewTransaction(
+                    () -> logTransferHistory(instructionId, accountTransferDTO.getTransactionAmount(), false, buildErrorLog(cause)));
+        } catch (RuntimeException historyFailure) {
+            transferFailure.addSuppressed(historyFailure);
+            LOG.error("Failed to persist standing instruction failure history for {}", instructionId, historyFailure);
+        }
+        return false;
+    }
+
+    private Exception wrapTransferException(final AccountTransferDTO accountTransferDTO, final Long instructionId, final int attempts,
+            final Exception cause) {
+        String attemptSuffix = attempts > 1 ? " after " + attempts + " attempts" : "";
+        if (cause instanceof PlatformApiDataValidationException e) {
+            return new Exception("Validation exception while transfering funds for standing Instruction id" + instructionId + " from "
+                    + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId() + attemptSuffix, e);
+        } else if (cause instanceof InsufficientAccountBalanceException e) {
+            return new Exception("InsufficientAccountBalance Exception while trasfering funds for standing Instruction id" + instructionId
+                    + " from " + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId() + attemptSuffix, e);
+        } else if (cause instanceof AbstractPlatformServiceUnavailableException e) {
+            return new Exception("Platform exception while trasfering funds for standing Instruction id" + instructionId + " from "
+                    + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId() + attemptSuffix, e);
+        }
+        return new Exception("Unhandled System Exception while trasfering funds for standing Instruction id" + instructionId + " from "
+                + accountTransferDTO.getFromAccountId() + " to " + accountTransferDTO.getToAccountId() + attemptSuffix, cause);
+    }
+
+    private String buildErrorLog(final Exception cause) {
+        StringBuilder errorLog = new StringBuilder();
+        if (cause instanceof PlatformApiDataValidationException e) {
+            errorLog.append("Validation exception while trasfering funds ").append(e.getDefaultUserMessage());
+        } else if (cause instanceof InsufficientAccountBalanceException) {
+            errorLog.append("InsufficientAccountBalance Exception ");
+        } else if (cause instanceof AbstractPlatformServiceUnavailableException e) {
+            errorLog.append("Platform exception while trasfering funds ").append(e.getDefaultUserMessage());
+        } else {
+            errorLog.append("Exception while trasfering funds ").append(cause.getMessage());
+        }
+        if (errorLog.length() > MAX_ERROR_LOG_LENGTH) {
+            return errorLog.substring(0, MAX_ERROR_LOG_LENGTH);
+        }
+        return errorLog.toString();
+    }
+
+    private boolean isRetryableOptimisticLock(final Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof OptimisticLockException || current instanceof OptimisticLockingFailureException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void executeInNewTransaction(final Runnable action) {
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+
+            @Override
+            protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {
+                action.run();
+            }
+        });
     }
 
     private void updateLastRunDate(LocalDate transactionDate, Long instructionId) {
@@ -188,15 +263,9 @@ public class MnzlExecuteStandingInstructionsTasklet extends ExecuteStandingInstr
     }
 
     private void logTransferHistory(Long instructionId, BigDecimal amount, boolean success, String errorLog) {
-        StringBuilder updateQuery = new StringBuilder(
-                "INSERT INTO m_account_transfer_standing_instructions_history (standing_instruction_id, " + sqlGenerator.escape("status")
-                        + ", amount,execution_time, error_log) VALUES (");
-        updateQuery.append(instructionId).append(",");
-        updateQuery.append(success ? "'success'" : "'failed'").append(",");
-        updateQuery.append(amount.doubleValue());
-        updateQuery.append(", now(),");
-        updateQuery.append("'").append(errorLog).append("')");
-        jdbcTemplate.update(updateQuery.toString());
+        String updateQuery = "INSERT INTO m_account_transfer_standing_instructions_history (standing_instruction_id, "
+                + sqlGenerator.escape("status") + ", amount, execution_time, error_log) VALUES (?, ?, ?, now(), ?)";
+        jdbcTemplate.update(updateQuery, instructionId, success ? "success" : "failed", amount, errorLog);
     }
 
     @Override
