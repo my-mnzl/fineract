@@ -186,12 +186,10 @@ public class DatabaseSpecificSQLGenerator {
             return "";
         }
         if (databaseTypeResolver.isMySQL()) {
-            return " ON DUPLICATE KEY UPDATE "
-                    + updateColumns.stream().map(column -> format("%s=VALUES(%s)", escape(column), escape(column)))
-                            .collect(Collectors.joining(", "));
+            return " ON DUPLICATE KEY UPDATE " + updateColumns.stream()
+                    .map(column -> format("%s=VALUES(%s)", escape(column), escape(column))).collect(Collectors.joining(", "));
         } else if (databaseTypeResolver.isPostgreSQL()) {
-            return " ON CONFLICT (" + conflictColumns.stream().map(this::escape).collect(Collectors.joining(", "))
-                    + ") DO UPDATE SET "
+            return " ON CONFLICT (" + conflictColumns.stream().map(this::escape).collect(Collectors.joining(", ")) + ") DO UPDATE SET "
                     + updateColumns.stream().map(column -> format("%s=EXCLUDED.%s", escape(column), escape(column)))
                             .collect(Collectors.joining(", "));
         } else {

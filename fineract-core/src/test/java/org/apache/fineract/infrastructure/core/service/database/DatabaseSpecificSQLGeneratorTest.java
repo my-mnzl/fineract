@@ -72,10 +72,8 @@ public class DatabaseSpecificSQLGeneratorTest {
         String clause = databaseSpecificSQLGenerator.insertOnConflictUpdate(List.of("loan_id"),
                 List.of("principal_overdue_derived", "total_overdue_derived"));
 
-        Assertions.assertEquals(
-                " ON DUPLICATE KEY UPDATE `principal_overdue_derived`=VALUES(`principal_overdue_derived`), "
-                        + "`total_overdue_derived`=VALUES(`total_overdue_derived`)",
-                clause);
+        Assertions.assertEquals(" ON DUPLICATE KEY UPDATE `principal_overdue_derived`=VALUES(`principal_overdue_derived`), "
+                + "`total_overdue_derived`=VALUES(`total_overdue_derived`)", clause);
     }
 
     @Test
