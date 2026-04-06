@@ -321,6 +321,39 @@ public final class DateUtils {
         return getExactDifference(first, second, DAYS);
     }
 
+    public static int getDifferenceInDaysFor30DayMonth(LocalDate first, LocalDate second) {
+        if (first == null || second == null) {
+            throw new IllegalArgumentException("Dates must not be null to get difference");
+        }
+        if (isEqual(first, second)) {
+            return 0;
+        }
+        if (isAfter(first, second)) {
+            return -getDifferenceInDaysFor30DayMonth(second, first);
+        }
+
+        final int adjustedStartDay = Math.min(30, first.getDayOfMonth());
+        final int adjustedEndDay = Math.min(30, second.getDayOfMonth());
+        if (first.getMonthValue() == second.getMonthValue() && first.getYear() == second.getYear()) {
+            return adjustedEndDay - adjustedStartDay;
+        }
+
+        int daysRemainingInStartMonth = 30 - adjustedStartDay;
+        if (first.getDayOfMonth() > 30) {
+            daysRemainingInStartMonth++;
+        }
+
+        final LocalDate startOfNextMonth = first.withDayOfMonth(1).plusMonths(1);
+        final LocalDate startOfEndMonth = second.withDayOfMonth(1);
+        int fullMonthsBetween = 0;
+        if (!startOfNextMonth.isAfter(startOfEndMonth)) {
+            fullMonthsBetween = getExactDifference(startOfNextMonth, startOfEndMonth, ChronoUnit.MONTHS);
+        }
+
+        final int daysIntoEndMonth = adjustedEndDay - 1;
+        return daysRemainingInStartMonth + (fullMonthsBetween * 30) + daysIntoEndMonth;
+    }
+
     public static LocalDate minusDays(LocalDate first, int days) {
         return first == null ? null : first.minusDays(days);
     }
