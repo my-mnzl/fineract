@@ -271,6 +271,8 @@ public class LoanArrearsAgingServiceImpl implements LoanArrearsAgingService {
         BigDecimal totalOverDue = principalOverdue.add(interestOverdue).add(feeOverdue).add(penaltyOverdue);
         insertStatementBuilder.append(totalOverDue).append(",'");
         insertStatementBuilder.append(this.formatter.format(overDueSince)).append("')");
+        insertStatementBuilder
+                .append(sqlGenerator.insertOnConflictUpdate(List.of("loan_id"), LoanArrearsAgingService.ARREARS_UPSERT_COLUMNS));
         return insertStatementBuilder.toString();
     }
 

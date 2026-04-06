@@ -26,6 +26,9 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.data.LoanScheduleP
 
 public interface LoanArrearsAgingService {
 
+    List<String> ARREARS_UPSERT_COLUMNS = List.of("principal_overdue_derived", "interest_overdue_derived", "fee_charges_overdue_derived",
+            "penalty_charges_overdue_derived", "total_overdue_derived", "overdue_since_date_derived");
+
     void updateLoanArrearsAgeingDetailsWithOriginalSchedule(Loan loan);
 
     Map<Long, List<LoanSchedulePeriodData>> getScheduleDate(String loanId);

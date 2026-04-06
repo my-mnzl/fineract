@@ -50,8 +50,8 @@ public class LoanArrearsAgeingUpdateHandler {
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final LoanArrearsAgingService loanArrearsAgingService;
 
-    private void truncateLoanArrearsAgingDetails() {
-        jdbcTemplate.execute("truncate table m_loan_arrears_aging");
+    private void clearLoanArrearsAgingDetails() {
+        jdbcTemplate.update("delete from m_loan_arrears_aging");
     }
 
     private void deleteLoanArrearsAgingDetails(List<Long> loanIds) {
@@ -62,7 +62,7 @@ public class LoanArrearsAgeingUpdateHandler {
     }
 
     public void updateLoanArrearsAgeingDetailsForAllLoans() {
-        truncateLoanArrearsAgingDetails();
+        clearLoanArrearsAgingDetails();
         String insertSQLStatement = buildQueryForInsertAgeingDetails(Boolean.TRUE);
         List<String> insertStatements = updateLoanArrearsAgeingDetailsWithOriginalScheduleForAllLoans();
         insertStatements.add(0, insertSQLStatement);
@@ -144,6 +144,8 @@ public class LoanArrearsAgeingUpdateHandler {
         insertSqlStatementBuilder
                 .append(" and (prd.arrears_based_on_original_schedule = false or prd.arrears_based_on_original_schedule is null) ");
         insertSqlStatementBuilder.append(" GROUP BY ml.id");
+        insertSqlStatementBuilder
+                .append(sqlGenerator.insertOnConflictUpdate(List.of("loan_id"), LoanArrearsAgingService.ARREARS_UPSERT_COLUMNS));
         return insertSqlStatementBuilder.toString();
     }
 

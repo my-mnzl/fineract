@@ -53,8 +53,10 @@ public class SavingsInterestPostingTest extends BaseSavingsIntegrationTest {
             Long productId = product.getResourceId();
 
             // Create accounts
+            // Keep approval and activation deterministic; the shared integration client and result list are not safe
+            // to drive through a parallel stream.
             IntStream.range(0, 200)//
-                    .parallel().mapToObj(i -> applySavingsRequest(clientId, productId, "01 January 2023"))//
+                    .mapToObj(i -> applySavingsRequest(clientId, productId, "01 January 2023"))//
                     .map(this::applySavingsAccount) //
                     .mapToLong(PostSavingsAccountsResponse::getResourceId) //
                     .forEach(savingsId -> {
