@@ -79,8 +79,6 @@ tasks.named('test') {
 
 tasks.named('cucumber').get().finalizedBy 'allureReport'
 
-tasks.named('cucumber').get().dependsOn 'spotlessCheck'
-
 cucumber {
     // Use -Pcucumber.features=... if passed, otherwise default
     if (project.hasProperty("cucumber.features")) {
