@@ -181,6 +181,25 @@ public class DatabaseSpecificSQLGenerator {
         }
     }
 
+    public String insertOnConflictUpdate(@NonNull List<String> conflictColumns, @NonNull List<String> updateColumns) {
+        if (updateColumns.isEmpty()) {
+            return "";
+        }
+        if (databaseTypeResolver.isMySQL()) {
+            return " ON DUPLICATE KEY UPDATE "
+                    + updateColumns.stream().map(column -> format("%s=VALUES(%s)", escape(column), escape(column)))
+                            .collect(Collectors.joining(", "));
+        } else if (databaseTypeResolver.isPostgreSQL()) {
+            return " ON CONFLICT (" + conflictColumns.stream().map(this::escape).collect(Collectors.joining(", "))
+                    + ") DO UPDATE SET "
+                    + updateColumns.stream().map(column -> format("%s=EXCLUDED.%s", escape(column), escape(column)))
+                            .collect(Collectors.joining(", "));
+        } else {
+            throw new IllegalStateException(
+                    "Database type is not supported for insert conflict updates " + databaseTypeResolver.databaseType());
+        }
+    }
+
     public String currentSchema() {
         if (databaseTypeResolver.isMySQL()) {
             return "SCHEMA()";

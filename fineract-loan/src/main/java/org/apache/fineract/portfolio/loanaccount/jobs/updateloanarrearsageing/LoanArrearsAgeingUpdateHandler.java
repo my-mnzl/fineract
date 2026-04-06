@@ -46,12 +46,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class LoanArrearsAgeingUpdateHandler {
 
+    private static final List<String> ARREARS_UPSERT_COLUMNS = List.of("principal_overdue_derived", "interest_overdue_derived",
+            "fee_charges_overdue_derived", "penalty_charges_overdue_derived", "total_overdue_derived", "overdue_since_date_derived");
+
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final LoanArrearsAgingService loanArrearsAgingService;
 
-    private void truncateLoanArrearsAgingDetails() {
-        jdbcTemplate.execute("truncate table m_loan_arrears_aging");
+    private void clearLoanArrearsAgingDetails() {
+        jdbcTemplate.update("delete from m_loan_arrears_aging");
     }
 
     private void deleteLoanArrearsAgingDetails(List<Long> loanIds) {
@@ -62,7 +65,7 @@ public class LoanArrearsAgeingUpdateHandler {
     }
 
     public void updateLoanArrearsAgeingDetailsForAllLoans() {
-        truncateLoanArrearsAgingDetails();
+        clearLoanArrearsAgingDetails();
         String insertSQLStatement = buildQueryForInsertAgeingDetails(Boolean.TRUE);
         List<String> insertStatements = updateLoanArrearsAgeingDetailsWithOriginalScheduleForAllLoans();
         insertStatements.add(0, insertSQLStatement);
@@ -144,6 +147,7 @@ public class LoanArrearsAgeingUpdateHandler {
         insertSqlStatementBuilder
                 .append(" and (prd.arrears_based_on_original_schedule = false or prd.arrears_based_on_original_schedule is null) ");
         insertSqlStatementBuilder.append(" GROUP BY ml.id");
+        insertSqlStatementBuilder.append(sqlGenerator.insertOnConflictUpdate(List.of("loan_id"), ARREARS_UPSERT_COLUMNS));
         return insertSqlStatementBuilder.toString();
     }
 

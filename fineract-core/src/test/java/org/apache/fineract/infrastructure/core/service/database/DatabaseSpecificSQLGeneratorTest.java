@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.infrastructure.core.service.database;
 
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -62,5 +63,32 @@ public class DatabaseSpecificSQLGeneratorTest {
         String sql = "SELECT 1 FROM test_table WHERE asd=2 OFFSET 2 LIMIT 50";
         String countQuery = databaseSpecificSQLGenerator.countQueryResult(sql);
         Assertions.assertEquals("SELECT COUNT(*) FROM (SELECT 1 FROM test_table WHERE asd=2) AS temp", countQuery);
+    }
+
+    @Test
+    public void testInsertOnConflictUpdateOnMySql() {
+        Mockito.when(databaseTypeResolver.isMySQL()).thenReturn(true);
+
+        String clause = databaseSpecificSQLGenerator.insertOnConflictUpdate(List.of("loan_id"),
+                List.of("principal_overdue_derived", "total_overdue_derived"));
+
+        Assertions.assertEquals(
+                " ON DUPLICATE KEY UPDATE `principal_overdue_derived`=VALUES(`principal_overdue_derived`), "
+                        + "`total_overdue_derived`=VALUES(`total_overdue_derived`)",
+                clause);
+    }
+
+    @Test
+    public void testInsertOnConflictUpdateOnPostgreSql() {
+        Mockito.when(databaseTypeResolver.isMySQL()).thenReturn(false);
+        Mockito.when(databaseTypeResolver.isPostgreSQL()).thenReturn(true);
+
+        String clause = databaseSpecificSQLGenerator.insertOnConflictUpdate(List.of("loan_id"),
+                List.of("principal_overdue_derived", "total_overdue_derived"));
+
+        Assertions.assertEquals(
+                " ON CONFLICT (\"loan_id\") DO UPDATE SET \"principal_overdue_derived\"=EXCLUDED.\"principal_overdue_derived\", "
+                        + "\"total_overdue_derived\"=EXCLUDED.\"total_overdue_derived\"",
+                clause);
     }
 }
