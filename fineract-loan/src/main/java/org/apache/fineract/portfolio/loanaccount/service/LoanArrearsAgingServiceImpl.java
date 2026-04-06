@@ -65,9 +65,6 @@ import org.springframework.jdbc.core.ResultSetExtractor;
 @RequiredArgsConstructor
 public class LoanArrearsAgingServiceImpl implements LoanArrearsAgingService {
 
-    private static final List<String> ARREARS_UPSERT_COLUMNS = List.of("principal_overdue_derived", "interest_overdue_derived",
-            "fee_charges_overdue_derived", "penalty_charges_overdue_derived", "total_overdue_derived", "overdue_since_date_derived");
-
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final JdbcTemplate jdbcTemplate;
@@ -274,7 +271,8 @@ public class LoanArrearsAgingServiceImpl implements LoanArrearsAgingService {
         BigDecimal totalOverDue = principalOverdue.add(interestOverdue).add(feeOverdue).add(penaltyOverdue);
         insertStatementBuilder.append(totalOverDue).append(",'");
         insertStatementBuilder.append(this.formatter.format(overDueSince)).append("')");
-        insertStatementBuilder.append(sqlGenerator.insertOnConflictUpdate(List.of("loan_id"), ARREARS_UPSERT_COLUMNS));
+        insertStatementBuilder
+                .append(sqlGenerator.insertOnConflictUpdate(List.of("loan_id"), LoanArrearsAgingService.ARREARS_UPSERT_COLUMNS));
         return insertStatementBuilder.toString();
     }
 

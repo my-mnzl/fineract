@@ -89,4 +89,15 @@ public class DatabaseSpecificSQLGeneratorTest {
                         + "\"total_overdue_derived\"=EXCLUDED.\"total_overdue_derived\"",
                 clause);
     }
+
+    @Test
+    public void testInsertOnConflictUpdateOnPostgreSqlRequiresConflictColumns() {
+        Mockito.when(databaseTypeResolver.isMySQL()).thenReturn(false);
+        Mockito.when(databaseTypeResolver.isPostgreSQL()).thenReturn(true);
+
+        IllegalArgumentException exception = Assertions.assertThrows(IllegalArgumentException.class,
+                () -> databaseSpecificSQLGenerator.insertOnConflictUpdate(List.of(), List.of("principal_overdue_derived")));
+
+        Assertions.assertEquals("conflictColumns must not be empty for PostgreSQL ON CONFLICT clause", exception.getMessage());
+    }
 }

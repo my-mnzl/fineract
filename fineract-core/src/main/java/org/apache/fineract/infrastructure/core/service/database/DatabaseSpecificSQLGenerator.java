@@ -186,9 +186,14 @@ public class DatabaseSpecificSQLGenerator {
             return "";
         }
         if (databaseTypeResolver.isMySQL()) {
+            // MySQL applies ON DUPLICATE KEY UPDATE to any unique-key conflict, so conflictColumns is intentionally
+            // unused here.
             return " ON DUPLICATE KEY UPDATE " + updateColumns.stream()
                     .map(column -> format("%s=VALUES(%s)", escape(column), escape(column))).collect(Collectors.joining(", "));
         } else if (databaseTypeResolver.isPostgreSQL()) {
+            if (conflictColumns.isEmpty()) {
+                throw new IllegalArgumentException("conflictColumns must not be empty for PostgreSQL ON CONFLICT clause");
+            }
             return " ON CONFLICT (" + conflictColumns.stream().map(this::escape).collect(Collectors.joining(", ")) + ") DO UPDATE SET "
                     + updateColumns.stream().map(column -> format("%s=EXCLUDED.%s", escape(column), escape(column)))
                             .collect(Collectors.joining(", "));
