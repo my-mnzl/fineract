@@ -159,9 +159,7 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.amountPaid = BigDecimal.ZERO;
         this.amountWaived = BigDecimal.ZERO;
         this.amountWrittenOff = BigDecimal.ZERO;
-        this.amountOutstanding = calculateAmountOutstanding(currency);
-        this.paid = false;
-        this.waived = false;
+        syncAmountOutstandingAndPaidState(currency);
         for (final LoanInstallmentCharge installmentCharge : this.loanInstallmentCharge) {
             installmentCharge.resetToOriginal(currency);
         }
@@ -169,8 +167,7 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
     public void resetPaidAmount(final MonetaryCurrency currency) {
         this.amountPaid = BigDecimal.ZERO;
-        this.amountOutstanding = calculateAmountOutstanding(currency);
-        this.paid = false;
+        syncAmountOutstandingAndPaidState(currency);
         for (final LoanInstallmentCharge installmentCharge : this.loanInstallmentCharge) {
             installmentCharge.resetPaidAmount(currency);
         }
@@ -223,8 +220,24 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.waived = false;
     }
 
-    private BigDecimal calculateAmountOutstanding(final MonetaryCurrency currency) {
-        return getAmount(currency).minus(getAmountWaived(currency)).minus(getAmountPaid(currency)).getAmount();
+    private Money calculateAmountOutstanding(final MonetaryCurrency currency) {
+        return Money.of(currency, calculateOutstanding());
+    }
+
+    private MonetaryCurrency resolveCurrency() {
+        if (this.loan == null) {
+            return null;
+        }
+        return this.loan.getCurrency();
+    }
+
+    private void syncAmountOutstandingAndPaidState(final MonetaryCurrency currency) {
+        final Money outstandingAmount = calculateAmountOutstanding(currency);
+        this.amountOutstanding = outstandingAmount.getAmount();
+        final boolean fullySettled = outstandingAmount.isZero();
+        final boolean hasWaivedAmount = getAmountWaived(currency).isGreaterThanZero();
+        this.paid = fullySettled && !hasWaivedAmount;
+        this.waived = fullySettled && hasWaivedAmount;
     }
 
     public void update(final Loan loan) {
@@ -264,7 +277,11 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         if (this.amount == null) {
             return true;
         }
-        return BigDecimal.ZERO.compareTo(calculateOutstanding()) == 0;
+        final MonetaryCurrency currency = resolveCurrency();
+        if (currency == null) {
+            return BigDecimal.ZERO.compareTo(calculateOutstanding()) == 0;
+        }
+        return calculateAmountOutstanding(currency).isZero();
     }
 
     public BigDecimal calculateOutstanding() {
@@ -436,20 +453,12 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
             amountPaidOnThisCharge = amountOutstanding;
             amountPaidToDate = amountPaidToDate.plus(amountOutstanding);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = BigDecimal.ZERO;
-            Money waivedAmount = getAmountWaived(processAmount.getCurrency());
-            if (waivedAmount.isGreaterThanZero()) {
-                this.waived = true;
-            } else {
-                this.paid = true;
-            }
-
         } else {
             amountPaidOnThisCharge = processAmount;
             amountPaidToDate = amountPaidToDate.plus(processAmount);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = calculateAmountOutstanding(incrementBy.getCurrency());
         }
+        syncAmountOutstandingAndPaidState(processAmount.getCurrency());
         return amountPaidOnThisCharge;
     }
 
@@ -640,15 +649,12 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
             amountDeductedOnThisCharge = amountPaidToDate;
             amountPaidToDate = Money.zero(processAmount.getCurrency());
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = this.amount;
-            this.paid = false;
-
         } else {
             amountDeductedOnThisCharge = processAmount;
             amountPaidToDate = amountPaidToDate.minus(processAmount);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = calculateAmountOutstanding(incrementBy.getCurrency());
         }
+        syncAmountOutstandingAndPaidState(processAmount.getCurrency());
         return amountDeductedOnThisCharge;
     }
 

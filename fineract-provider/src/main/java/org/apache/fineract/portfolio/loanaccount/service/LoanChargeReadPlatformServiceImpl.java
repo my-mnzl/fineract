@@ -196,7 +196,7 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
     public Collection<LoanChargeData> retrieveLoanChargesForFeePayment(final Integer paymentMode, final Integer loanStatus) {
         final LoanChargeMapperWithLoanId rm = new LoanChargeMapperWithLoanId();
         final String sql = "select " + rm.schema()
-                + "where loan.loan_status_id= ? and lc.charge_payment_mode_enum=? and lc.waived = false and lc.is_paid_derived=false and lc.is_active = true";
+                + "where loan.loan_status_id= ? and lc.charge_payment_mode_enum=? and lc.waived = false and lc.is_paid_derived=false and lc.amount_outstanding_derived > 0 and lc.is_active = true";
         return this.jdbcTemplate.query(sql, rm, loanStatus, paymentMode); // NOSONAR
     }
 
@@ -233,7 +233,7 @@ public class LoanChargeReadPlatformServiceImpl implements LoanChargeReadPlatform
         final LoanInstallmentChargeMapper rm = new LoanInstallmentChargeMapper();
         String sql = "select " + rm.schema() + "where lic.loan_charge_id= ? ";
         if (onlyPaymentPendingCharges) {
-            sql = sql + "and lic.waived = false and lic.is_paid_derived=false";
+            sql = sql + "and lic.waived = false and lic.is_paid_derived=false and lic.amount_outstanding_derived > 0";
         }
         sql = sql + " order by lsi.installment";
         return this.jdbcTemplate.query(sql, rm, loanChargeId); // NOSONAR
