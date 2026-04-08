@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.loanaccount.jobs.transferfeechargeforloans;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -64,22 +65,33 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
                             .retrieveInstallmentLoanCharges(chargeData.getId(), true);
                     PortfolioAccountData portfolioAccountData = null;
                     for (final LoanInstallmentChargeData installmentChargeData : chargePerInstallments) {
-                        if (!DateUtils.isDateInTheFuture(installmentChargeData.getDueDate())) {
-                            if (portfolioAccountData == null) {
-                                portfolioAccountData = accountAssociationsReadPlatformService
-                                        .retriveLoanLinkedAssociation(chargeData.getLoanId());
-                            }
-                            final boolean isExceptionForBalanceCheck = false;
-                            final AccountTransferDTO accountTransferDTO = new AccountTransferDTO(DateUtils.getBusinessLocalDate(),
-                                    installmentChargeData.getAmountOutstanding(), PortfolioAccountType.SAVINGS, PortfolioAccountType.LOAN,
-                                    portfolioAccountData.getId(), chargeData.getLoanId(), "Loan Charge Payment", null, null, null, null,
-                                    LoanTransactionType.CHARGE_PAYMENT.getValue(), chargeData.getId(),
-                                    installmentChargeData.getInstallmentNumber(), AccountTransferType.CHARGE_PAYMENT.getValue(), null, null,
-                                    ExternalId.empty(), null, null, null, isRegularTransaction, isExceptionForBalanceCheck);
-                            transferFeeCharge(accountTransferDTO, errors);
+                        if (DateUtils.isDateInTheFuture(installmentChargeData.getDueDate())
+                                || !hasPositiveOutstanding(installmentChargeData.getAmountOutstanding())) {
+                            log.debug("Skipping installment charge {} (installment {}) for loan {}: dueDate={}, amountOutstanding={}",
+                                    chargeData.getId(), installmentChargeData.getInstallmentNumber(), chargeData.getLoanId(),
+                                    installmentChargeData.getDueDate(), installmentChargeData.getAmountOutstanding());
+                            continue;
                         }
+                        if (portfolioAccountData == null) {
+                            portfolioAccountData = accountAssociationsReadPlatformService
+                                    .retriveLoanLinkedAssociation(chargeData.getLoanId());
+                        }
+                        final boolean isExceptionForBalanceCheck = false;
+                        final AccountTransferDTO accountTransferDTO = new AccountTransferDTO(DateUtils.getBusinessLocalDate(),
+                                installmentChargeData.getAmountOutstanding(), PortfolioAccountType.SAVINGS, PortfolioAccountType.LOAN,
+                                portfolioAccountData.getId(), chargeData.getLoanId(), "Loan Charge Payment", null, null, null, null,
+                                LoanTransactionType.CHARGE_PAYMENT.getValue(), chargeData.getId(),
+                                installmentChargeData.getInstallmentNumber(), AccountTransferType.CHARGE_PAYMENT.getValue(), null, null,
+                                ExternalId.empty(), null, null, null, isRegularTransaction, isExceptionForBalanceCheck);
+                        transferFeeCharge(accountTransferDTO, errors);
                     }
-                } else if (chargeData.getDueDate() != null && !DateUtils.isDateInTheFuture(chargeData.getDueDate())) {
+                } else if (chargeData.getDueDate() != null) {
+                    if (DateUtils.isDateInTheFuture(chargeData.getDueDate())
+                            || !hasPositiveOutstanding(chargeData.getAmountOutstanding())) {
+                        log.debug("Skipping charge {} for loan {}: dueDate={}, amountOutstanding={}", chargeData.getId(),
+                                chargeData.getLoanId(), chargeData.getDueDate(), chargeData.getAmountOutstanding());
+                        continue;
+                    }
                     final PortfolioAccountData portfolioAccountData = accountAssociationsReadPlatformService
                             .retriveLoanLinkedAssociation(chargeData.getLoanId());
                     final boolean isExceptionForBalanceCheck = false;
@@ -107,5 +119,9 @@ public class TransferFeeChargeForLoansTasklet implements Tasklet {
                     accountTransferDTO.getToAccountId(), e);
             errors.add(e);
         }
+    }
+
+    private boolean hasPositiveOutstanding(final BigDecimal amountOutstanding) {
+        return amountOutstanding != null && amountOutstanding.compareTo(BigDecimal.ZERO) > 0;
     }
 }

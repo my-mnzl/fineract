@@ -95,8 +95,13 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
     public void copyFrom(final LoanInstallmentCharge loanChargePerInstallment) {
         this.amount = loanChargePerInstallment.amount;
         this.installment = loanChargePerInstallment.installment;
-        this.amountOutstanding = calculateOutstanding();
-        this.paid = determineIfFullyPaid();
+        final MonetaryCurrency currency = resolveCurrency();
+        if (currency == null) {
+            this.amountOutstanding = calculateOutstanding();
+            this.paid = determineIfFullyPaid();
+        } else {
+            syncAmountOutstandingAndPaidState(currency);
+        }
     }
 
     public void waive() {
@@ -125,7 +130,11 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
         if (this.amount == null) {
             return true;
         }
-        return BigDecimal.ZERO.compareTo(calculateOutstanding()) == 0;
+        final MonetaryCurrency currency = resolveCurrency();
+        if (currency == null) {
+            return BigDecimal.ZERO.compareTo(calculateOutstanding()) == 0;
+        }
+        return calculateAmountOutstanding(currency).isZero();
     }
 
     public void undoWaive(final BigDecimal amountOutstanding, final BigDecimal amountWaived) {
@@ -165,8 +174,24 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
         return Money.of(currency, this.amountPaid);
     }
 
-    private BigDecimal calculateAmountOutstanding(final MonetaryCurrency currency) {
-        return getAmount(currency).minus(getAmountWaived(currency)).minus(getAmountPaid(currency)).getAmount();
+    private Money calculateAmountOutstanding(final MonetaryCurrency currency) {
+        return Money.of(currency, calculateOutstanding());
+    }
+
+    private MonetaryCurrency resolveCurrency() {
+        if (this.loancharge == null || this.loancharge.getLoan() == null) {
+            return null;
+        }
+        return this.loancharge.getLoan().getCurrency();
+    }
+
+    private void syncAmountOutstandingAndPaidState(final MonetaryCurrency currency) {
+        final Money outstandingAmount = calculateAmountOutstanding(currency);
+        this.amountOutstanding = outstandingAmount.getAmount();
+        final boolean fullySettled = outstandingAmount.isZero();
+        final boolean hasWaivedAmount = getAmountWaived(currency).isGreaterThanZero();
+        this.paid = fullySettled && !hasWaivedAmount;
+        this.waived = fullySettled && hasWaivedAmount;
     }
 
     public boolean isPending() {
@@ -193,12 +218,10 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
             amountPaidOnThisCharge = amountOutstanding;
             amountPaidToDate = amountPaidToDate.plus(amountOutstanding);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = BigDecimal.ZERO;
         } else {
             amountPaidOnThisCharge = incrementBy;
             amountPaidToDate = amountPaidToDate.plus(incrementBy);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = calculateAmountOutstanding(incrementBy.getCurrency());
         }
         Money amountFromChargePayment = Money.of(incrementBy.getCurrency(), this.amountThroughChargePayment);
         if (amountPaidPreviously.isGreaterThanZero()) {
@@ -207,14 +230,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
             amountFromChargePayment = feeAmount;
         }
         this.amountThroughChargePayment = amountFromChargePayment.getAmount();
-        if (determineIfFullyPaid()) {
-            Money waivedAmount = getAmountWaived(incrementBy.getCurrency());
-            if (waivedAmount.isGreaterThanZero()) {
-                this.waived = true;
-            } else {
-                this.paid = true;
-            }
-        }
+        syncAmountOutstandingAndPaidState(incrementBy.getCurrency());
 
         return amountPaidOnThisCharge;
     }
@@ -225,8 +241,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
 
     public void resetPaidAmount(final MonetaryCurrency currency) {
         this.amountPaid = BigDecimal.ZERO;
-        this.amountOutstanding = calculateAmountOutstanding(currency);
-        this.paid = false;
+        syncAmountOutstandingAndPaidState(currency);
     }
 
     public void undoWaiveFlag() {
@@ -242,9 +257,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
         this.amountWaived = BigDecimal.ZERO;
         this.amountWrittenOff = BigDecimal.ZERO;
         this.amountThroughChargePayment = BigDecimal.ZERO;
-        this.amountOutstanding = calculateAmountOutstanding(currency);
-        this.paid = false;
-        this.waived = false;
+        syncAmountOutstandingAndPaidState(currency);
 
     }
 
@@ -297,15 +310,13 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom<Long> imple
             amountToDeductOnThisCharge = amountPaidToDate;
             amountPaidToDate = Money.zero(incrementBy.getCurrency());
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = this.amount;
         } else {
             amountToDeductOnThisCharge = incrementBy;
             amountPaidToDate = amountPaidToDate.minus(incrementBy);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = calculateAmountOutstanding(incrementBy.getCurrency());
         }
         this.amountThroughChargePayment = feeAmount.getAmount();
-        this.paid = determineIfFullyPaid();
+        syncAmountOutstandingAndPaidState(incrementBy.getCurrency());
 
         return amountToDeductOnThisCharge;
     }
