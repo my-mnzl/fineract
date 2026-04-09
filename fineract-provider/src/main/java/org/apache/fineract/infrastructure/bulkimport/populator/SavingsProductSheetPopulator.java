@@ -85,8 +85,7 @@ public class SavingsProductSheetPopulator extends AbstractWorkbookPopulator {
             writeInt(IN_MULTIPLES_OF_COL, row, currency.getInMultiplesOf() != null ? currency.getInMultiplesOf() : 0);
             writeBoolean(WITHDRAWAL_FEE_COL, row, product.isWithdrawalFeeForTransfers());
             writeBoolean(ALLOW_OVERDRAFT_COL, row, product.isAllowOverdraft());
-            writeBigDecimal(OVERDRAFT_LIMIT_COL, row,
-                    product.getOverdraftLimit() != null ? product.getOverdraftLimit() : BigDecimal.ZERO);
+            writeBigDecimal(OVERDRAFT_LIMIT_COL, row, product.getOverdraftLimit() != null ? product.getOverdraftLimit() : BigDecimal.ZERO);
         }
         productSheet.protectSheet("");
     }
