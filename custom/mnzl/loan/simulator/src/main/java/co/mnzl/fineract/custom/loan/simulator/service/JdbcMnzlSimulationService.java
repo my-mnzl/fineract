@@ -41,6 +41,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -140,7 +141,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     @Override
     public SimulationResult rerunSimulation(String uuid) {
         // Atomic check-and-set: allow transition if not RUNNING, or if RUNNING but stale (>30 min)
-        Timestamp staleThreshold = Timestamp.valueOf(LocalDateTime.now().minusMinutes(30));
+        Timestamp staleThreshold = Timestamp.valueOf(LocalDateTime.now(ZoneId.of("UTC")).minusMinutes(30));
         int updated = jdbcTemplate.update("""
                 UPDATE m_mnzl_simulation SET status = ?, progress = 0, started_at = CURRENT_TIMESTAMP
                 WHERE uuid = ? AND (status != ? OR started_at < ?)
