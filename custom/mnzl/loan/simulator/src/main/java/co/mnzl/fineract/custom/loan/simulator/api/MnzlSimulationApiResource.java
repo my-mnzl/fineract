@@ -43,7 +43,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MnzlSimulationApiResource {
 
-    private static final String PERMISSION_RESOURCE = "LOAN";
+    private static final String PERMISSION_RESOURCE = "MNZL_SIMULATION";
     private static final Set<String> RESPONSE_PARAMETERS = Set.of("uuid", "name", "status",
             "errorMessage", "snapshots");
 

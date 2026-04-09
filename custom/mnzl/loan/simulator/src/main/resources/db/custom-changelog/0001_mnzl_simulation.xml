@@ -87,4 +87,28 @@
                 constraintName="fk_m_mnzl_simulation_user" referencedTableName="m_appuser"
                 referencedColumnNames="id"/>
     </changeSet>
+
+    <changeSet author="mnzl" id="5">
+        <insert tableName="m_permission">
+            <column name="grouping" value="portfolio"/>
+            <column name="code" value="CREATE_MNZL_SIMULATION"/>
+            <column name="entity_name" value="MNZL_SIMULATION"/>
+            <column name="action_name" value="CREATE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="portfolio"/>
+            <column name="code" value="READ_MNZL_SIMULATION"/>
+            <column name="entity_name" value="MNZL_SIMULATION"/>
+            <column name="action_name" value="READ"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+        <insert tableName="m_permission">
+            <column name="grouping" value="portfolio"/>
+            <column name="code" value="DELETE_MNZL_SIMULATION"/>
+            <column name="entity_name" value="MNZL_SIMULATION"/>
+            <column name="action_name" value="DELETE"/>
+            <column name="can_maker_checker" valueBoolean="false"/>
+        </insert>
+    </changeSet>
 </databaseChangeLog>

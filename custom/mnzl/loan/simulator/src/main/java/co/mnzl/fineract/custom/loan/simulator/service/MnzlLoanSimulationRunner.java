@@ -61,8 +61,8 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(name = "mnzl.loan.simulator.enabled", havingValue = "true", matchIfMissing = true)
 public class MnzlLoanSimulationRunner {
 
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd MMMM yyyy");
-    private static final String DATETIME_PATTERN = "dd MMMM yyyy";
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final String DATETIME_PATTERN = "yyyy-MM-dd";
     private static final String LOCALE = "en";
 
     private final PortfolioCommandSourceWritePlatformService commandService;
@@ -294,6 +294,14 @@ public class MnzlLoanSimulationRunner {
         try {
             Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
 
+            // Undo write-off first if the loan was written off
+            if (loan.isClosedWrittenOff()) {
+                CommandWrapper undoWriteOff = new CommandWrapperBuilder().undoWriteOffLoanTransaction(loanId)
+                        .withJson("{}").build();
+                commandService.logCommandSource(undoWriteOff);
+                loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
+            }
+
             // Undo disbursement if disbursed
             if (loan.isOpen()) {
                 JsonObject undoJson = new JsonObject();
@@ -303,10 +311,10 @@ public class MnzlLoanSimulationRunner {
                 CommandWrapper undoDisburse = new CommandWrapperBuilder().undoLoanApplicationDisbursal(loanId)
                         .withJson(undoJson.toString()).build();
                 commandService.logCommandSource(undoDisburse);
+                loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
             }
 
             // Undo approval
-            loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
             if (loan.isApproved()) {
                 JsonObject undoJson = new JsonObject();
                 undoJson.addProperty("dateFormat", DATETIME_PATTERN);

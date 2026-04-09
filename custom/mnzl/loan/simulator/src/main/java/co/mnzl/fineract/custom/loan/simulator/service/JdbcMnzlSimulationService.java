@@ -28,6 +28,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import co.mnzl.fineract.custom.loan.simulator.data.SimulationSnapshot;
+import co.mnzl.fineract.custom.loan.simulator.exception.SimulationNotFoundException;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -36,6 +40,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -69,7 +74,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 "SELECT * FROM m_mnzl_simulation WHERE uuid = ?",
                 new SimulationRowMapper(), uuid);
         if (results.isEmpty()) {
-            throw new IllegalArgumentException("Simulation not found: " + uuid);
+            throw new SimulationNotFoundException(uuid);
         }
         return results.get(0);
     }
@@ -162,7 +167,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     public void deleteSimulation(String uuid) {
         int rows = jdbcTemplate.update("DELETE FROM m_mnzl_simulation WHERE uuid = ?", uuid);
         if (rows == 0) {
-            throw new IllegalArgumentException("Simulation not found: " + uuid);
+            throw new SimulationNotFoundException(uuid);
         }
     }
 
@@ -199,15 +204,23 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 .build();
     }
 
+    private static final Type SNAPSHOT_LIST_TYPE = new TypeToken<List<SimulationSnapshot>>() {}.getType();
+
     private static class SimulationRowMapper implements RowMapper<SimulationResult> {
 
         @Override
         public SimulationResult mapRow(ResultSet rs, int rowNum) throws SQLException {
+            String resultJson = rs.getString("result_json");
+            List<SimulationSnapshot> snapshots = resultJson != null
+                    ? GSON.fromJson(resultJson, SNAPSHOT_LIST_TYPE)
+                    : Collections.emptyList();
+
             return SimulationResult.builder()
                     .uuid(rs.getString("uuid"))
                     .name(rs.getString("name"))
                     .status(SimulationStatus.fromString(rs.getString("status")))
                     .errorMessage(rs.getString("error_message"))
+                    .snapshots(snapshots)
                     .build();
         }
     }
