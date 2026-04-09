@@ -105,6 +105,8 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             for (GetLoansLoanIdRepaymentPeriod period : repaymentPeriods) {
                 double totalDue = Utils.getDoubleValue(period.getTotalDueForPeriod());
                 String dueDate = period.getDueDate().format(dateTimeFormatter);
+                businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+                        .date(dueDate).dateFormat(DATETIME_PATTERN).locale("en"));
                 loanTransactionHelper.makeLoanRepayment(loanId, "repayment", dueDate, totalDue);
             }
 
@@ -144,10 +146,14 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
             // Pay period 1 on time (due 01 Feb)
             double period1Due = Utils.getDoubleValue(repaymentPeriods.get(0).getTotalDueForPeriod());
+            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+                    .date("01 February 2026").dateFormat(DATETIME_PATTERN).locale("en"));
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", "01 February 2026", period1Due);
 
             // Pay period 2 on time (due 01 Mar)
             double period2Due = Utils.getDoubleValue(repaymentPeriods.get(1).getTotalDueForPeriod());
+            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+                    .date("01 March 2026").dateFormat(DATETIME_PATTERN).locale("en"));
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", "01 March 2026", period2Due);
 
             // Skip period 3 (due 01 Apr) — advance business date past due date
