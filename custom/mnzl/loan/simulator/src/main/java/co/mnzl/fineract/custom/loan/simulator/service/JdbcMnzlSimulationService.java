@@ -38,20 +38,29 @@ import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,6 +83,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     private final PlatformSecurityContext securityContext;
     private final MnzlSimulationApiJsonValidator validator;
     private final MnzlLoanSimulationRunner runner;
+    private final TaskExecutor simulationExecutor;
 
     @Override
     public SimulationResult findByUuid(String uuid) {
@@ -103,38 +113,29 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         jdbcTemplate.update("""
                 INSERT INTO m_mnzl_simulation (uuid, name, status, progress, total_actions,
                     loan_product_id, principal, interest_rate, number_of_repayments,
-                    scenario_json, created_by, created_date)
-                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    scenario_json, created_by, created_date, started_at)
+                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, uuid, request.getName(), SimulationStatus.RUNNING.name(), request.getActions().size(), request.getLoanProductId(),
                 request.getPrincipal(), request.getInterestRatePerPeriod(), request.getNumberOfRepayments(), json, userId);
 
-        // Run the simulation
-        MDC.put("simulationUuid", uuid);
-        try {
-            SimulationResult result = runner.run(request,
-                    progress -> jdbcTemplate.update("UPDATE m_mnzl_simulation SET progress = ? WHERE uuid = ?", progress, uuid));
+        // Capture context for async execution
+        FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
+        HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>(ThreadLocalContextUtil.getBusinessDates());
+        SecurityContext secCtx = SecurityContextHolder.getContext();
 
-            // Update with results
-            jdbcTemplate.update("""
-                    UPDATE m_mnzl_simulation
-                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE uuid = ?
-                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
+        simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
 
-            return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
-                    .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
-        } finally {
-            MDC.remove("simulationUuid");
-        }
+        return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.RUNNING).build();
     }
 
     @Override
     public SimulationResult rerunSimulation(String uuid) {
         // Atomic check-and-set: allow transition if not RUNNING, or if RUNNING but stale (>30 min)
+        Timestamp staleThreshold = Timestamp.valueOf(LocalDateTime.now().minusMinutes(30));
         int updated = jdbcTemplate.update("""
                 UPDATE m_mnzl_simulation SET status = ?, progress = 0, started_at = CURRENT_TIMESTAMP
-                WHERE uuid = ? AND (status != ? OR started_at < TIMESTAMPADD(MINUTE, -30, CURRENT_TIMESTAMP))
-                """, SimulationStatus.RUNNING.name(), uuid, SimulationStatus.RUNNING.name());
+                WHERE uuid = ? AND (status != ? OR started_at < ?)
+                """, SimulationStatus.RUNNING.name(), uuid, SimulationStatus.RUNNING.name(), staleThreshold);
         if (updated == 0) {
             findByUuid(uuid); // throws SimulationNotFoundException if uuid is invalid
             throw new IllegalStateException("Simulation " + uuid + " is already running");
@@ -143,22 +144,14 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
         SimulationRequest request = parseRequest(scenarioJson);
 
-        MDC.put("simulationUuid", uuid);
-        try {
-            SimulationResult result = runner.run(request,
-                    progress -> jdbcTemplate.update("UPDATE m_mnzl_simulation SET progress = ? WHERE uuid = ?", progress, uuid));
+        // Capture context for async execution
+        FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
+        HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>(ThreadLocalContextUtil.getBusinessDates());
+        SecurityContext secCtx = SecurityContextHolder.getContext();
 
-            jdbcTemplate.update("""
-                    UPDATE m_mnzl_simulation
-                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE uuid = ?
-                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
+        simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
 
-            return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
-                    .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
-        } finally {
-            MDC.remove("simulationUuid");
-        }
+        return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.RUNNING).build();
     }
 
     @Override
@@ -167,6 +160,34 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         int rows = jdbcTemplate.update("DELETE FROM m_mnzl_simulation WHERE uuid = ?", uuid);
         if (rows == 0) {
             throw new SimulationNotFoundException(uuid);
+        }
+    }
+
+    private void executeSimulation(String uuid, SimulationRequest request, FineractPlatformTenant tenant,
+            HashMap<BusinessDateType, LocalDate> businessDates, SecurityContext secCtx) {
+        ThreadLocalContextUtil.setTenant(tenant);
+        ThreadLocalContextUtil.setBusinessDates(businessDates);
+        SecurityContextHolder.setContext(secCtx);
+        MDC.put("simulationUuid", uuid);
+        try {
+            SimulationResult result = runner.run(request,
+                    progress -> jdbcTemplate.update("UPDATE m_mnzl_simulation SET progress = ? WHERE uuid = ?", progress, uuid));
+            jdbcTemplate.update("""
+                    UPDATE m_mnzl_simulation
+                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE uuid = ?
+                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
+        } catch (Exception e) {
+            log.error("Simulation {} failed unexpectedly", uuid, e);
+            jdbcTemplate.update("""
+                    UPDATE m_mnzl_simulation
+                    SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE uuid = ?
+                    """, SimulationStatus.FAILED.name(), e.getMessage(), uuid);
+        } finally {
+            MDC.remove("simulationUuid");
+            SecurityContextHolder.clearContext();
+            ThreadLocalContextUtil.reset();
         }
     }
 
