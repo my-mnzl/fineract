@@ -116,9 +116,9 @@ class MnzlLoanSimulationRunnerTest {
         lenient().when(loan.getLoanTransactions()).thenReturn(Collections.emptyList());
         lenient().when(loan.getApprovedPrincipal()).thenReturn(BigDecimal.valueOf(100000));
 
-        // During action execution: not written off. During cleanup: first call -> written-off, after undo -> not
-        when(loan.isClosedWrittenOff()).thenReturn(false, false, true, false);
-        when(loan.isOpen()).thenReturn(true, true);
+        // During cleanup: first call -> written-off (triggers undo), after undo -> not written-off
+        when(loan.isClosedWrittenOff()).thenReturn(true, false);
+        when(loan.isOpen()).thenReturn(true);
         lenient().when(loan.isApproved()).thenReturn(true);
 
         SimulationRequest request = SimulationRequest.builder().name("Write-off test").loanProductId(1L)
