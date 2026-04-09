@@ -23,6 +23,9 @@ public enum SimulationActionType {
     DISBURSE, PAY, SKIP, RUN_COB, ADD_CHARGE, WRITE_OFF, CHANGE_INTEREST_RATE;
 
     public static SimulationActionType fromString(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("Action type cannot be null");
+        }
         return valueOf(value.toUpperCase());
     }
 }
