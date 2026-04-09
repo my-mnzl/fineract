@@ -29,6 +29,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -167,11 +168,14 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("clientId", clientId);
         json.addProperty("productId", request.getLoanProductId());
         json.addProperty("principal", request.getPrincipal());
-        json.addProperty("loanTermFrequency", request.getNumberOfRepayments());
-        json.addProperty("loanTermFrequencyType", 2); // MONTHS
+        int repaymentEvery = request.getRepaymentEvery() != null ? request.getRepaymentEvery() : 1;
+        int frequencyType = request.getRepaymentFrequencyType() != null ? request.getRepaymentFrequencyType() : 2; // default
+                                                                                                                   // MONTHS
+        json.addProperty("loanTermFrequency", request.getNumberOfRepayments() * repaymentEvery);
+        json.addProperty("loanTermFrequencyType", frequencyType);
         json.addProperty("numberOfRepayments", request.getNumberOfRepayments());
-        json.addProperty("repaymentEvery", 1);
-        json.addProperty("repaymentFrequencyType", 2); // MONTHS
+        json.addProperty("repaymentEvery", repaymentEvery);
+        json.addProperty("repaymentFrequencyType", frequencyType);
         json.addProperty("interestRatePerPeriod", request.getInterestRatePerPeriod());
         json.addProperty("amortizationType", 1); // EQUAL_INSTALLMENTS
         json.addProperty("interestType", 0); // DECLINING_BALANCE
@@ -354,8 +358,27 @@ public class MnzlLoanSimulationRunner {
                 loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
             }
 
-            // Undo disbursement if disbursed
+            // Reverse all non-reversed, non-disbursement transactions (repayments, charges, etc.)
+            // so that undo disbursal can succeed
             if (loan.isOpen()) {
+                List<LoanTransaction> txns = loan.getLoanTransactions();
+                if (txns != null) {
+                    List<LoanTransaction> toReverse = new ArrayList<>(
+                            txns.stream().filter(tx -> !tx.isReversed() && !tx.isDisbursement()).toList());
+                    Collections.reverse(toReverse);
+                    for (LoanTransaction tx : toReverse) {
+                        JsonObject adjustJson = new JsonObject();
+                        adjustJson.addProperty("transactionDate", tx.getTransactionDate().format(DATE_FORMAT));
+                        adjustJson.addProperty("transactionAmount", 0);
+                        adjustJson.addProperty("dateFormat", DATETIME_PATTERN);
+                        adjustJson.addProperty("locale", LOCALE);
+                        CommandWrapper adjust = new CommandWrapperBuilder().adjustTransaction(loanId, tx.getId())
+                                .withJson(adjustJson.toString()).build();
+                        commandService.logCommandSource(adjust);
+                    }
+                }
+
+                // Undo disbursement
                 JsonObject undoJson = new JsonObject();
                 undoJson.addProperty("dateFormat", DATETIME_PATTERN);
                 undoJson.addProperty("locale", LOCALE);

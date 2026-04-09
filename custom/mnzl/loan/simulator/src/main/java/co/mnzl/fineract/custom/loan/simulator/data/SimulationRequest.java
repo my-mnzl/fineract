@@ -32,6 +32,8 @@ public class SimulationRequest {
     private final BigDecimal principal;
     private final BigDecimal interestRatePerPeriod;
     private final Integer numberOfRepayments;
+    private final Integer repaymentEvery;
+    private final Integer repaymentFrequencyType;
     private final String disbursementDate;
     private final String submittedOnDate;
     private final String approvedOnDate;

@@ -57,6 +57,7 @@ import org.apache.fineract.infrastructure.security.service.PlatformSecurityConte
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.security.core.context.SecurityContext;
@@ -123,7 +124,15 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>(ThreadLocalContextUtil.getBusinessDates());
         SecurityContext secCtx = SecurityContextHolder.getContext();
 
-        simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
+        try {
+            simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
+        } catch (TaskRejectedException e) {
+            log.error("Simulation {} rejected — executor queue full", uuid, e);
+            jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, error_message = ? WHERE uuid = ?", SimulationStatus.FAILED.name(),
+                    "Executor queue full, try again later", uuid);
+            return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.FAILED)
+                    .errorMessage("Executor queue full, try again later").build();
+        }
 
         return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.RUNNING).build();
     }
@@ -149,7 +158,15 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>(ThreadLocalContextUtil.getBusinessDates());
         SecurityContext secCtx = SecurityContextHolder.getContext();
 
-        simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
+        try {
+            simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
+        } catch (TaskRejectedException e) {
+            log.error("Simulation {} rerun rejected — executor queue full", uuid, e);
+            jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, error_message = ? WHERE uuid = ?", SimulationStatus.FAILED.name(),
+                    "Executor queue full, try again later", uuid);
+            return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.FAILED)
+                    .errorMessage("Executor queue full, try again later").build();
+        }
 
         return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.RUNNING).build();
     }
@@ -157,7 +174,12 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     @Override
     @Transactional
     public void deleteSimulation(String uuid) {
-        int rows = jdbcTemplate.update("DELETE FROM m_mnzl_simulation WHERE uuid = ?", uuid);
+        SimulationResult existing = findByUuid(uuid);
+        if (existing.getStatus() == SimulationStatus.RUNNING) {
+            throw new IllegalStateException("Cannot delete a simulation that is currently RUNNING");
+        }
+        int rows = jdbcTemplate.update("DELETE FROM m_mnzl_simulation WHERE uuid = ? AND status != ?", uuid,
+                SimulationStatus.RUNNING.name());
         if (rows == 0) {
             throw new SimulationNotFoundException(uuid);
         }
@@ -220,6 +242,8 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 .principal(fromJsonHelper.extractBigDecimalWithLocaleNamed("principal", root))
                 .interestRatePerPeriod(fromJsonHelper.extractBigDecimalWithLocaleNamed("interestRatePerPeriod", root))
                 .numberOfRepayments(fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", root))
+                .repaymentEvery(fromJsonHelper.extractIntegerWithLocaleNamed("repaymentEvery", root))
+                .repaymentFrequencyType(fromJsonHelper.extractIntegerWithLocaleNamed("repaymentFrequencyType", root))
                 .disbursementDate(fromJsonHelper.extractStringNamed("disbursementDate", root))
                 .submittedOnDate(fromJsonHelper.extractStringNamed("submittedOnDate", root))
                 .approvedOnDate(fromJsonHelper.extractStringNamed("approvedOnDate", root))
