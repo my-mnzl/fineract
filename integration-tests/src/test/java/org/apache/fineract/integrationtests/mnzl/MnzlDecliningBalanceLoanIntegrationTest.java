@@ -165,7 +165,8 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
             // Add penalty charge for overdue installment
             PostLoansLoanIdChargesResponse chargeResponse = loanTransactionHelper.addChargesForLoan(loanId,
-                    new PostLoansLoanIdChargesRequest().chargeId(penaltyChargeId.longValue()).dateFormat(DATETIME_PATTERN).locale("en"));
+                    new PostLoansLoanIdChargesRequest().chargeId(penaltyChargeId.longValue()).amount(1.0).dateFormat(DATETIME_PATTERN)
+                            .locale("en"));
 
             // Verify loan state after late payment + penalty
             loanDetails = loanTransactionHelper.getLoanDetails(loanId);
@@ -255,7 +256,8 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     }
 
     private PostLoanProductsResponse createCoreDecliningBalanceProduct() {
-        return loanProductHelper.createLoanProduct(buildDecliningBalanceProduct(1, 365));
+        return loanProductHelper
+                .createLoanProduct(buildDecliningBalanceProduct(1, 365).interestCalculationPeriodType(InterestCalculationPeriodType.DAILY));
     }
 
     private PostLoanProductsRequest buildDecliningBalanceProduct(int daysInMonth, int daysInYear) {
