@@ -31,10 +31,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.BusinessDateUpdateRequest;
 import org.apache.fineract.client.models.GetLoansLoanIdRepaymentPeriod;
 import org.apache.fineract.client.models.GetLoansLoanIdResponse;
+import org.apache.fineract.client.models.LoanProductChargeData;
 import org.apache.fineract.client.models.PostLoanProductsRequest;
 import org.apache.fineract.client.models.PostLoanProductsResponse;
-import org.apache.fineract.client.models.PostLoansLoanIdChargesRequest;
-import org.apache.fineract.client.models.PostLoansLoanIdChargesResponse;
 import org.apache.fineract.client.models.PostLoansLoanIdRequest;
 import org.apache.fineract.client.models.PostLoansRequest;
 import org.apache.fineract.client.models.PostLoansResponse;
@@ -134,7 +133,9 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             Integer penaltyChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
                     ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("1"));
 
-            PostLoanProductsResponse loanProduct = createMnzlDecliningBalanceProduct();
+            // Create product with the penalty charge baked in — COB auto-applies it
+            PostLoanProductsResponse loanProduct = loanProductHelper.createLoanProduct(
+                    buildDecliningBalanceProduct(30, 360).charges(List.of(new LoanProductChargeData().id(penaltyChargeId.longValue()))));
             Long productId = loanProduct.getResourceId();
             setMnzlProductStrategy(productId);
 
@@ -160,15 +161,10 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
                     .date("05 April 2026").dateFormat(DATETIME_PATTERN).locale("en"));
 
-            // Run inline COB to trigger due installment check
+            // Run inline COB to trigger overdue penalty auto-application
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
 
-            // Add penalty charge for overdue installment
-            PostLoansLoanIdChargesResponse chargeResponse = loanTransactionHelper.addChargesForLoan(loanId,
-                    new PostLoansLoanIdChargesRequest().chargeId(penaltyChargeId.longValue()).amount(1.0).dateFormat(DATETIME_PATTERN)
-                            .locale("en"));
-
-            // Verify loan state after late payment + penalty
+            // Verify loan state after COB — penalty should be auto-applied
             loanDetails = loanTransactionHelper.getLoanDetails(loanId);
             verifyLoanStatus(loanDetails, status -> status.getActive());
 
@@ -183,9 +179,9 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             double totalOutstanding = Utils.getDoubleValue(loanDetails.getSummary().getTotalOutstanding());
             assertTrue(totalOutstanding > 0, "Total outstanding should be > 0 after missed payment");
 
-            // Penalty charges should be present
+            // Penalty charges should be present (auto-applied by COB)
             double penaltyOutstanding = Utils.getDoubleValue(loanDetails.getSummary().getPenaltyChargesOutstanding());
-            assertTrue(penaltyOutstanding > 0, "Penalty charges should be applied for overdue installment");
+            assertTrue(penaltyOutstanding > 0, "Penalty charges should be auto-applied by COB for overdue installment");
 
             log.info("Period 3 outstanding principal: {}", Utils.getDoubleValue(period3.getPrincipalOutstanding()));
             log.info("Period 3 outstanding interest: {}", Utils.getDoubleValue(period3.getInterestOutstanding()));
@@ -206,42 +202,42 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     }
 
     /**
-     * Test 3: Verify MNZL 30/360 schedule differs from core default actual day count.
+     * Test 3: Verify MNZL 30/360 interest formula across all repayment periods.
      *
-     * Creates two identical loans — one using MNZL_DECLINING_BALANCE (30/360) and one using core default (actual/365) —
-     * and verifies the interest calculations differ.
+     * Each period's interest must equal outstanding_principal * 12% * 30/360 (i.e., 1% monthly rate). This validates
+     * the custom schedule generator uses 30/360 day counting for every period, not just the first.
      */
     @Test
-    public void testMnzlScheduleDiffersFromCoreDefault() {
+    public void testMnzlScheduleFollows30_360FormulaAcrossAllPeriods() {
         runAt("01 January 2026", () -> {
             Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
 
-            // MNZL product (30/360)
             PostLoanProductsResponse mnzlProduct = createMnzlDecliningBalanceProduct();
             setMnzlProductStrategy(mnzlProduct.getResourceId());
 
-            // Core product (actual/365) — same parameters but no mnzl strategy
-            PostLoanProductsResponse coreProduct = createCoreDecliningBalanceProduct();
+            Long loanId = applyApproveDisburseLoan(clientId, mnzlProduct.getResourceId(), 120000.0, 12.0, 12, "01 January 2026");
 
-            Long mnzlLoanId = applyApproveDisburseLoan(clientId, mnzlProduct.getResourceId(), 120000.0, 12.0, 12, "01 January 2026");
-            Long coreLoanId = applyApproveDisburseLoan(clientId, coreProduct.getResourceId(), 120000.0, 12.0, 12, "01 January 2026");
+            List<GetLoansLoanIdRepaymentPeriod> periods = getRepaymentPeriods(loanTransactionHelper.getLoanDetails(loanId));
+            assertEquals(12, periods.size(), "Should have 12 repayment periods");
 
-            List<GetLoansLoanIdRepaymentPeriod> mnzlPeriods = getRepaymentPeriods(loanTransactionHelper.getLoanDetails(mnzlLoanId));
-            List<GetLoansLoanIdRepaymentPeriod> corePeriods = getRepaymentPeriods(loanTransactionHelper.getLoanDetails(coreLoanId));
+            // 30/360 monthly rate = 12% * 30/360 = 1%
+            double monthlyRate = 0.01;
+            double outstandingPrincipal = 120000.0;
 
-            double mnzlTotalInterest = mnzlPeriods.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
-            double coreTotalInterest = corePeriods.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
+            for (int i = 0; i < periods.size(); i++) {
+                GetLoansLoanIdRepaymentPeriod period = periods.get(i);
+                double expectedInterest = Math.round(outstandingPrincipal * monthlyRate * 100.0) / 100.0;
+                double actualInterest = Utils.getDoubleValue(period.getInterestDue());
 
-            log.info("MNZL total interest (30/360): {}", mnzlTotalInterest);
-            log.info("Core total interest (actual/365): {}", coreTotalInterest);
+                assertEquals(expectedInterest, actualInterest, 0.01,
+                        "Period " + (i + 1) + " interest should match 30/360 formula: " + outstandingPrincipal + " * 1%");
 
-            // 30/360 and actual/365 should produce different total interest
-            assertTrue(Math.abs(mnzlTotalInterest - coreTotalInterest) > 0.01,
-                    "MNZL (30/360) and Core (actual/365) should produce different total interest");
+                // Reduce outstanding by principal paid this period
+                outstandingPrincipal -= Utils.getDoubleValue(period.getPrincipalDue());
+            }
 
-            // MNZL first period interest = 120000 * 12% * 30/360 = 1200
-            double mnzlFirstInterest = Utils.getDoubleValue(mnzlPeriods.get(0).getInterestDue());
-            assertEquals(1200.0, mnzlFirstInterest, 0.01, "MNZL first period interest = 120000 * 12% * 30/360");
+            // Outstanding should be zero after all periods
+            assertEquals(0.0, outstandingPrincipal, 0.01, "All principal should be allocated across 12 periods");
         });
     }
 
@@ -253,11 +249,6 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
     private PostLoanProductsResponse createMnzlDecliningBalanceProduct() {
         return loanProductHelper.createLoanProduct(buildDecliningBalanceProduct(30, 360));
-    }
-
-    private PostLoanProductsResponse createCoreDecliningBalanceProduct() {
-        return loanProductHelper
-                .createLoanProduct(buildDecliningBalanceProduct(1, 365).interestCalculationPeriodType(InterestCalculationPeriodType.DAILY));
     }
 
     private PostLoanProductsRequest buildDecliningBalanceProduct(int daysInMonth, int daysInYear) {
