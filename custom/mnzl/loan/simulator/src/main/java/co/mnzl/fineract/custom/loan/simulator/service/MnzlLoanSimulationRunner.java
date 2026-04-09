@@ -115,6 +115,8 @@ public class MnzlLoanSimulationRunner {
     }
 
     private Long createLoanApplication(SimulationRequest request) {
+        setBusinessDate(LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT));
+
         JsonObject json = new JsonObject();
         json.addProperty("clientId", request.getClientId());
         json.addProperty("productId", request.getLoanProductId());
@@ -129,18 +131,23 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("interestType", 0); // DECLINING_BALANCE
         json.addProperty("interestCalculationPeriodType", 1); // SAME_AS_REPAYMENT_PERIOD
         json.addProperty("expectedDisbursementDate", request.getDisbursementDate());
-        json.addProperty("submittedOnDate", request.getDisbursementDate());
+        json.addProperty("submittedOnDate", request.getEffectiveSubmittedOnDate());
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
         json.addProperty("loanType", "individual");
+        if (request.getInterestChargedFromDate() != null) {
+            json.addProperty("interestChargedFromDate", request.getInterestChargedFromDate());
+        }
 
         CommandWrapper command = new CommandWrapperBuilder().createLoanApplication().withJson(json.toString()).build();
         CommandProcessingResult result = commandService.logCommandSource(command);
         Long loanId = result.getLoanId();
 
-        // Approve immediately
+        // Approve
+        setBusinessDate(LocalDate.parse(request.getEffectiveApprovedOnDate(), DATE_FORMAT));
+
         JsonObject approveJson = new JsonObject();
-        approveJson.addProperty("approvedOnDate", request.getDisbursementDate());
+        approveJson.addProperty("approvedOnDate", request.getEffectiveApprovedOnDate());
         approveJson.addProperty("approvedLoanAmount", request.getPrincipal());
         approveJson.addProperty("dateFormat", DATETIME_PATTERN);
         approveJson.addProperty("locale", LOCALE);

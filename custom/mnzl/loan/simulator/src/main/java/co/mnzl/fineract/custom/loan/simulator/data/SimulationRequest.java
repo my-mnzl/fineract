@@ -34,5 +34,16 @@ public class SimulationRequest {
     private final BigDecimal interestRatePerPeriod;
     private final Integer numberOfRepayments;
     private final String disbursementDate;
+    private final String submittedOnDate;
+    private final String approvedOnDate;
+    private final String interestChargedFromDate;
     private final List<SimulationActionRequest> actions;
+
+    public String getEffectiveSubmittedOnDate() {
+        return submittedOnDate != null ? submittedOnDate : disbursementDate;
+    }
+
+    public String getEffectiveApprovedOnDate() {
+        return approvedOnDate != null ? approvedOnDate : disbursementDate;
+    }
 }

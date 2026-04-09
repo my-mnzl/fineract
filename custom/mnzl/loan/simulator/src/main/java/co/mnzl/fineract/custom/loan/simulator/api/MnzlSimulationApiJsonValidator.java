@@ -43,7 +43,8 @@ import org.springframework.stereotype.Component;
 public class MnzlSimulationApiJsonValidator {
 
     private static final Set<String> SUPPORTED_PARAMETERS = Set.of("name", "loanProductId", "clientId",
-            "principal", "interestRatePerPeriod", "numberOfRepayments", "disbursementDate", "actions", "locale");
+            "principal", "interestRatePerPeriod", "numberOfRepayments", "disbursementDate",
+            "submittedOnDate", "approvedOnDate", "interestChargedFromDate", "actions", "locale");
 
     private static final Set<String> VALID_ACTION_TYPES = Set.of("DISBURSE", "PAY", "SKIP", "RUN_COB", "ADD_CHARGE", "WRITE_OFF");
 

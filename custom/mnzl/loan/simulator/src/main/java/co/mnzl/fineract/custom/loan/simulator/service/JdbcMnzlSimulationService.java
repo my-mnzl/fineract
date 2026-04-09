@@ -200,6 +200,9 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 .interestRatePerPeriod(fromJsonHelper.extractBigDecimalWithLocaleNamed("interestRatePerPeriod", root))
                 .numberOfRepayments(fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", root))
                 .disbursementDate(fromJsonHelper.extractStringNamed("disbursementDate", root))
+                .submittedOnDate(fromJsonHelper.extractStringNamed("submittedOnDate", root))
+                .approvedOnDate(fromJsonHelper.extractStringNamed("approvedOnDate", root))
+                .interestChargedFromDate(fromJsonHelper.extractStringNamed("interestChargedFromDate", root))
                 .actions(actions)
                 .build();
     }
