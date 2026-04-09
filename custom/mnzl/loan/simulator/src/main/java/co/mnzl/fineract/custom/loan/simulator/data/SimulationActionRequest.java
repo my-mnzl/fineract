@@ -32,4 +32,5 @@ public class SimulationActionRequest {
     private final LocalDate date;
     private final BigDecimal amount;
     private final Long chargeId;
+    private final BigDecimal rate;
 }

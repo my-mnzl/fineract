@@ -25,7 +25,8 @@ public enum SimulationActionType {
     SKIP,
     RUN_COB,
     ADD_CHARGE,
-    WRITE_OFF;
+    WRITE_OFF,
+    CHANGE_INTEREST_RATE;
 
     public static SimulationActionType fromString(String value) {
         return valueOf(value.toUpperCase());

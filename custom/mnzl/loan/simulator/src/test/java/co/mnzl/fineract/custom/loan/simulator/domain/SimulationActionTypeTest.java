@@ -28,7 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 class SimulationActionTypeTest {
 
     @ParameterizedTest
-    @ValueSource(strings = { "DISBURSE", "PAY", "SKIP", "RUN_COB", "ADD_CHARGE", "WRITE_OFF" })
+    @ValueSource(strings = { "DISBURSE", "PAY", "SKIP", "RUN_COB", "ADD_CHARGE", "WRITE_OFF", "CHANGE_INTEREST_RATE" })
     void fromStringParsesAllValidTypes(String type) {
         assertThat(SimulationActionType.fromString(type)).isNotNull();
     }

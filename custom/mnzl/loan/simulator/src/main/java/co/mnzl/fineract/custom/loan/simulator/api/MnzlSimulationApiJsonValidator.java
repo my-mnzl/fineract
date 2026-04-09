@@ -46,7 +46,8 @@ public class MnzlSimulationApiJsonValidator {
             "principal", "interestRatePerPeriod", "numberOfRepayments", "disbursementDate",
             "submittedOnDate", "approvedOnDate", "interestChargedFromDate", "actions", "locale");
 
-    private static final Set<String> VALID_ACTION_TYPES = Set.of("DISBURSE", "PAY", "SKIP", "RUN_COB", "ADD_CHARGE", "WRITE_OFF");
+    private static final Set<String> VALID_ACTION_TYPES = Set.of("DISBURSE", "PAY", "SKIP", "RUN_COB", "ADD_CHARGE", "WRITE_OFF",
+            "CHANGE_INTEREST_RATE");
 
     private final FromJsonHelper fromJsonHelper;
 

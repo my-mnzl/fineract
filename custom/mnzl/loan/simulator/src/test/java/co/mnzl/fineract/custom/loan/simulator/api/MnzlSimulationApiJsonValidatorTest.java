@@ -130,6 +130,7 @@ class MnzlSimulationApiJsonValidatorTest {
                         Map.of("type", "SKIP", "date", "2026-03-01"),
                         Map.of("type", "RUN_COB", "date", "2026-03-02"),
                         Map.of("type", "ADD_CHARGE", "date", "2026-03-02", "chargeId", 1),
+                        Map.of("type", "CHANGE_INTEREST_RATE", "date", "2026-06-01", "rate", 15.0),
                         Map.of("type", "WRITE_OFF", "date", "2026-12-01"))));
     }
 }

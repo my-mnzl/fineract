@@ -188,6 +188,9 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 if (actionObj.has("chargeId") && !actionObj.get("chargeId").isJsonNull()) {
                     builder.chargeId(actionObj.get("chargeId").getAsLong());
                 }
+                if (actionObj.has("rate") && !actionObj.get("rate").isJsonNull()) {
+                    builder.rate(actionObj.get("rate").getAsBigDecimal());
+                }
                 actions.add(builder.build());
             }
         }

@@ -23,6 +23,7 @@ import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationSnapshot;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -91,6 +92,7 @@ public class MnzlLoanSimulationRunner {
                     case RUN_COB -> runCob(loanId);
                     case ADD_CHARGE -> addCharge(loanId, action);
                     case WRITE_OFF -> writeOff(loanId, action);
+                    case CHANGE_INTEREST_RATE -> changeInterestRate(loanId, action);
                 }
 
                 snapshots.add(captureSnapshot(loanId, i, action));
@@ -205,6 +207,26 @@ public class MnzlLoanSimulationRunner {
 
         CommandWrapper command = new CommandWrapperBuilder().writeOffLoanTransaction(loanId).withJson(json.toString()).build();
         commandService.logCommandSource(command);
+    }
+
+    private void changeInterestRate(Long loanId, SimulationActionRequest action) {
+        JsonObject exception = new JsonObject();
+        exception.addProperty("termVariationType", 2); // INTEREST_RATE
+        exception.addProperty("termVariationApplicableFrom", action.getDate().format(DATE_FORMAT));
+        exception.addProperty("decimalValue", action.getRate());
+        exception.addProperty("isSpecificToInstallment", false);
+
+        JsonArray exceptions = new JsonArray();
+        exceptions.add(exception);
+
+        JsonObject json = new JsonObject();
+        json.add("exceptions", exceptions);
+        json.addProperty("dateFormat", DATETIME_PATTERN);
+        json.addProperty("locale", LOCALE);
+
+        CommandWrapper command = new CommandWrapperBuilder().createScheduleExceptions(loanId).withJson(json.toString()).build();
+        commandService.logCommandSource(command);
+        log.info("Simulation: changed interest rate to {} on {}", action.getRate(), action.getDate());
     }
 
     private SimulationSnapshot captureSnapshot(Long loanId, int actionIndex, SimulationActionRequest action) {
