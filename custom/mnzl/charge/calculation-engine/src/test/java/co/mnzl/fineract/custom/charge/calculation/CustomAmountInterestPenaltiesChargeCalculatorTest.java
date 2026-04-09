@@ -43,9 +43,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * Tests for {@link CustomAmountInterestPenaltiesChargeCalculator}.
  *
- * The custom calculator extends the default by including outstanding penalty charges in the
- * calculation base for percentage-based charges. This tests that penalty amounts are correctly
- * added to the base in all calculation methods.
+ * The custom calculator extends the default by including outstanding penalty charges in the calculation base for
+ * percentage-based charges. This tests that penalty amounts are correctly added to the base in all calculation methods.
  */
 @ExtendWith(MockitoExtension.class)
 class CustomAmountInterestPenaltiesChargeCalculatorTest {
@@ -92,10 +91,10 @@ class CustomAmountInterestPenaltiesChargeCalculatorTest {
     void calculateOverdueAmountPercentageAppliedToIncludesPenalties() {
         Loan loan = mockLoan(BigDecimal.valueOf(100000), BigDecimal.valueOf(5000), BigDecimal.valueOf(2000));
 
-        LoanRepaymentScheduleInstallment installment = mockInstallment(
-                BigDecimal.valueOf(10000),  // principal outstanding
-                BigDecimal.valueOf(500),    // interest outstanding
-                BigDecimal.valueOf(200));   // penalty outstanding
+        LoanRepaymentScheduleInstallment installment = mockInstallment(BigDecimal.valueOf(10000), // principal
+                                                                                                  // outstanding
+                BigDecimal.valueOf(500), // interest outstanding
+                BigDecimal.valueOf(200)); // penalty outstanding
 
         Money customBase = calculator.calculateOverdueAmountPercentageAppliedTo(loan, installment);
         Money defaultBase = defaultCalculator.calculateOverdueAmountPercentageAppliedTo(loan, installment);
@@ -111,10 +110,9 @@ class CustomAmountInterestPenaltiesChargeCalculatorTest {
     void calculateInstallmentChargeAmountIncludesPenalties() {
         Loan loan = mockLoan(BigDecimal.valueOf(100000), BigDecimal.valueOf(5000), BigDecimal.valueOf(2000));
 
-        LoanRepaymentScheduleInstallment installment = mockInstallmentForChargeCalc(
-                BigDecimal.valueOf(10000),  // principal
-                BigDecimal.valueOf(500),    // interest
-                BigDecimal.valueOf(200));   // penalty outstanding
+        LoanRepaymentScheduleInstallment installment = mockInstallmentForChargeCalc(BigDecimal.valueOf(10000), // principal
+                BigDecimal.valueOf(500), // interest
+                BigDecimal.valueOf(200)); // penalty outstanding
 
         BigDecimal percentage = BigDecimal.valueOf(1); // 1%
 
@@ -155,8 +153,8 @@ class CustomAmountInterestPenaltiesChargeCalculatorTest {
         return loan;
     }
 
-    private LoanRepaymentScheduleInstallment mockInstallment(BigDecimal principalOutstanding,
-            BigDecimal interestOutstanding, BigDecimal penaltyOutstanding) {
+    private LoanRepaymentScheduleInstallment mockInstallment(BigDecimal principalOutstanding, BigDecimal interestOutstanding,
+            BigDecimal penaltyOutstanding) {
         LoanRepaymentScheduleInstallment installment = mock(LoanRepaymentScheduleInstallment.class);
         when(installment.getPrincipalOutstanding(USD)).thenReturn(Money.of(USD, principalOutstanding));
         when(installment.getInterestOutstanding(USD)).thenReturn(Money.of(USD, interestOutstanding));
@@ -164,8 +162,8 @@ class CustomAmountInterestPenaltiesChargeCalculatorTest {
         return installment;
     }
 
-    private LoanRepaymentScheduleInstallment mockInstallmentForChargeCalc(BigDecimal principal,
-            BigDecimal interestCharged, BigDecimal penaltyOutstanding) {
+    private LoanRepaymentScheduleInstallment mockInstallmentForChargeCalc(BigDecimal principal, BigDecimal interestCharged,
+            BigDecimal penaltyOutstanding) {
         LoanRepaymentScheduleInstallment installment = mock(LoanRepaymentScheduleInstallment.class);
         when(installment.getPrincipal(USD)).thenReturn(Money.of(USD, principal));
         when(installment.getInterestCharged(USD)).thenReturn(Money.of(USD, interestCharged));

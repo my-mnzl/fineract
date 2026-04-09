@@ -51,30 +51,26 @@ class MnzlLoanScheduleMathTest {
     @Test
     void thirtyDayMonthConsecutiveFirstDaysReturns29() {
         // 1st-to-1st: 29 remaining days in start month (30-1) + 0 days into end month (day 1 = 0)
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1))).isEqualTo(29);
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 2, 1), LocalDate.of(2026, 3, 1))).isEqualTo(29);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1))).isEqualTo(29);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 3, 1))).isEqualTo(29);
         // Even for February (28 days actual) -> consistent 29 in this convention
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2025, 2, 1), LocalDate.of(2025, 3, 1))).isEqualTo(29);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2025, 2, 1), LocalDate.of(2025, 3, 1))).isEqualTo(29);
     }
 
     @Test
     void thirtyDayMonthHandlesFullYearCorrectly() {
         // Jan 1 to Jan 1 next year: 29 remaining + 11 full months * 30 + 0 into end = 29 + 330 = 359
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1))).isEqualTo(359);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1)))
+                .isEqualTo(359);
     }
 
     @Test
     void thirtyDayMonthHandlesMultipleMonthSpan() {
         // Jan 1 to Apr 1: 29 remaining + 2 full months * 30 + 0 = 89
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 4, 1))).isEqualTo(89);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 4, 1))).isEqualTo(89);
         // Jan 15 to Apr 15: 15 remaining + 2*30 + 14 days into Apr = 15 + 60 + 14 = 89
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 15), LocalDate.of(2026, 4, 15))).isEqualTo(89);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 4, 15)))
+                .isEqualTo(89);
     }
 
     @Test
@@ -82,27 +78,26 @@ class MnzlLoanScheduleMathTest {
         LocalDate date = LocalDate.of(2026, 6, 15);
         assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(date, date)).isZero();
         // Reversed dates should return 0
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 3, 1), LocalDate.of(2026, 2, 1))).isZero();
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 2, 1))).isZero();
     }
 
     @Test
     void thirtyDayMonthHandlesDay31Correctly() {
         // Same month: min(30, 31) - 1 = 30 - 1 = 29
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31))).isEqualTo(29);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)))
+                .isEqualTo(29);
         // Day 31 as start: remaining = max(0, 30-31) = 0
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 1))).isEqualTo(30);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 1)))
+                .isEqualTo(30);
     }
 
     @Test
     void thirtyDayMonthSameMonthPartialDays() {
         // Within the same month
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 3, 5), LocalDate.of(2026, 3, 20))).isEqualTo(15);
-        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 15))).isEqualTo(14);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 3, 5), LocalDate.of(2026, 3, 20)))
+                .isEqualTo(15);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 15)))
+                .isEqualTo(14);
     }
 
     // ---- getDifferenceInDays with LoanApplicationTerms tests ----
@@ -111,8 +106,7 @@ class MnzlLoanScheduleMathTest {
     void getDifferenceInDaysUses30DayMonthWhenConfigured() {
         LoanApplicationTerms terms = termsWithDaysInMonth(DaysInMonthType.DAYS_30);
         // Feb 1 to Mar 1 with 30-day month = 29 (actual = 28), uses 30-day convention
-        int days = MnzlLoanScheduleMath.getDifferenceInDays(
-                LocalDate.of(2025, 2, 1), LocalDate.of(2025, 3, 1), terms);
+        int days = MnzlLoanScheduleMath.getDifferenceInDays(LocalDate.of(2025, 2, 1), LocalDate.of(2025, 3, 1), terms);
         assertThat(days).isEqualTo(29);
     }
 
@@ -120,8 +114,7 @@ class MnzlLoanScheduleMathTest {
     void getDifferenceInDaysUsesActualDaysWhenConfigured() {
         LoanApplicationTerms terms = termsWithDaysInMonth(DaysInMonthType.ACTUAL);
         // Feb 1 to Mar 1 with actual days = 28
-        int days = MnzlLoanScheduleMath.getDifferenceInDays(
-                LocalDate.of(2025, 2, 1), LocalDate.of(2025, 3, 1), terms);
+        int days = MnzlLoanScheduleMath.getDifferenceInDays(LocalDate.of(2025, 2, 1), LocalDate.of(2025, 3, 1), terms);
         assertThat(days).isEqualTo(28);
     }
 
@@ -144,13 +137,8 @@ class MnzlLoanScheduleMathTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "5.00, 360, 0.0138888888889",
-            "10.00, 360, 0.0277777777778",
-            "15.00, 360, 0.0416666666667",
-            "25.00, 360, 0.0694444444444",
-            "12.00, 364, 0.0329670329670",
-    })
+    @CsvSource({ "5.00, 360, 0.0138888888889", "10.00, 360, 0.0277777777778", "15.00, 360, 0.0416666666667", "25.00, 360, 0.0694444444444",
+            "12.00, 364, 0.0329670329670", })
     void getDailyNominalInterestRateVariousConfigurations(String annualRate, int daysInYear, String expectedDailyRate) {
         DaysInYearType yearType = DaysInYearType.fromInt(daysInYear);
         LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal(annualRate), yearType);
@@ -180,8 +168,7 @@ class MnzlLoanScheduleMathTest {
         LoanApplicationTerms terms = termsWithAnnualNominalRate(annualRate, DaysInYearType.DAYS_360);
 
         BigDecimal dailyRate = MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, MC);
-        int daysInPeriod = MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(
-                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+        int daysInPeriod = MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
 
         assertThat(daysInPeriod).isEqualTo(29);
         BigDecimal monthlyInterest = principal.multiply(dailyRate).multiply(BigDecimal.valueOf(daysInPeriod))
@@ -205,7 +192,7 @@ class MnzlLoanScheduleMathTest {
         Money zero = Money.of(fromApplicationCurrency(currency), BigDecimal.ZERO, MC);
         return new LoanApplicationTerms.Builder().currency(currency.toData())
                 .principal(Money.of(fromApplicationCurrency(currency), BigDecimal.valueOf(100), MC)).inArrearsTolerance(zero)
-                .daysInMonthType(daysInMonthType).daysInYearType(DaysInYearType.DAYS_360)
-                .annualNominalInterestRate(BigDecimal.valueOf(12)).mc(MC).build();
+                .daysInMonthType(daysInMonthType).daysInYearType(DaysInYearType.DAYS_360).annualNominalInterestRate(BigDecimal.valueOf(12))
+                .mc(MC).build();
     }
 }

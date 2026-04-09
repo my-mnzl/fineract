@@ -20,13 +20,7 @@ package co.mnzl.fineract.custom.loan.simulator.domain;
 
 public enum SimulationActionType {
 
-    DISBURSE,
-    PAY,
-    SKIP,
-    RUN_COB,
-    ADD_CHARGE,
-    WRITE_OFF,
-    CHANGE_INTEREST_RATE;
+    DISBURSE, PAY, SKIP, RUN_COB, ADD_CHARGE, WRITE_OFF, CHANGE_INTEREST_RATE;
 
     public static SimulationActionType fromString(String value) {
         return valueOf(value.toUpperCase());

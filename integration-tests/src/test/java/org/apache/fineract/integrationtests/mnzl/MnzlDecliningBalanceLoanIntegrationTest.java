@@ -48,26 +48,23 @@ import org.junit.jupiter.api.Test;
 /**
  * Integration tests for Mnzl custom declining balance loan schedule with 30/360 day count convention.
  *
- * Tests verify that:
- * - {@code CustomLoanScheduleGeneratorFactory} routes to the custom generator when
- *   MNZL_DECLINING_BALANCE strategy is configured via {@code m_mnzl_loan_product_strategy}
- * - {@code CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator} produces correct
- *   30/360 interest calculations
- * - The custom schedule differs from core Fineract default (actual days)
- * - Late payments with penalty charges work correctly with the custom charge calculator
+ * Tests verify that: - {@code CustomLoanScheduleGeneratorFactory} routes to the custom generator when
+ * MNZL_DECLINING_BALANCE strategy is configured via {@code m_mnzl_loan_product_strategy} -
+ * {@code CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator} produces correct 30/360 interest calculations -
+ * The custom schedule differs from core Fineract default (actual days) - Late payments with penalty charges work
+ * correctly with the custom charge calculator
  */
 @Slf4j
 public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegrationTest {
 
-    private static final String MNZL_STRATEGY_URL = "/fineract-provider/api/v1/mnzl/loan-products/%d/strategies?"
-            + Utils.TENANT_IDENTIFIER;
+    private static final String MNZL_STRATEGY_URL = "/fineract-provider/api/v1/mnzl/loan-products/%d/strategies?" + Utils.TENANT_IDENTIFIER;
 
     /**
      * Test 1: Standard declining balance loan with 30/360 — full happy path.
      *
-     * Creates a loan product with MNZL_DECLINING_BALANCE schedule strategy, applies for a 12-month
-     * declining balance loan at 12% annual rate, disburses it, validates the schedule uses 30/360
-     * day count, makes all repayments on time, and verifies the loan closes with zero balance.
+     * Creates a loan product with MNZL_DECLINING_BALANCE schedule strategy, applies for a 12-month declining balance
+     * loan at 12% annual rate, disburses it, validates the schedule uses 30/360 day count, makes all repayments on
+     * time, and verifies the loan closes with zero balance.
      */
     @Test
     public void testStandardDecliningBalance30_360HappyPath() {
@@ -78,8 +75,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             Long productId = loanProduct.getResourceId();
             setMnzlProductStrategy(productId);
 
-            Long loanId = applyApproveDisburseLoan(clientId, productId, 120000.0, 12.0, 12,
-                    "01 January 2026");
+            Long loanId = applyApproveDisburseLoan(clientId, productId, 120000.0, 12.0, 12, "01 January 2026");
 
             // Validate schedule structure
             GetLoansLoanIdResponse loanDetails = loanTransactionHelper.getLoanDetails(loanId);
@@ -89,20 +85,17 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             assertEquals(12, repaymentPeriods.size(), "Should have 12 repayment periods");
 
             // Total principal across all periods equals disbursed amount
-            double totalPrincipal = repaymentPeriods.stream()
-                    .mapToDouble(p -> Utils.getDoubleValue(p.getPrincipalDue())).sum();
+            double totalPrincipal = repaymentPeriods.stream().mapToDouble(p -> Utils.getDoubleValue(p.getPrincipalDue())).sum();
             assertEquals(120000.0, totalPrincipal, 0.01, "Total principal should equal disbursed amount");
 
             // Interest is declining (declining balance)
             double firstPeriodInterest = Utils.getDoubleValue(repaymentPeriods.get(0).getInterestDue());
             double lastPeriodInterest = Utils.getDoubleValue(repaymentPeriods.get(11).getInterestDue());
             assertTrue(firstPeriodInterest > 0, "First period should have interest");
-            assertTrue(firstPeriodInterest > lastPeriodInterest,
-                    "Interest should decline over time in declining balance");
+            assertTrue(firstPeriodInterest > lastPeriodInterest, "Interest should decline over time in declining balance");
 
             // 30/360: first period interest = 120000 * (12/100) * (30/360) = 1200.00
-            assertEquals(1200.0, firstPeriodInterest, 0.01,
-                    "First period interest should be 120000 * 12% * 30/360 = 1200");
+            assertEquals(1200.0, firstPeriodInterest, 0.01, "First period interest should be 120000 * 12% * 30/360 = 1200");
 
             // Due dates are monthly
             assertEquals(LocalDate.of(2026, 2, 1), repaymentPeriods.get(0).getDueDate());
@@ -126,9 +119,9 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     /**
      * Test 2: Late payment with penalty charges.
      *
-     * Creates a loan, makes first two payments on time, misses the third, advances the business
-     * date past the due date, runs inline COB, adds a penalty charge, and verifies the loan state
-     * reflects the overdue installment with penalty charges.
+     * Creates a loan, makes first two payments on time, misses the third, advances the business date past the due date,
+     * runs inline COB, adds a penalty charge, and verifies the loan state reflects the overdue installment with penalty
+     * charges.
      */
     @Test
     public void testLatePaymentWithPenaltyCharges() {
@@ -143,8 +136,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             Long productId = loanProduct.getResourceId();
             setMnzlProductStrategy(productId);
 
-            Long loanId = applyApproveDisburseLoan(clientId, productId, 120000.0, 12.0, 12,
-                    "01 January 2026");
+            Long loanId = applyApproveDisburseLoan(clientId, productId, 120000.0, 12.0, 12, "01 January 2026");
 
             // Get schedule
             GetLoansLoanIdResponse loanDetails = loanTransactionHelper.getLoanDetails(loanId);
@@ -159,8 +151,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", "01 March 2026", period2Due);
 
             // Skip period 3 (due 01 Apr) — advance business date past due date
-            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest()
-                    .type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
                     .date("05 April 2026").dateFormat(DATETIME_PATTERN).locale("en"));
 
             // Run inline COB to trigger due installment check
@@ -168,10 +159,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
             // Add penalty charge for overdue installment
             PostLoansLoanIdChargesResponse chargeResponse = loanTransactionHelper.addChargesForLoan(loanId,
-                    new PostLoansLoanIdChargesRequest()
-                            .chargeId(penaltyChargeId.longValue())
-                            .dateFormat(DATETIME_PATTERN)
-                            .locale("en"));
+                    new PostLoansLoanIdChargesRequest().chargeId(penaltyChargeId.longValue()).dateFormat(DATETIME_PATTERN).locale("en"));
 
             // Verify loan state after late payment + penalty
             loanDetails = loanTransactionHelper.getLoanDetails(loanId);
@@ -182,8 +170,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
                     .filter(p -> p.getPeriod() != null && p.getPeriod() == 3).findFirst().orElseThrow();
             assertTrue(Utils.getDoubleValue(period3.getPrincipalOutstanding()) > 0,
                     "Period 3 principal should be outstanding (missed payment)");
-            assertTrue(Utils.getDoubleValue(period3.getInterestOutstanding()) > 0,
-                    "Period 3 interest should be outstanding");
+            assertTrue(Utils.getDoubleValue(period3.getInterestOutstanding()) > 0, "Period 3 interest should be outstanding");
 
             // Total outstanding should include the missed installment
             double totalOutstanding = Utils.getDoubleValue(loanDetails.getSummary().getTotalOutstanding());
@@ -200,13 +187,12 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
             // Now make the late payment covering period 3 + penalty
             double period3TotalDue = Utils.getDoubleValue(period3.getTotalDueForPeriod());
-            loanTransactionHelper.makeLoanRepayment(loanId, "repayment", "05 April 2026",
-                    period3TotalDue + penaltyOutstanding);
+            loanTransactionHelper.makeLoanRepayment(loanId, "repayment", "05 April 2026", period3TotalDue + penaltyOutstanding);
 
             // Verify period 3 is now paid
             loanDetails = loanTransactionHelper.getLoanDetails(loanId);
-            period3 = loanDetails.getRepaymentSchedule().getPeriods().stream()
-                    .filter(p -> p.getPeriod() != null && p.getPeriod() == 3).findFirst().orElseThrow();
+            period3 = loanDetails.getRepaymentSchedule().getPeriods().stream().filter(p -> p.getPeriod() != null && p.getPeriod() == 3)
+                    .findFirst().orElseThrow();
             assertEquals(0.0, Utils.getDoubleValue(period3.getPrincipalOutstanding()),
                     "Period 3 principal should be paid after late repayment");
         });
@@ -215,8 +201,8 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     /**
      * Test 3: Verify MNZL 30/360 schedule differs from core default actual day count.
      *
-     * Creates two identical loans — one using MNZL_DECLINING_BALANCE (30/360) and one using core
-     * default (actual/365) — and verifies the interest calculations differ.
+     * Creates two identical loans — one using MNZL_DECLINING_BALANCE (30/360) and one using core default (actual/365) —
+     * and verifies the interest calculations differ.
      */
     @Test
     public void testMnzlScheduleDiffersFromCoreDefault() {
@@ -230,20 +216,14 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             // Core product (actual/365) — same parameters but no mnzl strategy
             PostLoanProductsResponse coreProduct = createCoreDecliningBalanceProduct();
 
-            Long mnzlLoanId = applyApproveDisburseLoan(clientId, mnzlProduct.getResourceId(), 120000.0, 12.0,
-                    12, "01 January 2026");
-            Long coreLoanId = applyApproveDisburseLoan(clientId, coreProduct.getResourceId(), 120000.0, 12.0,
-                    12, "01 January 2026");
+            Long mnzlLoanId = applyApproveDisburseLoan(clientId, mnzlProduct.getResourceId(), 120000.0, 12.0, 12, "01 January 2026");
+            Long coreLoanId = applyApproveDisburseLoan(clientId, coreProduct.getResourceId(), 120000.0, 12.0, 12, "01 January 2026");
 
-            List<GetLoansLoanIdRepaymentPeriod> mnzlPeriods = getRepaymentPeriods(
-                    loanTransactionHelper.getLoanDetails(mnzlLoanId));
-            List<GetLoansLoanIdRepaymentPeriod> corePeriods = getRepaymentPeriods(
-                    loanTransactionHelper.getLoanDetails(coreLoanId));
+            List<GetLoansLoanIdRepaymentPeriod> mnzlPeriods = getRepaymentPeriods(loanTransactionHelper.getLoanDetails(mnzlLoanId));
+            List<GetLoansLoanIdRepaymentPeriod> corePeriods = getRepaymentPeriods(loanTransactionHelper.getLoanDetails(coreLoanId));
 
-            double mnzlTotalInterest = mnzlPeriods.stream()
-                    .mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
-            double coreTotalInterest = corePeriods.stream()
-                    .mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
+            double mnzlTotalInterest = mnzlPeriods.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
+            double coreTotalInterest = corePeriods.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
 
             log.info("MNZL total interest (30/360): {}", mnzlTotalInterest);
             log.info("Core total interest (actual/365): {}", coreTotalInterest);
@@ -254,16 +234,14 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
             // MNZL first period interest = 120000 * 12% * 30/360 = 1200
             double mnzlFirstInterest = Utils.getDoubleValue(mnzlPeriods.get(0).getInterestDue());
-            assertEquals(1200.0, mnzlFirstInterest, 0.01,
-                    "MNZL first period interest = 120000 * 12% * 30/360");
+            assertEquals(1200.0, mnzlFirstInterest, 0.01, "MNZL first period interest = 120000 * 12% * 30/360");
         });
     }
 
     // ---- Helper methods ----
 
     private List<GetLoansLoanIdRepaymentPeriod> getRepaymentPeriods(GetLoansLoanIdResponse loanDetails) {
-        return loanDetails.getRepaymentSchedule().getPeriods().stream()
-                .filter(p -> p.getPeriod() != null && p.getPeriod() > 0).toList();
+        return loanDetails.getRepaymentSchedule().getPeriods().stream().filter(p -> p.getPeriod() != null && p.getPeriod() > 0).toList();
     }
 
     private PostLoanProductsResponse createMnzlDecliningBalanceProduct() {
@@ -275,48 +253,22 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     }
 
     private PostLoanProductsRequest buildDecliningBalanceProduct(int daysInMonth, int daysInYear) {
-        return new PostLoanProductsRequest()
-                .name(Utils.uniqueRandomStringGenerator("MNZL_TEST_", 6))
+        return new PostLoanProductsRequest().name(Utils.uniqueRandomStringGenerator("MNZL_TEST_", 6))
                 .shortName(Utils.uniqueRandomStringGenerator("", 4))
-                .description("Declining balance test product " + daysInMonth + "/" + daysInYear)
-                .currencyCode("USD")
-                .digitsAfterDecimal(2)
-                .principal(120000.0)
-                .minPrincipal(1000.0)
-                .maxPrincipal(1000000.0)
-                .numberOfRepayments(12)
-                .repaymentEvery(1)
-                .repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L)
-                .interestRatePerPeriod(12.0)
-                .interestRateFrequencyType(InterestRateFrequencyType.YEARS)
-                .amortizationType(AmortizationType.EQUAL_INSTALLMENTS)
+                .description("Declining balance test product " + daysInMonth + "/" + daysInYear).currencyCode("USD").digitsAfterDecimal(2)
+                .principal(120000.0).minPrincipal(1000.0).maxPrincipal(1000000.0).numberOfRepayments(12).repaymentEvery(1)
+                .repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).interestRatePerPeriod(12.0)
+                .interestRateFrequencyType(InterestRateFrequencyType.YEARS).amortizationType(AmortizationType.EQUAL_INSTALLMENTS)
                 .interestType(InterestType.DECLINING_BALANCE)
-                .interestCalculationPeriodType(InterestCalculationPeriodType.SAME_AS_REPAYMENT_PERIOD)
-                .daysInMonthType(daysInMonth)
-                .daysInYearType(daysInYear)
-                .includeInBorrowerCycle(false)
-                .useBorrowerCycle(false)
-                .isLinkedToFloatingInterestRates(false)
-                .allowVariableInstallments(false)
-                .allowPartialPeriodInterestCalcualtion(false)
-                .isInterestRecalculationEnabled(false)
-                .canDefineInstallmentAmount(false)
-                .holdGuaranteeFunds(false)
-                .isEqualAmortization(false)
-                .canUseForTopup(false)
-                .multiDisburseLoan(false)
-                .enableDownPayment(false)
-                .enableInstallmentLevelDelinquency(false)
-                .enableAccrualActivityPosting(false)
-                .overdueDaysForNPA(5)
-                .accountMovesOutOfNPAOnlyOnArrearsCompletion(false)
-                .repaymentStartDateType(1)
-                .charges(List.of())
-                .principalVariationsForBorrowerCycle(List.of())
-                .interestRateVariationsForBorrowerCycle(List.of())
-                .numberOfRepaymentVariationsForBorrowerCycle(List.of())
-                .loanScheduleType(LoanScheduleType.CUMULATIVE.toString())
-                .transactionProcessingStrategyCode("mifos-standard-strategy")
+                .interestCalculationPeriodType(InterestCalculationPeriodType.SAME_AS_REPAYMENT_PERIOD).daysInMonthType(daysInMonth)
+                .daysInYearType(daysInYear).includeInBorrowerCycle(false).useBorrowerCycle(false).isLinkedToFloatingInterestRates(false)
+                .allowVariableInstallments(false).allowPartialPeriodInterestCalcualtion(false).isInterestRecalculationEnabled(false)
+                .canDefineInstallmentAmount(false).holdGuaranteeFunds(false).isEqualAmortization(false).canUseForTopup(false)
+                .multiDisburseLoan(false).enableDownPayment(false).enableInstallmentLevelDelinquency(false)
+                .enableAccrualActivityPosting(false).overdueDaysForNPA(5).accountMovesOutOfNPAOnlyOnArrearsCompletion(false)
+                .repaymentStartDateType(1).charges(List.of()).principalVariationsForBorrowerCycle(List.of())
+                .interestRateVariationsForBorrowerCycle(List.of()).numberOfRepaymentVariationsForBorrowerCycle(List.of())
+                .loanScheduleType(LoanScheduleType.CUMULATIVE.toString()).transactionProcessingStrategyCode("mifos-standard-strategy")
                 .accountingRule(3) // accrual periodic
                 .fundSourceAccountId(fundSource.getAccountID().longValue())
                 .loanPortfolioAccountId(loansReceivableAccount.getAccountID().longValue())
@@ -338,8 +290,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
                 .incomeFromChargeOffFeesAccountId(feeChargeOffAccount.getAccountID().longValue())
                 .incomeFromChargeOffPenaltyAccountId(penaltyChargeOffAccount.getAccountID().longValue())
                 .chargeOffExpenseAccountId(chargeOffExpenseAccount.getAccountID().longValue())
-                .chargeOffFraudExpenseAccountId(chargeOffFraudExpenseAccount.getAccountID().longValue())
-                .dateFormat(DATETIME_PATTERN)
+                .chargeOffFraudExpenseAccountId(chargeOffFraudExpenseAccount.getAccountID().longValue()).dateFormat(DATETIME_PATTERN)
                 .locale("en");
     }
 
@@ -354,45 +305,28 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
         Utils.performServerPut(requestSpec, responseSpec, url, new Gson().toJson(strategyBody));
     }
 
-    private PostLoansResponse applyForMnzlLoan(Long clientId, Long productId, double principal,
-            double annualRate, int numberOfRepayments, String submittedDate) {
-        return loanTransactionHelper.applyLoan(new PostLoansRequest()
-                .clientId(clientId)
-                .productId(productId)
-                .principal(BigDecimal.valueOf(principal))
-                .loanTermFrequency(numberOfRepayments)
-                .loanTermFrequencyType(2) // MONTHS
-                .numberOfRepayments(numberOfRepayments)
-                .repaymentEvery(1)
-                .repaymentFrequencyType(2) // MONTHS
-                .interestRatePerPeriod(BigDecimal.valueOf(annualRate))
-                .amortizationType(1) // EQUAL_INSTALLMENTS
+    private PostLoansResponse applyForMnzlLoan(Long clientId, Long productId, double principal, double annualRate, int numberOfRepayments,
+            String submittedDate) {
+        return loanTransactionHelper.applyLoan(new PostLoansRequest().clientId(clientId).productId(productId)
+                .principal(BigDecimal.valueOf(principal)).loanTermFrequency(numberOfRepayments).loanTermFrequencyType(2) // MONTHS
+                .numberOfRepayments(numberOfRepayments).repaymentEvery(1).repaymentFrequencyType(2) // MONTHS
+                .interestRatePerPeriod(BigDecimal.valueOf(annualRate)).amortizationType(1) // EQUAL_INSTALLMENTS
                 .interestType(0) // DECLINING_BALANCE
                 .interestCalculationPeriodType(1) // SAME_AS_REPAYMENT_PERIOD
-                .expectedDisbursementDate(submittedDate)
-                .submittedOnDate(submittedDate)
-                .dateFormat(DATETIME_PATTERN)
-                .locale("en")
+                .expectedDisbursementDate(submittedDate).submittedOnDate(submittedDate).dateFormat(DATETIME_PATTERN).locale("en")
                 .loanType("individual"));
     }
 
-    private Long applyApproveDisburseLoan(Long clientId, Long productId, double principal,
-            double annualRate, int numberOfRepayments, String date) {
-        PostLoansResponse loanResponse = applyForMnzlLoan(clientId, productId, principal, annualRate,
-                numberOfRepayments, date);
+    private Long applyApproveDisburseLoan(Long clientId, Long productId, double principal, double annualRate, int numberOfRepayments,
+            String date) {
+        PostLoansResponse loanResponse = applyForMnzlLoan(clientId, productId, principal, annualRate, numberOfRepayments, date);
         Long loanId = loanResponse.getLoanId();
 
-        loanTransactionHelper.approveLoan(loanId, new PostLoansLoanIdRequest()
-                .approvedLoanAmount(BigDecimal.valueOf(principal))
-                .dateFormat(DATETIME_PATTERN)
-                .approvedOnDate(date)
-                .locale("en"));
+        loanTransactionHelper.approveLoan(loanId, new PostLoansLoanIdRequest().approvedLoanAmount(BigDecimal.valueOf(principal))
+                .dateFormat(DATETIME_PATTERN).approvedOnDate(date).locale("en"));
 
-        loanTransactionHelper.disburseLoan(loanId, new PostLoansLoanIdRequest()
-                .actualDisbursementDate(date)
-                .dateFormat(DATETIME_PATTERN)
-                .transactionAmount(BigDecimal.valueOf(principal))
-                .locale("en"));
+        loanTransactionHelper.disburseLoan(loanId, new PostLoansLoanIdRequest().actualDisbursementDate(date).dateFormat(DATETIME_PATTERN)
+                .transactionAmount(BigDecimal.valueOf(principal)).locale("en"));
 
         return loanId;
     }

@@ -22,22 +22,19 @@ import co.mnzl.fineract.custom.loan.simulator.api.MnzlSimulationApiJsonValidator
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationActionRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
+import co.mnzl.fineract.custom.loan.simulator.data.SimulationSnapshot;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationActionType;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
+import co.mnzl.fineract.custom.loan.simulator.exception.SimulationNotFoundException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import co.mnzl.fineract.custom.loan.simulator.data.SimulationSnapshot;
-import co.mnzl.fineract.custom.loan.simulator.exception.SimulationNotFoundException;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
-import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,9 +67,8 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     @Override
     public SimulationResult findByUuid(String uuid) {
-        List<SimulationResult> results = jdbcTemplate.query(
-                "SELECT * FROM m_mnzl_simulation WHERE uuid = ?",
-                new SimulationRowMapper(), uuid);
+        List<SimulationResult> results = jdbcTemplate.query("SELECT * FROM m_mnzl_simulation WHERE uuid = ?", new SimulationRowMapper(),
+                uuid);
         if (results.isEmpty()) {
             throw new SimulationNotFoundException(uuid);
         }
@@ -81,9 +77,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     @Override
     public List<SimulationResult> findAll() {
-        return jdbcTemplate.query(
-                "SELECT * FROM m_mnzl_simulation ORDER BY created_date DESC",
-                new SimulationRowMapper());
+        return jdbcTemplate.query("SELECT * FROM m_mnzl_simulation ORDER BY created_date DESC", new SimulationRowMapper());
     }
 
     @Override
@@ -101,12 +95,8 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                     loan_product_id, principal, interest_rate, number_of_repayments,
                     scenario_json, created_by, created_date)
                 VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """,
-                uuid, request.getName(), SimulationStatus.RUNNING.name(),
-                request.getActions().size(), request.getLoanProductId(),
-                request.getPrincipal(),
-                request.getInterestRatePerPeriod(), request.getNumberOfRepayments(),
-                json, userId);
+                """, uuid, request.getName(), SimulationStatus.RUNNING.name(), request.getActions().size(), request.getLoanProductId(),
+                request.getPrincipal(), request.getInterestRatePerPeriod(), request.getNumberOfRepayments(), json, userId);
 
         // Run the simulation
         SimulationResult result = runner.run(request);
@@ -116,26 +106,17 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 UPDATE m_mnzl_simulation
                 SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
                 WHERE uuid = ?
-                """,
-                result.getStatus().name(), GSON.toJson(result.getSnapshots()),
-                result.getErrorMessage(), uuid);
+                """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
 
-        return SimulationResult.builder()
-                .uuid(uuid)
-                .name(result.getName())
-                .status(result.getStatus())
-                .errorMessage(result.getErrorMessage())
-                .snapshots(result.getSnapshots())
-                .build();
+        return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
+                .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
     }
 
     @Override
     @Transactional
     public SimulationResult rerunSimulation(String uuid) {
         SimulationResult existing = findByUuid(uuid);
-        String scenarioJson = jdbcTemplate.queryForObject(
-                "SELECT scenario_json FROM m_mnzl_simulation WHERE uuid = ?",
-                String.class, uuid);
+        String scenarioJson = jdbcTemplate.queryForObject("SELECT scenario_json FROM m_mnzl_simulation WHERE uuid = ?", String.class, uuid);
 
         SimulationRequest request = parseRequest(scenarioJson);
 
@@ -149,17 +130,10 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 UPDATE m_mnzl_simulation
                 SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
                 WHERE uuid = ?
-                """,
-                result.getStatus().name(), GSON.toJson(result.getSnapshots()),
-                result.getErrorMessage(), uuid);
+                """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
 
-        return SimulationResult.builder()
-                .uuid(uuid)
-                .name(result.getName())
-                .status(result.getStatus())
-                .errorMessage(result.getErrorMessage())
-                .snapshots(result.getSnapshots())
-                .build();
+        return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
+                .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
     }
 
     @Override
@@ -195,8 +169,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
             }
         }
 
-        return SimulationRequest.builder()
-                .name(fromJsonHelper.extractStringNamed("name", root))
+        return SimulationRequest.builder().name(fromJsonHelper.extractStringNamed("name", root))
                 .loanProductId(fromJsonHelper.extractLongNamed("loanProductId", root))
                 .principal(fromJsonHelper.extractBigDecimalWithLocaleNamed("principal", root))
                 .interestRatePerPeriod(fromJsonHelper.extractBigDecimalWithLocaleNamed("interestRatePerPeriod", root))
@@ -204,9 +177,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 .disbursementDate(fromJsonHelper.extractStringNamed("disbursementDate", root))
                 .submittedOnDate(fromJsonHelper.extractStringNamed("submittedOnDate", root))
                 .approvedOnDate(fromJsonHelper.extractStringNamed("approvedOnDate", root))
-                .interestChargedFromDate(fromJsonHelper.extractStringNamed("interestChargedFromDate", root))
-                .actions(actions)
-                .build();
+                .interestChargedFromDate(fromJsonHelper.extractStringNamed("interestChargedFromDate", root)).actions(actions).build();
     }
 
     private static final Type SNAPSHOT_LIST_TYPE = new TypeToken<List<SimulationSnapshot>>() {}.getType();
@@ -216,17 +187,12 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         @Override
         public SimulationResult mapRow(ResultSet rs, int rowNum) throws SQLException {
             String resultJson = rs.getString("result_json");
-            List<SimulationSnapshot> snapshots = resultJson != null
-                    ? GSON.fromJson(resultJson, SNAPSHOT_LIST_TYPE)
+            List<SimulationSnapshot> snapshots = resultJson != null ? GSON.fromJson(resultJson, SNAPSHOT_LIST_TYPE)
                     : Collections.emptyList();
 
-            return SimulationResult.builder()
-                    .uuid(rs.getString("uuid"))
-                    .name(rs.getString("name"))
-                    .status(SimulationStatus.fromString(rs.getString("status")))
-                    .errorMessage(rs.getString("error_message"))
-                    .snapshots(snapshots)
-                    .build();
+            return SimulationResult.builder().uuid(rs.getString("uuid")).name(rs.getString("name"))
+                    .status(SimulationStatus.fromString(rs.getString("status"))).errorMessage(rs.getString("error_message"))
+                    .snapshots(snapshots).build();
         }
     }
 }

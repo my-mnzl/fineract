@@ -48,82 +48,45 @@ class MnzlSimulationApiJsonValidatorTest {
 
     @Test
     void blankJsonThrowsInvalidJson() {
-        assertThatThrownBy(() -> validator.validateForCreate(""))
-                .isInstanceOf(InvalidJsonException.class);
-        assertThatThrownBy(() -> validator.validateForCreate(null))
-                .isInstanceOf(InvalidJsonException.class);
+        assertThatThrownBy(() -> validator.validateForCreate("")).isInstanceOf(InvalidJsonException.class);
+        assertThatThrownBy(() -> validator.validateForCreate(null)).isInstanceOf(InvalidJsonException.class);
     }
 
     @Test
     void missingLoanProductIdFails() {
-        String json = new Gson().toJson(Map.of(
-                "principal", "100000",
-                "interestRatePerPeriod", "12",
-                "numberOfRepayments", 12,
-                "disbursementDate", "2026-01-01",
-                "locale", "en",
-                "actions", List.of(Map.of("type", "DISBURSE", "date", "2026-01-01"))));
-        assertThatThrownBy(() -> validator.validateForCreate(json))
-                .isInstanceOf(PlatformApiDataValidationException.class);
+        String json = new Gson().toJson(Map.of("principal", "100000", "interestRatePerPeriod", "12", "numberOfRepayments", 12,
+                "disbursementDate", "2026-01-01", "locale", "en", "actions", List.of(Map.of("type", "DISBURSE", "date", "2026-01-01"))));
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
     }
 
     @Test
     void emptyActionsFails() {
-        String json = new Gson().toJson(Map.of(
-                "loanProductId", 1,
-                "principal", "100000",
-                "interestRatePerPeriod", "12",
-                "numberOfRepayments", 12,
-                "disbursementDate", "2026-01-01",
-                "locale", "en",
-                "actions", List.of()));
-        assertThatThrownBy(() -> validator.validateForCreate(json))
-                .isInstanceOf(PlatformApiDataValidationException.class);
+        String json = new Gson().toJson(Map.of("loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
+                "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "actions", List.of()));
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
     }
 
     @Test
     void invalidActionTypeFails() {
-        String json = new Gson().toJson(Map.of(
-                "loanProductId", 1,
-                "principal", "100000",
-                "interestRatePerPeriod", "12",
-                "numberOfRepayments", 12,
-                "disbursementDate", "2026-01-01",
-                "locale", "en",
-                "actions", List.of(Map.of("type", "INVALID_TYPE", "date", "2026-01-01"))));
-        assertThatThrownBy(() -> validator.validateForCreate(json))
-                .isInstanceOf(PlatformApiDataValidationException.class);
+        String json = new Gson().toJson(Map.of("loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
+                "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "actions",
+                List.of(Map.of("type", "INVALID_TYPE", "date", "2026-01-01"))));
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
     }
 
     @Test
     void unsupportedParameterFails() {
-        String json = new Gson().toJson(Map.of(
-                "loanProductId", 1,
-                "principal", "100000",
-                "interestRatePerPeriod", "12",
-                "numberOfRepayments", 12,
-                "disbursementDate", "2026-01-01",
-                "locale", "en",
-                "unknownField", "value",
-                "actions", List.of(Map.of("type", "DISBURSE", "date", "2026-01-01"))));
-        assertThatThrownBy(() -> validator.validateForCreate(json))
-                .isInstanceOf(UnsupportedParameterException.class);
+        String json = new Gson().toJson(Map.of("loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
+                "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "unknownField", "value", "actions",
+                List.of(Map.of("type", "DISBURSE", "date", "2026-01-01"))));
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(UnsupportedParameterException.class);
     }
 
     private String buildValidRequest() {
-        return new Gson().toJson(Map.of(
-                "name", "Test simulation",
-                "loanProductId", 1,
-                "principal", "100000",
-                "interestRatePerPeriod", "12",
-                "numberOfRepayments", 12,
-                "disbursementDate", "2026-01-01",
-                "locale", "en",
-                "actions", List.of(
-                        Map.of("type", "DISBURSE", "date", "2026-01-01"),
-                        Map.of("type", "PAY", "date", "2026-02-01", "amount", 9583.33),
-                        Map.of("type", "SKIP", "date", "2026-03-01"),
-                        Map.of("type", "RUN_COB", "date", "2026-03-02"),
+        return new Gson().toJson(Map.of("name", "Test simulation", "loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
+                "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "actions",
+                List.of(Map.of("type", "DISBURSE", "date", "2026-01-01"), Map.of("type", "PAY", "date", "2026-02-01", "amount", 9583.33),
+                        Map.of("type", "SKIP", "date", "2026-03-01"), Map.of("type", "RUN_COB", "date", "2026-03-02"),
                         Map.of("type", "ADD_CHARGE", "date", "2026-03-02", "chargeId", 1),
                         Map.of("type", "CHANGE_INTEREST_RATE", "date", "2026-06-01", "rate", 15.0),
                         Map.of("type", "WRITE_OFF", "date", "2026-12-01"))));

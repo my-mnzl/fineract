@@ -31,7 +31,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.commands.domain.CommandWrapper;
@@ -50,12 +49,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Orchestrates a loan simulation by stepping through a list of actions (disburse, pay, run COB,
- * add charge, write off), overriding the ThreadLocal business date for each step, and capturing a
- * snapshot of the loan state after each action.
+ * Orchestrates a loan simulation by stepping through a list of actions (disburse, pay, run COB, add charge, write off),
+ * overriding the ThreadLocal business date for each step, and capturing a snapshot of the loan state after each action.
  *
- * The runner creates a real loan via the Fineract command pipeline, executes all actions, captures
- * results, then reverses and deletes the loan so nothing persists except the simulation record.
+ * The runner creates a real loan via the Fineract command pipeline, executes all actions, captures results, then
+ * reverses and deletes the loan so nothing persists except the simulation record.
  */
 @Slf4j
 @Service
@@ -288,28 +286,19 @@ public class MnzlLoanSimulationRunner {
                     .add(safeSubtract(installment.getPenaltyCharges(), installment.getPenaltyChargesPaid(),
                             installment.getPenaltyChargesWaived(), installment.getPenaltyChargesWrittenOff()));
 
-            schedulePeriods.add(SimulationSnapshot.SchedulePeriod.builder()
-                    .period(installment.getInstallmentNumber())
-                    .dueDate(installment.getDueDate())
-                    .principalDue(installment.getPrincipal())
-                    .interestDue(installment.getInterestCharged())
-                    .feeChargesDue(installment.getFeeChargesCharged())
-                    .penaltyChargesDue(installment.getPenaltyCharges())
-                    .totalDue(totalDue)
-                    .principalOutstanding(principalOut)
-                    .interestOutstanding(interestOut)
-                    .totalOutstanding(totalOut)
-                    .build());
+            schedulePeriods.add(SimulationSnapshot.SchedulePeriod.builder().period(installment.getInstallmentNumber())
+                    .dueDate(installment.getDueDate()).principalDue(installment.getPrincipal())
+                    .interestDue(installment.getInterestCharged()).feeChargesDue(installment.getFeeChargesCharged())
+                    .penaltyChargesDue(installment.getPenaltyCharges()).totalDue(totalDue).principalOutstanding(principalOut)
+                    .interestOutstanding(interestOut).totalOutstanding(totalOut).build());
         }
 
-        SimulationSnapshot.Summary summary = SimulationSnapshot.Summary.builder()
-                .principalDisbursed(loan.getApprovedPrincipal())
+        SimulationSnapshot.Summary summary = SimulationSnapshot.Summary.builder().principalDisbursed(loan.getApprovedPrincipal())
                 .principalOutstanding(loan.getSummary().getTotalPrincipalOutstanding())
                 .interestOutstanding(loan.getSummary().getTotalInterestOutstanding())
                 .feeChargesOutstanding(loan.getSummary().getTotalFeeChargesOutstanding())
                 .penaltyChargesOutstanding(loan.getSummary().getTotalPenaltyChargesOutstanding())
-                .totalOutstanding(loan.getSummary().getTotalOutstanding())
-                .build();
+                .totalOutstanding(loan.getSummary().getTotalOutstanding()).build();
 
         List<SimulationSnapshot.Transaction> transactions = new ArrayList<>();
         List<LoanTransaction> loanTransactions = loan.getLoanTransactions();
@@ -318,25 +307,14 @@ public class MnzlLoanSimulationRunner {
                 if (tx.isReversed()) {
                     continue;
                 }
-                transactions.add(SimulationSnapshot.Transaction.builder()
-                        .type(tx.getTypeOf().name())
-                        .date(tx.getTransactionDate())
-                        .amount(tx.getAmount())
-                        .principalPortion(tx.getPrincipalPortion())
-                        .interestPortion(tx.getInterestPortion())
-                        .feePortion(tx.getFeeChargesPortion())
-                        .penaltyPortion(tx.getPenaltyChargesPortion())
-                        .build());
+                transactions.add(SimulationSnapshot.Transaction.builder().type(tx.getTypeOf().name()).date(tx.getTransactionDate())
+                        .amount(tx.getAmount()).principalPortion(tx.getPrincipalPortion()).interestPortion(tx.getInterestPortion())
+                        .feePortion(tx.getFeeChargesPortion()).penaltyPortion(tx.getPenaltyChargesPortion()).build());
             }
         }
 
-        return SimulationSnapshot.builder()
-                .actionIndex(actionIndex)
-                .action(action)
-                .schedule(schedulePeriods)
-                .summary(summary)
-                .transactions(transactions)
-                .build();
+        return SimulationSnapshot.builder().actionIndex(actionIndex).action(action).schedule(schedulePeriods).summary(summary)
+                .transactions(transactions).build();
     }
 
     private static BigDecimal safe(BigDecimal value) {
@@ -364,8 +342,7 @@ public class MnzlLoanSimulationRunner {
 
             // Undo write-off first if the loan was written off
             if (loan.isClosedWrittenOff()) {
-                CommandWrapper undoWriteOff = new CommandWrapperBuilder().undoWriteOffLoanTransaction(loanId)
-                        .withJson("{}").build();
+                CommandWrapper undoWriteOff = new CommandWrapperBuilder().undoWriteOffLoanTransaction(loanId).withJson("{}").build();
                 commandService.logCommandSource(undoWriteOff);
                 loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
             }
@@ -376,8 +353,8 @@ public class MnzlLoanSimulationRunner {
                 undoJson.addProperty("dateFormat", DATETIME_PATTERN);
                 undoJson.addProperty("locale", LOCALE);
                 undoJson.addProperty("note", "Simulation cleanup");
-                CommandWrapper undoDisburse = new CommandWrapperBuilder().undoLoanApplicationDisbursal(loanId)
-                        .withJson(undoJson.toString()).build();
+                CommandWrapper undoDisburse = new CommandWrapperBuilder().undoLoanApplicationDisbursal(loanId).withJson(undoJson.toString())
+                        .build();
                 commandService.logCommandSource(undoDisburse);
                 loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
             }

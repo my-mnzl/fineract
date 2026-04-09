@@ -121,12 +121,8 @@ class MnzlLoanSimulationRunnerTest {
         when(loan.isOpen()).thenReturn(true, true);
         lenient().when(loan.isApproved()).thenReturn(true);
 
-        SimulationRequest request = SimulationRequest.builder()
-                .name("Write-off test")
-                .loanProductId(1L)
-                .principal(BigDecimal.valueOf(100000))
-                .interestRatePerPeriod(BigDecimal.valueOf(12))
-                .numberOfRepayments(12)
+        SimulationRequest request = SimulationRequest.builder().name("Write-off test").loanProductId(1L)
+                .principal(BigDecimal.valueOf(100000)).interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12)
                 .disbursementDate("2026-01-01")
                 .actions(List.of(
                         SimulationActionRequest.builder().type(SimulationActionType.DISBURSE).date(LocalDate.of(2026, 1, 1)).build(),
@@ -142,8 +138,8 @@ class MnzlLoanSimulationRunnerTest {
     @Test
     void businessDatesRestoredOnFailure() {
         setupSecurityContext();
-        when(commandService.logCommandSource(any(CommandWrapper.class)))
-                .thenReturn(commandResult) // client creation succeeds
+        when(commandService.logCommandSource(any(CommandWrapper.class))).thenReturn(commandResult) // client creation
+                                                                                                   // succeeds
                 .thenThrow(new RuntimeException("Loan creation failed"));
         lenient().when(commandResult.getClientId()).thenReturn(CLIENT_ID);
 
@@ -157,15 +153,10 @@ class MnzlLoanSimulationRunnerTest {
     }
 
     private SimulationRequest buildSimpleRequest() {
-        return SimulationRequest.builder()
-                .name("Test simulation")
-                .loanProductId(1L)
-                .principal(BigDecimal.valueOf(100000))
-                .interestRatePerPeriod(BigDecimal.valueOf(12))
-                .numberOfRepayments(12)
-                .disbursementDate("2026-01-01")
-                .actions(List.of(
-                        SimulationActionRequest.builder().type(SimulationActionType.DISBURSE).date(LocalDate.of(2026, 1, 1)).build()))
+        return SimulationRequest.builder().name("Test simulation").loanProductId(1L).principal(BigDecimal.valueOf(100000))
+                .interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12).disbursementDate("2026-01-01")
+                .actions(List
+                        .of(SimulationActionRequest.builder().type(SimulationActionType.DISBURSE).date(LocalDate.of(2026, 1, 1)).build()))
                 .build();
     }
 

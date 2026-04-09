@@ -41,7 +41,6 @@ class SimulationActionTypeTest {
 
     @Test
     void fromStringThrowsForInvalidType() {
-        assertThatThrownBy(() -> SimulationActionType.fromString("INVALID"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> SimulationActionType.fromString("INVALID")).isInstanceOf(IllegalArgumentException.class);
     }
 }
