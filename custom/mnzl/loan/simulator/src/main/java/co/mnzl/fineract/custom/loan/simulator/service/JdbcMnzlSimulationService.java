@@ -86,8 +86,9 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     }
 
     @Override
-    public List<SimulationResult> findAll() {
-        return jdbcTemplate.query("SELECT * FROM m_mnzl_simulation ORDER BY created_date DESC", new SimulationRowMapper());
+    public List<SimulationResult> findAll(int offset, int limit) {
+        return jdbcTemplate.query("SELECT * FROM m_mnzl_simulation ORDER BY created_date DESC LIMIT ? OFFSET ?", new SimulationRowMapper(),
+                limit, offset);
     }
 
     @Override
@@ -129,17 +130,18 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     @Override
     public SimulationResult rerunSimulation(String uuid) {
-        SimulationResult existing = findByUuid(uuid);
-        if (SimulationStatus.RUNNING.equals(existing.getStatus())) {
+        // Atomic check-and-set: allow transition if not RUNNING, or if RUNNING but stale (>30 min)
+        int updated = jdbcTemplate.update("""
+                UPDATE m_mnzl_simulation SET status = ?, progress = 0, started_at = CURRENT_TIMESTAMP
+                WHERE uuid = ? AND (status != ? OR started_at < TIMESTAMPADD(MINUTE, -30, CURRENT_TIMESTAMP))
+                """, SimulationStatus.RUNNING.name(), uuid, SimulationStatus.RUNNING.name());
+        if (updated == 0) {
+            findByUuid(uuid); // throws SimulationNotFoundException if uuid is invalid
             throw new IllegalStateException("Simulation " + uuid + " is already running");
         }
         String scenarioJson = jdbcTemplate.queryForObject("SELECT scenario_json FROM m_mnzl_simulation WHERE uuid = ?", String.class, uuid);
 
         SimulationRequest request = parseRequest(scenarioJson);
-
-        // Update status to RUNNING
-        jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, progress = 0, started_at = CURRENT_TIMESTAMP WHERE uuid = ?",
-                SimulationStatus.RUNNING.name(), uuid);
 
         MDC.put("simulationUuid", uuid);
         try {

@@ -104,6 +104,10 @@ public class MnzlSimulationApiJsonValidator {
                     validator.reset().parameter("actions[" + i + "].chargeId").value(action.has("chargeId") ? action.get("chargeId") : null)
                             .notNull();
                 }
+                if ("PAY".equalsIgnoreCase(actionType)) {
+                    validator.reset().parameter("actions[" + i + "].amount").value(action.has("amount") ? action.get("amount") : null)
+                            .notNull();
+                }
             }
         }
 

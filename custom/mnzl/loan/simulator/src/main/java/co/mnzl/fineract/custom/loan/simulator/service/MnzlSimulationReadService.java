@@ -25,5 +25,5 @@ public interface MnzlSimulationReadService {
 
     SimulationResult findByUuid(String uuid);
 
-    List<SimulationResult> findAll();
+    List<SimulationResult> findAll(int offset, int limit);
 }

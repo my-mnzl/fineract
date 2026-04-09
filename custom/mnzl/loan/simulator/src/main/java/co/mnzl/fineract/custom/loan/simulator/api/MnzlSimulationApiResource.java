@@ -23,11 +23,13 @@ import co.mnzl.fineract.custom.loan.simulator.service.MnzlSimulationReadService;
 import co.mnzl.fineract.custom.loan.simulator.service.MnzlSimulationWriteService;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 import java.util.Set;
@@ -62,9 +64,10 @@ public class MnzlSimulationApiResource {
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public String listSimulations() {
+    public String listSimulations(@QueryParam("offset") @DefaultValue("0") final int offset,
+            @QueryParam("limit") @DefaultValue("50") final int limit) {
         context.authenticatedUser().validateHasReadPermission(PERMISSION_RESOURCE);
-        List<SimulationResult> results = readService.findAll();
+        List<SimulationResult> results = readService.findAll(offset, limit);
         return serializer.serialize(results);
     }
 
