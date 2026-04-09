@@ -29,7 +29,6 @@ public class SimulationRequest {
 
     private final String name;
     private final Long loanProductId;
-    private final Long clientId;
     private final BigDecimal principal;
     private final BigDecimal interestRatePerPeriod;
     private final Integer numberOfRepayments;

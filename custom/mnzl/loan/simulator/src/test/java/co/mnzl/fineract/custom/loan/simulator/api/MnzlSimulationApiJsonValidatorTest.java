@@ -57,7 +57,6 @@ class MnzlSimulationApiJsonValidatorTest {
     @Test
     void missingLoanProductIdFails() {
         String json = new Gson().toJson(Map.of(
-                "clientId", 1,
                 "principal", "100000",
                 "interestRatePerPeriod", "12",
                 "numberOfRepayments", 12,
@@ -72,7 +71,6 @@ class MnzlSimulationApiJsonValidatorTest {
     void emptyActionsFails() {
         String json = new Gson().toJson(Map.of(
                 "loanProductId", 1,
-                "clientId", 1,
                 "principal", "100000",
                 "interestRatePerPeriod", "12",
                 "numberOfRepayments", 12,
@@ -87,7 +85,6 @@ class MnzlSimulationApiJsonValidatorTest {
     void invalidActionTypeFails() {
         String json = new Gson().toJson(Map.of(
                 "loanProductId", 1,
-                "clientId", 1,
                 "principal", "100000",
                 "interestRatePerPeriod", "12",
                 "numberOfRepayments", 12,
@@ -102,7 +99,6 @@ class MnzlSimulationApiJsonValidatorTest {
     void unsupportedParameterFails() {
         String json = new Gson().toJson(Map.of(
                 "loanProductId", 1,
-                "clientId", 1,
                 "principal", "100000",
                 "interestRatePerPeriod", "12",
                 "numberOfRepayments", 12,
@@ -118,7 +114,6 @@ class MnzlSimulationApiJsonValidatorTest {
         return new Gson().toJson(Map.of(
                 "name", "Test simulation",
                 "loanProductId", 1,
-                "clientId", 1,
                 "principal", "100000",
                 "interestRatePerPeriod", "12",
                 "numberOfRepayments", 12,

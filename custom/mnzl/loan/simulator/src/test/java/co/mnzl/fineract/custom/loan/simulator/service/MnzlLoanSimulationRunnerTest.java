@@ -40,9 +40,12 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.service.InlineExecutorService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
+import org.apache.fineract.useradministration.domain.AppUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +57,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class MnzlLoanSimulationRunnerTest {
 
     private static final Long LOAN_ID = 42L;
+    private static final Long CLIENT_ID = 99L;
 
     @Mock
     private PortfolioCommandSourceWritePlatformService commandService;
@@ -61,6 +65,12 @@ class MnzlLoanSimulationRunnerTest {
     private LoanRepositoryWrapper loanRepositoryWrapper;
     @Mock
     private InlineExecutorService<Long> inlineLoanCOBExecutorService;
+    @Mock
+    private PlatformSecurityContext securityContext;
+    @Mock
+    private AppUser appUser;
+    @Mock
+    private Office office;
     @Mock
     private Loan loan;
     @Mock
@@ -73,7 +83,7 @@ class MnzlLoanSimulationRunnerTest {
 
     @BeforeEach
     void setUp() {
-        runner = new MnzlLoanSimulationRunner(commandService, loanRepositoryWrapper, inlineLoanCOBExecutorService);
+        runner = new MnzlLoanSimulationRunner(commandService, loanRepositoryWrapper, inlineLoanCOBExecutorService, securityContext);
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "Asia/Kolkata", null));
         originalDates = new HashMap<>();
         originalDates.put(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 1, 1));
@@ -106,14 +116,14 @@ class MnzlLoanSimulationRunnerTest {
         lenient().when(loan.getLoanTransactions()).thenReturn(Collections.emptyList());
         lenient().when(loan.getApprovedPrincipal()).thenReturn(BigDecimal.valueOf(100000));
 
-        // During action execution: not written off. During cleanup: first call → written-off, after undo → not
+        // During action execution: not written off. During cleanup: first call -> written-off, after undo -> not
         when(loan.isClosedWrittenOff()).thenReturn(false, false, true, false);
         when(loan.isOpen()).thenReturn(true, true);
         lenient().when(loan.isApproved()).thenReturn(true);
 
         SimulationRequest request = SimulationRequest.builder()
                 .name("Write-off test")
-                .loanProductId(1L).clientId(1L)
+                .loanProductId(1L)
                 .principal(BigDecimal.valueOf(100000))
                 .interestRatePerPeriod(BigDecimal.valueOf(12))
                 .numberOfRepayments(12)
@@ -131,8 +141,11 @@ class MnzlLoanSimulationRunnerTest {
 
     @Test
     void businessDatesRestoredOnFailure() {
+        setupSecurityContext();
         when(commandService.logCommandSource(any(CommandWrapper.class)))
+                .thenReturn(commandResult) // client creation succeeds
                 .thenThrow(new RuntimeException("Loan creation failed"));
+        lenient().when(commandResult.getClientId()).thenReturn(CLIENT_ID);
 
         SimulationResult result = runner.run(buildSimpleRequest());
 
@@ -146,7 +159,7 @@ class MnzlLoanSimulationRunnerTest {
     private SimulationRequest buildSimpleRequest() {
         return SimulationRequest.builder()
                 .name("Test simulation")
-                .loanProductId(1L).clientId(1L)
+                .loanProductId(1L)
                 .principal(BigDecimal.valueOf(100000))
                 .interestRatePerPeriod(BigDecimal.valueOf(12))
                 .numberOfRepayments(12)
@@ -156,7 +169,15 @@ class MnzlLoanSimulationRunnerTest {
                 .build();
     }
 
+    private void setupSecurityContext() {
+        lenient().when(securityContext.authenticatedUser()).thenReturn(appUser);
+        lenient().when(appUser.getOffice()).thenReturn(office);
+        lenient().when(office.getId()).thenReturn(1L);
+    }
+
     private void setupCommandService() {
+        setupSecurityContext();
+        lenient().when(commandResult.getClientId()).thenReturn(CLIENT_ID);
         lenient().when(commandResult.getLoanId()).thenReturn(LOAN_ID);
         lenient().when(commandService.logCommandSource(any(CommandWrapper.class))).thenReturn(commandResult);
     }

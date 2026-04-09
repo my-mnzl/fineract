@@ -43,9 +43,6 @@
             <column name="loan_product_id" type="BIGINT">
                 <constraints nullable="false"/>
             </column>
-            <column name="client_id" type="BIGINT">
-                <constraints nullable="false"/>
-            </column>
             <column name="principal" type="DECIMAL(19,6)">
                 <constraints nullable="false"/>
             </column>
@@ -77,18 +74,12 @@
     </changeSet>
 
     <changeSet author="mnzl" id="3">
-        <addForeignKeyConstraint baseTableName="m_mnzl_simulation" baseColumnNames="client_id"
-                constraintName="fk_m_mnzl_simulation_client" referencedTableName="m_client"
-                referencedColumnNames="id"/>
-    </changeSet>
-
-    <changeSet author="mnzl" id="4">
         <addForeignKeyConstraint baseTableName="m_mnzl_simulation" baseColumnNames="created_by"
                 constraintName="fk_m_mnzl_simulation_user" referencedTableName="m_appuser"
                 referencedColumnNames="id"/>
     </changeSet>
 
-    <changeSet author="mnzl" id="5">
+    <changeSet author="mnzl" id="4">
         <insert tableName="m_permission">
             <column name="grouping" value="portfolio"/>
             <column name="code" value="CREATE_MNZL_SIMULATION"/>

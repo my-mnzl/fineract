@@ -41,6 +41,7 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.service.InlineExecutorService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
@@ -65,22 +66,29 @@ public class MnzlLoanSimulationRunner {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final String DATETIME_PATTERN = "yyyy-MM-dd";
     private static final String LOCALE = "en";
+    private static final String SIMULATED_CLIENT_ACTIVATION_DATE = "2020-01-01";
 
     private final PortfolioCommandSourceWritePlatformService commandService;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final InlineExecutorService<Long> inlineLoanCOBExecutorService;
+    private final PlatformSecurityContext securityContext;
 
     public SimulationResult run(SimulationRequest request) {
         List<SimulationSnapshot> snapshots = new ArrayList<>();
         HashMap<BusinessDateType, LocalDate> originalDates = ThreadLocalContextUtil.getBusinessDates();
+        Long clientId = null;
         Long loanId = null;
 
         try {
-            // 1. Create the loan application
-            loanId = createLoanApplication(request);
+            // 1. Create a test client
+            clientId = createSimulatedClient();
+            log.info("Simulation: created test client {}", clientId);
+
+            // 2. Create the loan application
+            loanId = createLoanApplication(request, clientId);
             log.info("Simulation: created loan application {}", loanId);
 
-            // 2. Execute each action
+            // 3. Execute each action
             for (int i = 0; i < request.getActions().size(); i++) {
                 SimulationActionRequest action = request.getActions().get(i);
                 setBusinessDate(action.getDate());
@@ -107,20 +115,51 @@ public class MnzlLoanSimulationRunner {
             return SimulationResult.builder().uuid(null).name(request.getName()).status(SimulationStatus.FAILED)
                     .errorMessage(e.getMessage()).snapshots(snapshots).build();
         } finally {
-            // 3. Cleanup: reverse and delete the simulated loan
+            // 4. Cleanup: reverse and delete the simulated loan, then the client
             if (loanId != null) {
                 cleanupSimulatedLoan(loanId);
             }
-            // 4. Restore original business dates
+            if (clientId != null) {
+                cleanupSimulatedClient(clientId);
+            }
+            // 5. Restore original business dates
             ThreadLocalContextUtil.setBusinessDates(originalDates);
         }
     }
 
-    private Long createLoanApplication(SimulationRequest request) {
+    private Long createSimulatedClient() {
+        setBusinessDate(LocalDate.parse(SIMULATED_CLIENT_ACTIVATION_DATE, DATE_FORMAT));
+
+        Long officeId = securityContext.authenticatedUser().getOffice().getId();
+
+        JsonObject json = new JsonObject();
+        json.addProperty("officeId", officeId);
+        json.addProperty("fullname", "Simulation Test Client");
+        json.addProperty("active", true);
+        json.addProperty("activationDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        json.addProperty("dateFormat", DATETIME_PATTERN);
+        json.addProperty("locale", LOCALE);
+
+        CommandWrapper command = new CommandWrapperBuilder().createClient().withJson(json.toString()).build();
+        CommandProcessingResult result = commandService.logCommandSource(command);
+        return result.getClientId();
+    }
+
+    private void cleanupSimulatedClient(Long clientId) {
+        try {
+            CommandWrapper command = new CommandWrapperBuilder().deleteClient(clientId).build();
+            commandService.logCommandSource(command);
+            log.info("Simulation: cleaned up client {}", clientId);
+        } catch (Exception e) {
+            log.warn("Simulation: failed to cleanup client {} — manual cleanup may be needed", clientId, e);
+        }
+    }
+
+    private Long createLoanApplication(SimulationRequest request, Long clientId) {
         setBusinessDate(LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT));
 
         JsonObject json = new JsonObject();
-        json.addProperty("clientId", request.getClientId());
+        json.addProperty("clientId", clientId);
         json.addProperty("productId", request.getLoanProductId());
         json.addProperty("principal", request.getPrincipal());
         json.addProperty("loanTermFrequency", request.getNumberOfRepayments());

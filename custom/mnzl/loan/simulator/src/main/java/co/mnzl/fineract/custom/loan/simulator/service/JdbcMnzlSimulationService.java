@@ -98,13 +98,13 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         // Insert initial record
         jdbcTemplate.update("""
                 INSERT INTO m_mnzl_simulation (uuid, name, status, progress, total_actions,
-                    loan_product_id, client_id, principal, interest_rate, number_of_repayments,
+                    loan_product_id, principal, interest_rate, number_of_repayments,
                     scenario_json, created_by, created_date)
-                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """,
                 uuid, request.getName(), SimulationStatus.RUNNING.name(),
                 request.getActions().size(), request.getLoanProductId(),
-                request.getClientId(), request.getPrincipal(),
+                request.getPrincipal(),
                 request.getInterestRatePerPeriod(), request.getNumberOfRepayments(),
                 json, userId);
 
@@ -198,7 +198,6 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         return SimulationRequest.builder()
                 .name(fromJsonHelper.extractStringNamed("name", root))
                 .loanProductId(fromJsonHelper.extractLongNamed("loanProductId", root))
-                .clientId(fromJsonHelper.extractLongNamed("clientId", root))
                 .principal(fromJsonHelper.extractBigDecimalWithLocaleNamed("principal", root))
                 .interestRatePerPeriod(fromJsonHelper.extractBigDecimalWithLocaleNamed("interestRatePerPeriod", root))
                 .numberOfRepayments(fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", root))

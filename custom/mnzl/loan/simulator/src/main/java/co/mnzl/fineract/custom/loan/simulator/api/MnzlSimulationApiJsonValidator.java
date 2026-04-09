@@ -42,7 +42,7 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "mnzl.loan.simulator.enabled", havingValue = "true", matchIfMissing = true)
 public class MnzlSimulationApiJsonValidator {
 
-    private static final Set<String> SUPPORTED_PARAMETERS = Set.of("name", "loanProductId", "clientId",
+    private static final Set<String> SUPPORTED_PARAMETERS = Set.of("name", "loanProductId",
             "principal", "interestRatePerPeriod", "numberOfRepayments", "disbursementDate",
             "submittedOnDate", "approvedOnDate", "interestChargedFromDate", "actions", "locale");
 
@@ -65,9 +65,6 @@ public class MnzlSimulationApiJsonValidator {
 
         final Long loanProductId = fromJsonHelper.extractLongNamed("loanProductId", element);
         validator.reset().parameter("loanProductId").value(loanProductId).notNull().longGreaterThanZero();
-
-        final Long clientId = fromJsonHelper.extractLongNamed("clientId", element);
-        validator.reset().parameter("clientId").value(clientId).notNull().longGreaterThanZero();
 
         final String principal = fromJsonHelper.extractStringNamed("principal", element);
         validator.reset().parameter("principal").value(principal).notBlank();
