@@ -182,7 +182,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     private static final Type SNAPSHOT_LIST_TYPE = new TypeToken<List<SimulationSnapshot>>() {}.getType();
 
-    private static class SimulationRowMapper implements RowMapper<SimulationResult> {
+    private static final class SimulationRowMapper implements RowMapper<SimulationResult> {
 
         @Override
         public SimulationResult mapRow(ResultSet rs, int rowNum) throws SQLException {

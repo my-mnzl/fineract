@@ -313,8 +313,8 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
                 .interestRatePerPeriod(BigDecimal.valueOf(annualRate)).amortizationType(1) // EQUAL_INSTALLMENTS
                 .interestType(0) // DECLINING_BALANCE
                 .interestCalculationPeriodType(1) // SAME_AS_REPAYMENT_PERIOD
-                .expectedDisbursementDate(submittedDate).submittedOnDate(submittedDate).dateFormat(DATETIME_PATTERN).locale("en")
-                .loanType("individual"));
+                .transactionProcessingStrategyCode("mifos-standard-strategy").expectedDisbursementDate(submittedDate)
+                .submittedOnDate(submittedDate).dateFormat(DATETIME_PATTERN).locale("en").loanType("individual"));
     }
 
     private Long applyApproveDisburseLoan(Long clientId, Long productId, double principal, double annualRate, int numberOfRepayments,
