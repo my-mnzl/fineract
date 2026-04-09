@@ -96,6 +96,14 @@ public class MnzlSimulationApiJsonValidator {
 
                 String date = action.has("date") ? action.get("date").getAsString() : null;
                 validator.reset().parameter("actions[" + i + "].date").value(date).notBlank();
+
+                if ("CHANGE_INTEREST_RATE".equalsIgnoreCase(actionType)) {
+                    validator.reset().parameter("actions[" + i + "].rate").value(action.has("rate") ? action.get("rate") : null).notNull();
+                }
+                if ("ADD_CHARGE".equalsIgnoreCase(actionType)) {
+                    validator.reset().parameter("actions[" + i + "].chargeId").value(action.has("chargeId") ? action.get("chargeId") : null)
+                            .notNull();
+                }
             }
         }
 

@@ -75,6 +75,22 @@ class MnzlSimulationApiJsonValidatorTest {
     }
 
     @Test
+    void changeInterestRateWithoutRateFails() {
+        String json = new Gson().toJson(Map.of("loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
+                "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "actions",
+                List.of(Map.of("type", "CHANGE_INTEREST_RATE", "date", "2026-06-01"))));
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
+    }
+
+    @Test
+    void addChargeWithoutChargeIdFails() {
+        String json = new Gson().toJson(Map.of("loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
+                "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "actions",
+                List.of(Map.of("type", "ADD_CHARGE", "date", "2026-03-02"))));
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
+    }
+
+    @Test
     void unsupportedParameterFails() {
         String json = new Gson().toJson(Map.of("loanProductId", 1, "principal", "100000", "interestRatePerPeriod", "12",
                 "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "unknownField", "value", "actions",

@@ -31,6 +31,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.function.IntConsumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.commands.domain.CommandWrapper;
@@ -64,6 +65,7 @@ public class MnzlLoanSimulationRunner {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final String DATETIME_PATTERN = "yyyy-MM-dd";
     private static final String LOCALE = "en";
+    private static final IntConsumer NOOP_PROGRESS = progress -> { /* no-op */ };
     private static final String SIMULATED_CLIENT_ACTIVATION_DATE = "2020-01-01";
 
     private final PortfolioCommandSourceWritePlatformService commandService;
@@ -72,6 +74,10 @@ public class MnzlLoanSimulationRunner {
     private final PlatformSecurityContext securityContext;
 
     public SimulationResult run(SimulationRequest request) {
+        return run(request, NOOP_PROGRESS);
+    }
+
+    public SimulationResult run(SimulationRequest request, IntConsumer progressCallback) {
         List<SimulationSnapshot> snapshots = new ArrayList<>();
         HashMap<BusinessDateType, LocalDate> originalDates = ThreadLocalContextUtil.getBusinessDates();
         Long clientId = null;
@@ -102,6 +108,7 @@ public class MnzlLoanSimulationRunner {
                 }
 
                 snapshots.add(captureSnapshot(loanId, i, action));
+                progressCallback.accept(i + 1);
                 log.info("Simulation: completed action {} ({}) on date {}", i, action.getType(), action.getDate());
             }
 

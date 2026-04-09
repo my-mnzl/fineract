@@ -27,9 +27,13 @@ import co.mnzl.fineract.custom.loan.simulator.domain.SimulationActionType;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
 import co.mnzl.fineract.custom.loan.simulator.exception.SimulationNotFoundException;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializer;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.sql.ResultSet;
@@ -44,6 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -56,7 +61,12 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(name = "mnzl.loan.simulator.enabled", havingValue = "true", matchIfMissing = true)
 public class JdbcMnzlSimulationService implements MnzlSimulationReadService, MnzlSimulationWriteService {
 
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = new GsonBuilder()
+            .registerTypeAdapter(LocalDate.class,
+                    (JsonSerializer<LocalDate>) (src, t, ctx) -> new JsonPrimitive(src.format(DateTimeFormatter.ISO_LOCAL_DATE)))
+            .registerTypeAdapter(LocalDate.class,
+                    (JsonDeserializer<LocalDate>) (json, t, ctx) -> LocalDate.parse(json.getAsString(), DateTimeFormatter.ISO_LOCAL_DATE))
+            .create();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final JdbcTemplate jdbcTemplate;
@@ -81,7 +91,6 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     }
 
     @Override
-    @Transactional
     public SimulationResult runSimulation(String json) {
         validator.validateForCreate(json);
 
@@ -99,41 +108,55 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 request.getPrincipal(), request.getInterestRatePerPeriod(), request.getNumberOfRepayments(), json, userId);
 
         // Run the simulation
-        SimulationResult result = runner.run(request);
+        MDC.put("simulationUuid", uuid);
+        try {
+            SimulationResult result = runner.run(request,
+                    progress -> jdbcTemplate.update("UPDATE m_mnzl_simulation SET progress = ? WHERE uuid = ?", progress, uuid));
 
-        // Update with results
-        jdbcTemplate.update("""
-                UPDATE m_mnzl_simulation
-                SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                WHERE uuid = ?
-                """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
+            // Update with results
+            jdbcTemplate.update("""
+                    UPDATE m_mnzl_simulation
+                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE uuid = ?
+                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
 
-        return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
-                .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
+            return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
+                    .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
+        } finally {
+            MDC.remove("simulationUuid");
+        }
     }
 
     @Override
-    @Transactional
     public SimulationResult rerunSimulation(String uuid) {
         SimulationResult existing = findByUuid(uuid);
+        if (SimulationStatus.RUNNING.equals(existing.getStatus())) {
+            throw new IllegalStateException("Simulation " + uuid + " is already running");
+        }
         String scenarioJson = jdbcTemplate.queryForObject("SELECT scenario_json FROM m_mnzl_simulation WHERE uuid = ?", String.class, uuid);
 
         SimulationRequest request = parseRequest(scenarioJson);
 
         // Update status to RUNNING
-        jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, started_at = CURRENT_TIMESTAMP WHERE uuid = ?",
+        jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, progress = 0, started_at = CURRENT_TIMESTAMP WHERE uuid = ?",
                 SimulationStatus.RUNNING.name(), uuid);
 
-        SimulationResult result = runner.run(request);
+        MDC.put("simulationUuid", uuid);
+        try {
+            SimulationResult result = runner.run(request,
+                    progress -> jdbcTemplate.update("UPDATE m_mnzl_simulation SET progress = ? WHERE uuid = ?", progress, uuid));
 
-        jdbcTemplate.update("""
-                UPDATE m_mnzl_simulation
-                SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                WHERE uuid = ?
-                """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
+            jdbcTemplate.update("""
+                    UPDATE m_mnzl_simulation
+                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE uuid = ?
+                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
 
-        return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
-                .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
+            return SimulationResult.builder().uuid(uuid).name(result.getName()).status(result.getStatus())
+                    .errorMessage(result.getErrorMessage()).snapshots(result.getSnapshots()).build();
+        } finally {
+            MDC.remove("simulationUuid");
+        }
     }
 
     @Override
