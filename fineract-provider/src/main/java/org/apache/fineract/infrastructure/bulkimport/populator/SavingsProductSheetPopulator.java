@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.infrastructure.bulkimport.populator;
 
+import java.math.BigDecimal;
 import java.util.List;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -81,14 +82,10 @@ public class SavingsProductSheetPopulator extends AbstractWorkbookPopulator {
             CurrencyData currency = product.getCurrency();
             writeString(CURRENCY_COL, row, currency.getCode());
             writeInt(DECIMAL_PLACES_COL, row, currency.getDecimalPlaces());
-            if (currency.getInMultiplesOf() != null) {
-                writeInt(IN_MULTIPLES_OF_COL, row, currency.getInMultiplesOf());
-            }
+            writeInt(IN_MULTIPLES_OF_COL, row, currency.getInMultiplesOf() != null ? currency.getInMultiplesOf() : 0);
             writeBoolean(WITHDRAWAL_FEE_COL, row, product.isWithdrawalFeeForTransfers());
             writeBoolean(ALLOW_OVERDRAFT_COL, row, product.isAllowOverdraft());
-            if (product.getOverdraftLimit() != null) {
-                writeBigDecimal(OVERDRAFT_LIMIT_COL, row, product.getOverdraftLimit());
-            }
+            writeBigDecimal(OVERDRAFT_LIMIT_COL, row, product.getOverdraftLimit() != null ? product.getOverdraftLimit() : BigDecimal.ZERO);
         }
         productSheet.protectSheet("");
     }
