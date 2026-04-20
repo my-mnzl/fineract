@@ -21,7 +21,6 @@ package co.mnzl.fineract.custom.loan.schedule;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
-import java.time.Period;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.common.domain.DaysInMonthType;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
@@ -32,12 +31,18 @@ public final class MnzlLoanScheduleMath {
     private MnzlLoanScheduleMath() {}
 
     public static BigDecimal getDailyNominalInterestRate(final LoanApplicationTerms loanApplicationTerms, final MathContext mc) {
+        return getDailyNominalInterestRate(loanApplicationTerms, loanApplicationTerms.getExpectedDisbursementDate(), mc);
+    }
+
+    public static BigDecimal getDailyNominalInterestRate(final LoanApplicationTerms loanApplicationTerms, final LocalDate referenceDate,
+            final MathContext mc) {
         final LoanProductRelatedDetail loanProductRelatedDetail = loanApplicationTerms.toLoanProductRelatedDetail();
         BigDecimal daysInYear = BigDecimal.valueOf(switch (loanProductRelatedDetail.fetchDaysInYearType()) {
             case DAYS_360 -> 360;
             case DAYS_364 -> 364;
             case DAYS_365 -> 365;
-            default -> 365;
+            case ACTUAL -> resolveActualDaysInYear(referenceDate, loanApplicationTerms);
+            case INVALID -> throw new IllegalArgumentException("Days in year type is required");
         });
         return loanApplicationTerms.getAnnualNominalInterestRate().divide(daysInYear, mc);
     }
@@ -52,27 +57,34 @@ public final class MnzlLoanScheduleMath {
     }
 
     public static int getDifferenceInDaysFor30DayMonth(final LocalDate startDate, final LocalDate endDate) {
-        if (startDate.isAfter(endDate) || startDate.equals(endDate)) {
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("Dates must not be null to get difference");
+        }
+        if (startDate.equals(endDate)) {
             return 0;
         }
-
-        int startDay = startDate.getDayOfMonth();
-        int endDay = endDate.getDayOfMonth();
-        if (startDate.getMonthValue() == endDate.getMonthValue() && startDate.getYear() == endDate.getYear()) {
-            return Math.min(30, endDay) - startDay;
+        if (startDate.isAfter(endDate)) {
+            return -getDifferenceInDaysFor30DayMonth(endDate, startDate);
         }
 
-        int daysRemainingInStartMonth = Math.max(0, 30 - startDay);
-        LocalDate startOfNextMonth = startDate.withDayOfMonth(1).plusMonths(1);
-        LocalDate endOfStartMonth = endDate.withDayOfMonth(1);
+        // 30E/360 convention
+        final int adjustedStartDay = Math.min(30, startDate.getDayOfMonth());
+        final int adjustedEndDay = Math.min(30, endDate.getDayOfMonth());
+        return ((endDate.getYear() - startDate.getYear()) * 360) + ((endDate.getMonthValue() - startDate.getMonthValue()) * 30)
+                + (adjustedEndDay - adjustedStartDay);
+    }
 
-        int fullMonthsBetween = 0;
-        if (!startOfNextMonth.isAfter(endOfStartMonth)) {
-            Period period = Period.between(startOfNextMonth, endOfStartMonth);
-            fullMonthsBetween = period.getYears() * 12 + period.getMonths();
+    private static int resolveActualDaysInYear(final LocalDate referenceDate, final LoanApplicationTerms loanApplicationTerms) {
+        LocalDate effectiveReferenceDate = referenceDate;
+        if (effectiveReferenceDate == null) {
+            effectiveReferenceDate = loanApplicationTerms.getInterestChargedFromDate();
         }
-
-        int daysIntoEndMonth = endDay == 1 ? 0 : endDay - 1;
-        return Math.max(0, daysRemainingInStartMonth + (fullMonthsBetween * 30) + daysIntoEndMonth);
+        if (effectiveReferenceDate == null) {
+            effectiveReferenceDate = loanApplicationTerms.getExpectedDisbursementDate();
+        }
+        if (effectiveReferenceDate == null) {
+            throw new IllegalArgumentException("Reference date is required when days in year type is ACTUAL");
+        }
+        return effectiveReferenceDate.lengthOfYear();
     }
 }
