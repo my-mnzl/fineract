@@ -43,7 +43,8 @@ import org.springframework.stereotype.Component;
 public class MnzlSimulationApiJsonValidator {
 
     private static final Set<String> SUPPORTED_PARAMETERS = Set.of("name", "loanProductId", "principal", "interestRatePerPeriod",
-            "numberOfRepayments", "disbursementDate", "submittedOnDate", "approvedOnDate", "interestChargedFromDate", "actions", "locale");
+            "interestRateDifferential", "numberOfRepayments", "disbursementDate", "submittedOnDate", "approvedOnDate",
+            "interestChargedFromDate", "firstRepaymentOnDate", "actions", "locale");
 
     private static final Set<String> VALID_ACTION_TYPES = Set.of("DISBURSE", "PAY", "SKIP", "RUN_COB", "ADD_CHARGE", "WRITE_OFF",
             "CHANGE_INTEREST_RATE");
@@ -68,8 +69,8 @@ public class MnzlSimulationApiJsonValidator {
         final String principal = fromJsonHelper.extractStringNamed("principal", element);
         validator.reset().parameter("principal").value(principal).notBlank();
 
-        final String interestRate = fromJsonHelper.extractStringNamed("interestRatePerPeriod", element);
-        validator.reset().parameter("interestRatePerPeriod").value(interestRate).notBlank();
+        // interestRatePerPeriod and interestRateDifferential are both optional —
+        // when omitted, the runner uses defaults from the loan product.
 
         final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
         validator.reset().parameter("numberOfRepayments").value(numberOfRepayments).notNull().integerGreaterThanZero();
@@ -110,6 +111,38 @@ public class MnzlSimulationApiJsonValidator {
                 }
             }
         }
+
+        if (!errors.isEmpty()) {
+            throw new PlatformApiDataValidationException(errors);
+        }
+    }
+
+    /**
+     * Validate the subset of fields needed for a schedule preview (no actions required).
+     */
+    public void validateForPreview(String json) {
+        if (StringUtils.isBlank(json)) {
+            throw new InvalidJsonException();
+        }
+
+        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
+        fromJsonHelper.checkForUnsupportedParameters(typeOfMap, json, SUPPORTED_PARAMETERS);
+
+        final List<ApiParameterError> errors = new ArrayList<>();
+        final DataValidatorBuilder validator = new DataValidatorBuilder(errors).resource("mnzlSimulation");
+        final JsonElement element = fromJsonHelper.parse(json);
+
+        final Long loanProductId = fromJsonHelper.extractLongNamed("loanProductId", element);
+        validator.reset().parameter("loanProductId").value(loanProductId).notNull().longGreaterThanZero();
+
+        final String principal = fromJsonHelper.extractStringNamed("principal", element);
+        validator.reset().parameter("principal").value(principal).notBlank();
+
+        final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
+        validator.reset().parameter("numberOfRepayments").value(numberOfRepayments).notNull().integerGreaterThanZero();
+
+        final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", element);
+        validator.reset().parameter("disbursementDate").value(disbursementDate).notBlank();
 
         if (!errors.isEmpty()) {
             throw new PlatformApiDataValidationException(errors);

@@ -18,7 +18,9 @@
  */
 package co.mnzl.fineract.custom.loan.simulator.service;
 
+import co.mnzl.fineract.custom.loan.simulator.data.SchedulePreviewPeriod;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
+import java.util.List;
 
 public interface MnzlSimulationWriteService {
 
@@ -27,4 +29,7 @@ public interface MnzlSimulationWriteService {
     SimulationResult rerunSimulation(String uuid);
 
     void deleteSimulation(String uuid);
+
+    /** Return the repayment schedule Fineract would produce for this request — without creating any loan. */
+    List<SchedulePreviewPeriod> previewSchedule(String json);
 }

@@ -19,6 +19,7 @@
 package co.mnzl.fineract.custom.loan.simulator.service;
 
 import co.mnzl.fineract.custom.loan.simulator.api.MnzlSimulationApiJsonValidator;
+import co.mnzl.fineract.custom.loan.simulator.data.SchedulePreviewPeriod;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationActionRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
@@ -36,6 +37,7 @@ import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializer;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -118,7 +120,10 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                     scenario_json, created_by, created_date, started_at)
                 VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, uuid, request.getName(), SimulationStatus.RUNNING.name(), request.getActions().size(), request.getLoanProductId(),
-                request.getPrincipal(), request.getInterestRatePerPeriod(), request.getNumberOfRepayments(), json, userId);
+                request.getPrincipal(),
+                request.getInterestRateDifferential() != null ? request.getInterestRateDifferential()
+                        : request.getInterestRatePerPeriod() != null ? request.getInterestRatePerPeriod() : BigDecimal.ZERO,
+                request.getNumberOfRepayments(), json, userId);
 
         // Capture context for async execution
         FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
@@ -170,6 +175,13 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         }
 
         return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.RUNNING).build();
+    }
+
+    @Override
+    public List<SchedulePreviewPeriod> previewSchedule(String json) {
+        validator.validateForPreview(json);
+        SimulationRequest request = parseRequest(json);
+        return runner.previewSchedule(request);
     }
 
     @Override
@@ -242,13 +254,15 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                 .loanProductId(fromJsonHelper.extractLongNamed("loanProductId", root))
                 .principal(fromJsonHelper.extractBigDecimalWithLocaleNamed("principal", root))
                 .interestRatePerPeriod(fromJsonHelper.extractBigDecimalWithLocaleNamed("interestRatePerPeriod", root))
+                .interestRateDifferential(fromJsonHelper.extractBigDecimalWithLocaleNamed("interestRateDifferential", root))
                 .numberOfRepayments(fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", root))
                 .repaymentEvery(fromJsonHelper.extractIntegerWithLocaleNamed("repaymentEvery", root))
                 .repaymentFrequencyType(fromJsonHelper.extractIntegerWithLocaleNamed("repaymentFrequencyType", root))
                 .disbursementDate(fromJsonHelper.extractStringNamed("disbursementDate", root))
                 .submittedOnDate(fromJsonHelper.extractStringNamed("submittedOnDate", root))
                 .approvedOnDate(fromJsonHelper.extractStringNamed("approvedOnDate", root))
-                .interestChargedFromDate(fromJsonHelper.extractStringNamed("interestChargedFromDate", root)).actions(actions).build();
+                .interestChargedFromDate(fromJsonHelper.extractStringNamed("interestChargedFromDate", root))
+                .firstRepaymentOnDate(fromJsonHelper.extractStringNamed("firstRepaymentOnDate", root)).actions(actions).build();
     }
 
     private static final Type SNAPSHOT_LIST_TYPE = new TypeToken<List<SimulationSnapshot>>() {}.getType();

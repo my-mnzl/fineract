@@ -18,7 +18,9 @@
  */
 package co.mnzl.fineract.custom.loan.simulator.service;
 
+import co.mnzl.fineract.custom.loan.simulator.data.SchedulePreviewPeriod;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationActionRequest;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationSnapshot;
@@ -26,10 +28,10 @@ import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -39,14 +41,24 @@ import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.service.InlineExecutorService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModelPeriod;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -67,12 +79,38 @@ public class MnzlLoanSimulationRunner {
     private static final String DATETIME_PATTERN = "yyyy-MM-dd";
     private static final String LOCALE = "en";
     private static final IntConsumer NOOP_PROGRESS = progress -> { /* no-op */ };
-    private static final String SIMULATED_CLIENT_ACTIVATION_DATE = "2020-01-01";
+    private static final String SIMULATED_CLIENT_ACTIVATION_DATE = "2024-08-01";
+    private static final BigDecimal INSURANCE_ANNUAL_RATE = new BigDecimal("0.00015");
+    private static final BigDecimal INSURANCE_ANNUAL_MINIMUM = new BigDecimal("250");
+    private static final BigDecimal TWELVE = new BigDecimal("12");
 
     private final PortfolioCommandSourceWritePlatformService commandService;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final InlineExecutorService<Long> inlineLoanCOBExecutorService;
     private final PlatformSecurityContext securityContext;
+    private final LoanProductRepository loanProductRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final LoanScheduleCalculationPlatformService scheduleCalculationService;
+    private final FromJsonHelper fromJsonHelper;
+
+    // Fineract charge id for the monthly insurance premium. When 0 (default),
+    // the simulator falls back to looking up a charge by name (see below) so
+    // the usual dev DB "just works".
+    @Value("${mnzl.loan.simulator.insurance-charge-id:0}")
+    private long insuranceChargeId;
+
+    // Name of the insurance charge to auto-discover from m_charge when
+    // insuranceChargeId is not explicitly set. Kept configurable for envs
+    // that use a different label.
+    @Value("${mnzl.loan.simulator.insurance-charge-name:Insurance Fee}")
+    private String insuranceChargeName;
+
+    // Savings product id to open the linked savings account against. When 0
+    // (default) the runner picks the first active savings product from
+    // m_savings_product. A linked savings account is required to attach
+    // ACCOUNT_TRANSFER-mode charges such as the insurance fee.
+    @Value("${mnzl.loan.simulator.savings-product-id:0}")
+    private long savingsProductId;
 
     public SimulationResult run(SimulationRequest request) {
         return run(request, NOOP_PROGRESS);
@@ -82,6 +120,7 @@ public class MnzlLoanSimulationRunner {
         List<SimulationSnapshot> snapshots = new ArrayList<>();
         HashMap<BusinessDateType, LocalDate> originalDates = ThreadLocalContextUtil.getBusinessDates();
         Long clientId = null;
+        Long savingsId = null;
         Long loanId = null;
 
         try {
@@ -89,8 +128,15 @@ public class MnzlLoanSimulationRunner {
             clientId = createSimulatedClient();
             log.info("Simulation: created test client {}", clientId);
 
-            // 2. Create the loan application
-            loanId = createLoanApplication(request, clientId);
+            // 2. Open a linked savings account (needed for ACCOUNT_TRANSFER charges
+            //    like the insurance fee — mirrors the production origination flow).
+            savingsId = createSimulatedSavingsAccount(clientId);
+            if (savingsId != null) {
+                log.info("Simulation: created linked savings account {}", savingsId);
+            }
+
+            // 3. Create the loan application
+            loanId = createLoanApplication(request, clientId, savingsId);
             log.info("Simulation: created loan application {}", loanId);
 
             // 3. Execute each action
@@ -116,19 +162,25 @@ public class MnzlLoanSimulationRunner {
             return SimulationResult.builder().uuid(null) // set by the write service
                     .name(request.getName()).status(SimulationStatus.COMPLETED).snapshots(snapshots).build();
 
+        } catch (PlatformApiDataValidationException e) {
+            log.error("Simulation validation failed: {}", e.getErrors(), e);
+            return SimulationResult.builder().uuid(null).name(request.getName()).status(SimulationStatus.FAILED)
+                    .errorMessage(e.getErrors().toString()).snapshots(snapshots).build();
         } catch (Exception e) {
             log.error("Simulation failed", e);
             return SimulationResult.builder().uuid(null).name(request.getName()).status(SimulationStatus.FAILED)
                     .errorMessage(e.getMessage()).snapshots(snapshots).build();
         } finally {
-            // 4. Cleanup: reverse and delete the simulated loan, then the client
+            // Cleanup in reverse creation order: loan → savings → client.
             if (loanId != null) {
                 cleanupSimulatedLoan(loanId);
+            }
+            if (savingsId != null) {
+                cleanupSimulatedSavings(savingsId);
             }
             if (clientId != null) {
                 cleanupSimulatedClient(clientId);
             }
-            // 5. Restore original business dates
             ThreadLocalContextUtil.setBusinessDates(originalDates);
         }
     }
@@ -141,6 +193,7 @@ public class MnzlLoanSimulationRunner {
         JsonObject json = new JsonObject();
         json.addProperty("officeId", officeId);
         json.addProperty("fullname", "Simulation Test Client");
+        json.addProperty("legalFormId", 1);
         json.addProperty("active", true);
         json.addProperty("activationDate", SIMULATED_CLIENT_ACTIVATION_DATE);
         json.addProperty("dateFormat", DATETIME_PATTERN);
@@ -153,33 +206,155 @@ public class MnzlLoanSimulationRunner {
 
     private void cleanupSimulatedClient(Long clientId) {
         try {
-            CommandWrapper command = new CommandWrapperBuilder().deleteClient(clientId).build();
-            commandService.logCommandSource(command);
+            jdbcTemplate.execute((ConnectionCallback<Void>) con -> {
+                try (var stmt = con.createStatement()) {
+                    stmt.execute("SET FOREIGN_KEY_CHECKS=0");
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_note WHERE client_id = ?")) {
+                    ps.setLong(1, clientId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_client WHERE id = ?")) {
+                    ps.setLong(1, clientId);
+                    ps.executeUpdate();
+                }
+                try (var stmt = con.createStatement()) {
+                    stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+                }
+                return null;
+            });
             log.info("Simulation: cleaned up client {}", clientId);
         } catch (Exception e) {
             log.warn("Simulation: failed to cleanup client {} — manual cleanup may be needed", clientId, e);
         }
     }
 
-    private Long createLoanApplication(SimulationRequest request, Long clientId) {
-        setBusinessDate(LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT));
+    /**
+     * Open a linked savings account for the simulated client. Mirrors production:
+     * create → approve → activate, all dated at the client activation date so the
+     * account exists before the loan submission date.
+     *
+     * Returns null (and logs) when no savings product exists — the simulation
+     * continues, but ACCOUNT_TRANSFER-mode charges won't attach.
+     */
+    private Long createSimulatedSavingsAccount(Long clientId) {
+        Long productId = resolveSavingsProductId();
+        if (productId == null) {
+            log.warn("Simulation: no savings product configured or discoverable — skipping linked savings account");
+            return null;
+        }
+
+        setBusinessDate(LocalDate.parse(SIMULATED_CLIENT_ACTIVATION_DATE, DATE_FORMAT));
+
+        JsonObject createJson = new JsonObject();
+        createJson.addProperty("clientId", clientId);
+        createJson.addProperty("productId", productId);
+        createJson.addProperty("submittedOnDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        createJson.addProperty("dateFormat", DATETIME_PATTERN);
+        createJson.addProperty("locale", LOCALE);
+
+        CommandWrapper create = new CommandWrapperBuilder().createSavingsAccount().withJson(createJson.toString()).build();
+        CommandProcessingResult createResult = commandService.logCommandSource(create);
+        Long savingsId = createResult.getSavingsId();
+
+        JsonObject approveJson = new JsonObject();
+        approveJson.addProperty("approvedOnDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        approveJson.addProperty("dateFormat", DATETIME_PATTERN);
+        approveJson.addProperty("locale", LOCALE);
+        CommandWrapper approve = new CommandWrapperBuilder().approveSavingsAccountApplication(savingsId).withJson(approveJson.toString())
+                .build();
+        commandService.logCommandSource(approve);
+
+        JsonObject activateJson = new JsonObject();
+        activateJson.addProperty("activatedOnDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        activateJson.addProperty("dateFormat", DATETIME_PATTERN);
+        activateJson.addProperty("locale", LOCALE);
+        CommandWrapper activate = new CommandWrapperBuilder().savingsAccountActivation(savingsId).withJson(activateJson.toString()).build();
+        commandService.logCommandSource(activate);
+
+        return savingsId;
+    }
+
+    private Long resolveSavingsProductId() {
+        if (savingsProductId > 0) return savingsProductId;
+        try {
+            return jdbcTemplate.queryForObject("SELECT id FROM m_savings_product ORDER BY id LIMIT 1", Long.class);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void cleanupSimulatedSavings(Long savingsId) {
+        try {
+            jdbcTemplate.execute((ConnectionCallback<Void>) con -> {
+                try (var stmt = con.createStatement()) {
+                    stmt.execute("SET FOREIGN_KEY_CHECKS=0");
+                }
+                String[] children = { "m_note", "m_savings_account_transaction", "m_savings_account_charge",
+                        "m_portfolio_account_associations" };
+                for (String table : children) {
+                    String col = "m_portfolio_account_associations".equals(table) ? "linked_savings_account_id" : "savings_account_id";
+                    try (var ps = con.prepareStatement("DELETE FROM " + table + " WHERE " + col + " = ?")) {
+                        ps.setLong(1, savingsId);
+                        ps.executeUpdate();
+                    } catch (Exception ignored) {
+                        // table may not exist in this schema — safe to skip
+                    }
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_savings_account WHERE id = ?")) {
+                    ps.setLong(1, savingsId);
+                    ps.executeUpdate();
+                }
+                try (var stmt = con.createStatement()) {
+                    stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+                }
+                return null;
+            });
+            log.info("Simulation: cleaned up savings account {}", savingsId);
+        } catch (Exception e) {
+            log.warn("Simulation: failed to cleanup savings {} — manual cleanup may be needed", savingsId, e);
+        }
+    }
+
+    /**
+     * Build the loan-application JSON that Fineract's loan APIs accept.
+     * Shared between {@link #createLoanApplication} and schedule preview so
+     * both go through the exact same rate / product / date logic.
+     *
+     * @param clientId  clientId for real applications; null/omitted for previews
+     * @param savingsId linked savings account id; null to skip the linkAccountId field
+     */
+    JsonObject buildLoanApplicationJson(SimulationRequest request, Long clientId, Long savingsId) {
+        LoanProduct loanProduct = loanProductRepository.findById(request.getLoanProductId())
+                .orElseThrow(() -> new IllegalArgumentException("Loan product not found: " + request.getLoanProductId()));
 
         JsonObject json = new JsonObject();
-        json.addProperty("clientId", clientId);
+        if (clientId != null) {
+            json.addProperty("clientId", clientId);
+        }
         json.addProperty("productId", request.getLoanProductId());
         json.addProperty("principal", request.getPrincipal());
         int repaymentEvery = request.getRepaymentEvery() != null ? request.getRepaymentEvery() : 1;
-        int frequencyType = request.getRepaymentFrequencyType() != null ? request.getRepaymentFrequencyType() : 2; // default
-                                                                                                                   // MONTHS
+        int frequencyType = request.getRepaymentFrequencyType() != null ? request.getRepaymentFrequencyType() : 2; // default MONTHS
         json.addProperty("loanTermFrequency", request.getNumberOfRepayments() * repaymentEvery);
         json.addProperty("loanTermFrequencyType", frequencyType);
         json.addProperty("numberOfRepayments", request.getNumberOfRepayments());
         json.addProperty("repaymentEvery", repaymentEvery);
         json.addProperty("repaymentFrequencyType", frequencyType);
-        json.addProperty("interestRatePerPeriod", request.getInterestRatePerPeriod());
+        if (loanProduct.isLinkedToFloatingInterestRate()) {
+            json.addProperty("isFloatingInterestRate", false);
+            BigDecimal differential = request.getInterestRateDifferential() != null ? request.getInterestRateDifferential()
+                    : loanProduct.getFloatingRates().getDefaultDifferentialLendingRate();
+            json.addProperty("interestRateDifferential", differential);
+        } else {
+            BigDecimal rate = request.getInterestRatePerPeriod() != null ? request.getInterestRatePerPeriod()
+                    : loanProduct.getNominalInterestRatePerPeriod();
+            json.addProperty("interestRatePerPeriod", rate);
+        }
         json.addProperty("amortizationType", 1); // EQUAL_INSTALLMENTS
         json.addProperty("interestType", 0); // DECLINING_BALANCE
         json.addProperty("interestCalculationPeriodType", 1); // SAME_AS_REPAYMENT_PERIOD
+        json.addProperty("transactionProcessingStrategyCode", loanProduct.getTransactionProcessingStrategyCode());
         json.addProperty("expectedDisbursementDate", request.getDisbursementDate());
         json.addProperty("submittedOnDate", request.getEffectiveSubmittedOnDate());
         json.addProperty("dateFormat", DATETIME_PATTERN);
@@ -188,7 +363,38 @@ public class MnzlLoanSimulationRunner {
         if (request.getInterestChargedFromDate() != null) {
             json.addProperty("interestChargedFromDate", request.getInterestChargedFromDate());
         }
+        if (request.getFirstRepaymentOnDate() != null) {
+            json.addProperty("repaymentsStartingFromDate", request.getFirstRepaymentOnDate());
+        }
+        if (savingsId != null) {
+            json.addProperty("linkAccountId", savingsId);
+        }
 
+        // Bake the insurance charge into the initial schedule so both preview and
+        // real loan start life with it. Previously we attached it via a separate
+        // command after approval, which worked for the real loan but left the
+        // preview (and presets computed from it) short by the monthly premium.
+        BigDecimal principal = request.getPrincipal();
+        Long insuranceId = resolveInsuranceChargeId();
+        if (insuranceId != null && principal != null) {
+            BigDecimal annual = principal.multiply(INSURANCE_ANNUAL_RATE).max(INSURANCE_ANNUAL_MINIMUM);
+            BigDecimal monthly = annual.divide(TWELVE, 2, RoundingMode.HALF_UP);
+            JsonObject charge = new JsonObject();
+            charge.addProperty("chargeId", insuranceId);
+            charge.addProperty("amount", monthly);
+            JsonArray charges = new JsonArray();
+            charges.add(charge);
+            json.add("charges", charges);
+        }
+        return json;
+    }
+
+    private Long createLoanApplication(SimulationRequest request, Long clientId, Long savingsId) {
+        setBusinessDate(LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT));
+
+        JsonObject json = buildLoanApplicationJson(request, clientId, savingsId);
+
+        log.info("Simulation: loan application JSON = {}", json);
         CommandWrapper command = new CommandWrapperBuilder().createLoanApplication().withJson(json.toString()).build();
         CommandProcessingResult result = commandService.logCommandSource(command);
         Long loanId = result.getLoanId();
@@ -205,7 +411,33 @@ public class MnzlLoanSimulationRunner {
         CommandWrapper approveCommand = new CommandWrapperBuilder().approveLoanApplication(loanId).withJson(approveJson.toString()).build();
         commandService.logCommandSource(approveCommand);
 
+        // Insurance charge is now included in the initial loan creation JSON via
+        // buildLoanApplicationJson, so no separate attach step is needed here.
+
         return loanId;
+    }
+
+    private Long resolveInsuranceChargeId() {
+        if (insuranceChargeId > 0) return insuranceChargeId;
+        try {
+            return jdbcTemplate.queryForObject("SELECT id FROM m_charge WHERE name = ? AND is_active = 1 LIMIT 1", Long.class,
+                    insuranceChargeName);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void postLoanCharge(Long loanId, long chargeId, BigDecimal amount) {
+        JsonObject json = new JsonObject();
+        json.addProperty("chargeId", chargeId);
+        if (amount != null) {
+            json.addProperty("amount", amount);
+        }
+        json.addProperty("dateFormat", DATETIME_PATTERN);
+        json.addProperty("locale", LOCALE);
+
+        CommandWrapper command = new CommandWrapperBuilder().createLoanCharge(loanId).withJson(json.toString()).build();
+        commandService.logCommandSource(command);
     }
 
     private void disburseLoan(Long loanId, SimulationActionRequest action) {
@@ -235,16 +467,7 @@ public class MnzlLoanSimulationRunner {
     }
 
     private void addCharge(Long loanId, SimulationActionRequest action) {
-        JsonObject json = new JsonObject();
-        json.addProperty("chargeId", action.getChargeId());
-        json.addProperty("dateFormat", DATETIME_PATTERN);
-        json.addProperty("locale", LOCALE);
-        if (action.getAmount() != null) {
-            json.addProperty("amount", action.getAmount());
-        }
-
-        CommandWrapper command = new CommandWrapperBuilder().createLoanCharge(loanId).withJson(json.toString()).build();
-        commandService.logCommandSource(command);
+        postLoanCharge(loanId, action.getChargeId(), action.getAmount());
     }
 
     private void writeOff(Long loanId, SimulationActionRequest action) {
@@ -349,64 +572,78 @@ public class MnzlLoanSimulationRunner {
 
     private void cleanupSimulatedLoan(Long loanId) {
         try {
-            Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
-
-            // Undo write-off first if the loan was written off
-            if (loan.isClosedWrittenOff()) {
-                CommandWrapper undoWriteOff = new CommandWrapperBuilder().undoWriteOffLoanTransaction(loanId).withJson("{}").build();
-                commandService.logCommandSource(undoWriteOff);
-                loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
-            }
-
-            // Reverse all non-reversed, non-disbursement transactions (repayments, charges, etc.)
-            // so that undo disbursal can succeed
-            if (loan.isOpen()) {
-                List<LoanTransaction> txns = loan.getLoanTransactions();
-                if (txns != null) {
-                    List<LoanTransaction> toReverse = new ArrayList<>(
-                            txns.stream().filter(tx -> !tx.isReversed() && !tx.isDisbursement()).toList());
-                    Collections.reverse(toReverse);
-                    for (LoanTransaction tx : toReverse) {
-                        JsonObject adjustJson = new JsonObject();
-                        adjustJson.addProperty("transactionDate", tx.getTransactionDate().format(DATE_FORMAT));
-                        adjustJson.addProperty("transactionAmount", 0);
-                        adjustJson.addProperty("dateFormat", DATETIME_PATTERN);
-                        adjustJson.addProperty("locale", LOCALE);
-                        CommandWrapper adjust = new CommandWrapperBuilder().adjustTransaction(loanId, tx.getId())
-                                .withJson(adjustJson.toString()).build();
-                        commandService.logCommandSource(adjust);
-                    }
+            // Run all deletes on a single connection with FK checks disabled.
+            jdbcTemplate.execute((ConnectionCallback<Void>) con -> {
+                try (var stmt = con.createStatement()) {
+                    stmt.execute("SET FOREIGN_KEY_CHECKS=0");
                 }
-
-                // Undo disbursement
-                JsonObject undoJson = new JsonObject();
-                undoJson.addProperty("dateFormat", DATETIME_PATTERN);
-                undoJson.addProperty("locale", LOCALE);
-                undoJson.addProperty("note", "Simulation cleanup");
-                CommandWrapper undoDisburse = new CommandWrapperBuilder().undoLoanApplicationDisbursal(loanId).withJson(undoJson.toString())
-                        .build();
-                commandService.logCommandSource(undoDisburse);
-                loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
-            }
-
-            // Undo approval
-            if (loan.isApproved()) {
-                JsonObject undoJson = new JsonObject();
-                undoJson.addProperty("dateFormat", DATETIME_PATTERN);
-                undoJson.addProperty("locale", LOCALE);
-                undoJson.addProperty("note", "Simulation cleanup");
-                CommandWrapper undoApprove = new CommandWrapperBuilder().undoLoanApplicationApproval(loanId).withJson(undoJson.toString())
-                        .build();
-                commandService.logCommandSource(undoApprove);
-            }
-
-            // Delete the application
-            CommandWrapper delete = new CommandWrapperBuilder().deleteLoanApplication(loanId).build();
-            commandService.logCommandSource(delete);
-
+                try (var ps = con.prepareStatement("DELETE FROM m_loan_transaction WHERE loan_id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_loan_repayment_schedule WHERE loan_id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_loan_charge WHERE loan_id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_loan_disbursement_detail WHERE loan_id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_loan_officer_assignment_history WHERE loan_id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_note WHERE loan_id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var ps = con.prepareStatement("DELETE FROM m_loan WHERE id = ?")) {
+                    ps.setLong(1, loanId);
+                    ps.executeUpdate();
+                }
+                try (var stmt = con.createStatement()) {
+                    stmt.execute("SET FOREIGN_KEY_CHECKS=1");
+                }
+                return null;
+            });
             log.info("Simulation: cleaned up loan {}", loanId);
         } catch (Exception e) {
             log.warn("Simulation: failed to cleanup loan {} — manual cleanup may be needed", loanId, e);
         }
+    }
+
+    /**
+     * Calculate the expected repayment schedule for a request without creating a loan.
+     * Reuses {@link #buildLoanApplicationJson} so the preview exactly matches what
+     * {@link #run} would produce at disbursement time.
+     *
+     * Used by the frontend to seed presets (Happy Path, etc.) with the exact
+     * per-installment amounts the loan will actually bill.
+     */
+    public List<SchedulePreviewPeriod> previewSchedule(SimulationRequest request) {
+        // Preview doesn't create a client/loan, so omit clientId and skip
+        // Fineract's validateForCreate (which requires clientId/groupId).
+        JsonObject json = buildLoanApplicationJson(request, null, null);
+        String jsonString = json.toString();
+        JsonQuery query = JsonQuery.from(jsonString, fromJsonHelper.parse(jsonString), fromJsonHelper);
+        LoanScheduleModel model = scheduleCalculationService.calculateLoanSchedule(query, false);
+
+        List<SchedulePreviewPeriod> periods = new ArrayList<>();
+        for (LoanScheduleModelPeriod p : model.getPeriods()) {
+            if (!p.isRepaymentPeriod()) continue;
+            BigDecimal totalDue = safe(p.principalDue()).add(safe(p.interestDue())).add(safe(p.feeChargesDue()))
+                    .add(safe(p.penaltyChargesDue()));
+            periods.add(SchedulePreviewPeriod.builder().period(p.periodNumber())
+                    .dueDate(p.periodDueDate().format(DATE_FORMAT)).principalDue(safe(p.principalDue()))
+                    .interestDue(safe(p.interestDue())).feeChargesDue(safe(p.feeChargesDue()))
+                    .penaltyChargesDue(safe(p.penaltyChargesDue())).totalDue(totalDue)
+                    .principalOutstanding(safe(p.principalDue())).interestOutstanding(safe(p.interestDue()))
+                    .totalOutstanding(totalDue).build());
+        }
+        return periods;
     }
 }
