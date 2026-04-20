@@ -20,6 +20,7 @@ package co.mnzl.fineract.custom.loan.job;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.event.business.BusinessEventListener;
 import org.apache.fineract.infrastructure.event.business.domain.loan.LoanCreatedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
@@ -37,6 +38,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
  * {@link MnzlLoanChargeAssembler}; this listener only handles charges linked to the loan product.
  * </p>
  */
+@Slf4j
 @RequiredArgsConstructor
 public class MnzlPeriodicChargeProjectionListener {
 
@@ -53,7 +55,15 @@ public class MnzlPeriodicChargeProjectionListener {
         @Override
         public void onBusinessEvent(LoanCreatedBusinessEvent event) {
             final Loan loan = event.get();
-            projectionService.projectFullTermPeriodicCharges(loan);
+            try {
+                final int added = projectionService.projectFullTermPeriodicCharges(loan);
+                if (added > 0) {
+                    log.info("Projected {} periodic charge occurrence(s) for loan id={}", added, loan.getId());
+                }
+            } catch (RuntimeException e) {
+                log.error("Failed to project periodic charges for loan id={}", loan.getId(), e);
+                throw e;
+            }
         }
     }
 }

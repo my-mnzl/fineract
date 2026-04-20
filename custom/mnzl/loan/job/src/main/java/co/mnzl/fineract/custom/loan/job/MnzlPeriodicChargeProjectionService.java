@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
@@ -46,6 +47,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
  * {@link MnzlLoanChargeAssembler} and {@link MnzlPeriodicChargeCalculatorDecorator} for their JSON-level expansion.
  * </p>
  */
+@Slf4j
 @RequiredArgsConstructor
 public class MnzlPeriodicChargeProjectionService {
 
@@ -53,24 +55,35 @@ public class MnzlPeriodicChargeProjectionService {
     private final LoanChargeService loanChargeService;
     private final ScheduledDateGenerator scheduledDateGenerator;
 
-    public void projectFullTermPeriodicCharges(final Loan loan) {
+    /**
+     * Projects every occurrence of the product's periodic charges across the loan term and attaches them as
+     * {@link LoanCharge} rows on the loan. Returns the number of charges actually added (after dedup + zero-amount
+     * filter). Early-exit conditions are logged at DEBUG.
+     */
+    public int projectFullTermPeriodicCharges(final Loan loan) {
         if (loan == null || loan.getLoanProduct() == null || loan.getLoanProduct().getCharges() == null) {
-            return;
+            log.debug("Skipping periodic-charge projection: loan or product charges are null");
+            return 0;
         }
+        final Long loanId = loan.getId();
         final List<Charge> periodicCharges = loan.getLoanProduct().getCharges().stream().filter(Charge::isActive)
                 .filter(Charge::isLoanCharge).filter(Charge::isLoanPeriodic).toList();
         if (periodicCharges.isEmpty()) {
-            return;
+            log.debug("Skipping periodic-charge projection for loan id={}: product has no active periodic charges", loanId);
+            return 0;
         }
         final LocalDate anchor = determineAnchorDate(loan);
         if (anchor == null) {
-            return;
+            log.debug("Skipping periodic-charge projection for loan id={}: no anchor date available", loanId);
+            return 0;
         }
         final LocalDate maturity = determineMaturityDate(loan);
         if (maturity == null || DateUtils.isAfter(anchor, maturity)) {
-            return;
+            log.debug("Skipping periodic-charge projection for loan id={}: maturity={} is before anchor={}", loanId, maturity, anchor);
+            return 0;
         }
 
+        int added = 0;
         final Collection<LoanCharge> existingCharges = loan.getCharges() == null ? List.of() : loan.getCharges();
         for (final Charge chargeDefinition : periodicCharges) {
             final Set<LocalDate> existingDueDates = existingCharges.stream()
@@ -83,12 +96,16 @@ public class MnzlPeriodicChargeProjectionService {
                 }
                 final LoanCharge loanCharge = loanChargeAssembler.createNewFromChargeDefinition(loan, chargeDefinition, occurrenceDate);
                 if (BigDecimal.ZERO.compareTo(loanCharge.amount()) == 0) {
+                    log.debug("Skipping zero-amount occurrence chargeId={} dueDate={} for loan id={}", chargeDefinition.getId(),
+                            occurrenceDate, loanId);
                     continue;
                 }
                 loanChargeService.addLoanCharge(loan, loanCharge);
                 existingDueDates.add(occurrenceDate);
+                added++;
             }
         }
+        return added;
     }
 
     /**

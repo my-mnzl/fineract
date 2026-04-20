@@ -34,6 +34,7 @@ import org.apache.fineract.client.models.GetLoansLoanIdResponse;
 import org.apache.fineract.client.models.LoanProductChargeData;
 import org.apache.fineract.client.models.PostLoanProductsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdResponse;
+import org.apache.fineract.client.models.PostLoansResponse;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -107,6 +108,24 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
     }
 
     @Test
+    public void testCalculateLoanSchedulePreviewProjectsPeriodicChargesAcrossFullTerm() {
+        runAt(LOAN_DISBURSEMENT_DATE, () -> {
+            final Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
+            final Long loanProductId = createPeriodicLoanProductWithYearlyCharge();
+
+            final PostLoansResponse preview = loanTransactionHelper.calculateRepaymentScheduleForApplyLoan(
+                    applyLoanRequest(clientId, loanProductId, LOAN_DISBURSEMENT_DATE, 1000.0, 36,
+                            request -> request.repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS)
+                                    .loanTermFrequency(36).loanTermFrequencyType(RepaymentFrequencyType.MONTHS)),
+                    "calculateLoanSchedule");
+
+            assertEquals(3, preview.getPeriods().stream()
+                    .filter(p -> p.getFeeChargesDue() != null && p.getFeeChargesDue() > 0L).count(),
+                    "Yearly periodic charge on a 36-month loan should project exactly 3 occurrences into the preview");
+        });
+    }
+
+    @Test
     public void testPeriodicLoanChargeWithAccountTransferGetsPaidFromLinkedSavings() {
         AtomicReference<PeriodicLoanContext> contextRef = new AtomicReference<>();
 
@@ -137,6 +156,17 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
                 cleanupFinancialActivityMapping(createdFinancialActivityMappingId);
             }
         });
+    }
+
+    private Long createPeriodicLoanProductWithYearlyCharge() {
+        final Long periodicChargeId = new ChargesHelper()
+                .createCharges(ChargesHelper.loanPeriodicChargeRequest(PERIODIC_CHARGE_AMOUNT, ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, 1))
+                .getResourceId();
+        final PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct()
+                .numberOfRepayments(12).repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).multiDisburseLoan(false)
+                .disallowExpectedDisbursements(false).allowApprovedDisbursedAmountsOverApplied(false).overAppliedNumber(null)
+                .overAppliedCalculationType(null).charges(List.of(new LoanProductChargeData().id(periodicChargeId)));
+        return loanProductHelper.createLoanProduct(loanProduct).getResourceId();
     }
 
     private PeriodicLoanContext createPeriodicLoan(final int numberOfRepayments) {
