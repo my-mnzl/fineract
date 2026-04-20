@@ -90,13 +90,6 @@ public final class LoanChargeApiJsonValidator {
         final JsonElement element = this.fromApiJsonHelper.parse(json);
         final Long chargeId = this.fromApiJsonHelper.extractLongNamed("chargeId", element);
         baseDataValidator.reset().parameter("chargeId").value(chargeId).notNull().integerGreaterThanZero();
-        if (chargeId != null) {
-            final Charge chargeDefinition = chargeRepository.findOneWithNotFoundDetection(chargeId);
-            if (chargeDefinition.isLoanPeriodic()) {
-                throw new LoanChargeCannotBeAddedException("loanCharge", "periodic.charge",
-                        "Periodic charge cannot be added to the loan manually.", null, chargeDefinition.getName());
-            }
-        }
 
         final BigDecimal amount = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed("amount", element);
         baseDataValidator.reset().parameter("amount").value(amount).notNull().positiveAmount();
@@ -369,10 +362,6 @@ public final class LoanChargeApiJsonValidator {
                         final String defaultUserMessage = "Installment charge cannot be added to the loan.";
                         throw new LoanChargeCannotBeAddedException("loanCharge", "overdue.charge", defaultUserMessage, null,
                                 chargeDefinition.getName());
-                    }
-                    if (chargeDefinition.isLoanPeriodic()) {
-                        throw new LoanChargeCannotBeAddedException("loanCharge", "periodic.charge",
-                                "Periodic charge cannot be added to the loan manually.", null, chargeDefinition.getName());
                     }
                     final BigDecimal amount = this.fromApiJsonHelper.extractBigDecimalNamed(LoanApiConstants.amountParameterName,
                             loanChargeElement, locale);

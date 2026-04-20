@@ -1490,10 +1490,10 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, Loa
         Collection<ChargeData> chargeOptions = null;
         if (loanProduct.getMultiDisburseLoan()) {
             chargeOptions = this.chargeReadPlatformService.retrieveLoanProductApplicableCharges(productId,
-                    new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.LOAN_PERIODIC });
+                    new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT });
         } else {
-            chargeOptions = this.chargeReadPlatformService.retrieveLoanProductApplicableCharges(productId, new ChargeTimeType[] {
-                    ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.TRANCHE_DISBURSEMENT, ChargeTimeType.LOAN_PERIODIC });
+            chargeOptions = this.chargeReadPlatformService.retrieveLoanProductApplicableCharges(productId,
+                    new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.TRANCHE_DISBURSEMENT });
         }
 
         Integer loanCycleCounter = null;
