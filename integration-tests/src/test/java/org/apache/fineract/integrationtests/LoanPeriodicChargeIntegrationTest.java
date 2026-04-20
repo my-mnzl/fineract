@@ -74,16 +74,17 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
     public void testPeriodicLoanChargeProjectsAllYearlyOccurrencesAcrossLongLoanTerm() {
         AtomicReference<PeriodicLoanContext> contextRef = new AtomicReference<>();
 
-        runAt(LOAN_DISBURSEMENT_DATE, () -> contextRef.set(createPeriodicLoan(36)));
+        // 24-month term → yearly periodic charge projects two occurrences (first repayment + 1 year later).
+        // Product template caps numberOfRepayments at 30.
+        runAt(LOAN_DISBURSEMENT_DATE, () -> contextRef.set(createPeriodicLoan(24)));
 
         PeriodicLoanContext context = contextRef.get();
         List<GetLoansLoanIdChargesChargeIdResponse> loanCharges = loanTransactionHelper.getLoanCharges(context.loanId());
-        assertEquals(3, loanCharges.size());
+        assertEquals(2, loanCharges.size());
 
         GetLoansLoanIdResponse loanDetails = loanTransactionHelper.getLoanDetails(context.loanId());
         assertFeeChargeOnRepaymentPeriod(loanDetails, context.firstRepaymentDate());
         assertFeeChargeOnRepaymentPeriod(loanDetails, context.firstRepaymentDate().plusYears(1));
-        assertFeeChargeOnRepaymentPeriod(loanDetails, context.firstRepaymentDate().plusYears(2));
     }
 
     @Test
@@ -113,15 +114,15 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
             final Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
             final Long loanProductId = createPeriodicLoanProductWithYearlyCharge();
 
-            final PostLoansResponse preview = loanTransactionHelper.calculateRepaymentScheduleForApplyLoan(
-                    applyLoanRequest(clientId, loanProductId, LOAN_DISBURSEMENT_DATE, 1000.0, 36,
-                            request -> request.repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS)
-                                    .loanTermFrequency(36).loanTermFrequencyType(RepaymentFrequencyType.MONTHS)),
-                    "calculateLoanSchedule");
+            final PostLoansResponse preview = loanTransactionHelper
+                    .calculateRepaymentScheduleForApplyLoan(
+                            applyLoanRequest(clientId, loanProductId, LOAN_DISBURSEMENT_DATE, 1000.0, 24,
+                                    request -> request.repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS)
+                                            .loanTermFrequency(24).loanTermFrequencyType(RepaymentFrequencyType.MONTHS)),
+                            "calculateLoanSchedule");
 
-            assertEquals(3, preview.getPeriods().stream()
-                    .filter(p -> p.getFeeChargesDue() != null && p.getFeeChargesDue() > 0L).count(),
-                    "Yearly periodic charge on a 36-month loan should project exactly 3 occurrences into the preview");
+            assertEquals(2, preview.getPeriods().stream().filter(p -> p.getFeeChargesDue() != null && p.getFeeChargesDue() > 0L).count(),
+                    "Yearly periodic charge on a 24-month loan should project exactly 2 occurrences into the preview");
         });
     }
 
@@ -162,8 +163,8 @@ public class LoanPeriodicChargeIntegrationTest extends BaseLoanIntegrationTest {
         final Long periodicChargeId = new ChargesHelper()
                 .createCharges(ChargesHelper.loanPeriodicChargeRequest(PERIODIC_CHARGE_AMOUNT, ChargesHelper.CHARGE_FEE_FREQUENCY_YEARS, 1))
                 .getResourceId();
-        final PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct()
-                .numberOfRepayments(12).repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).multiDisburseLoan(false)
+        final PostLoanProductsRequest loanProduct = createOnePeriod30DaysLongNoInterestPeriodicAccrualProduct().numberOfRepayments(12)
+                .repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).multiDisburseLoan(false)
                 .disallowExpectedDisbursements(false).allowApprovedDisbursedAmountsOverApplied(false).overAppliedNumber(null)
                 .overAppliedCalculationType(null).charges(List.of(new LoanProductChargeData().id(periodicChargeId)));
         return loanProductHelper.createLoanProduct(loanProduct).getResourceId();
