@@ -293,7 +293,7 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
                     int daysInSegment = getDifferenceInDays(segmentStart, rateChangeDate, loanApplicationTerms);
                     if (daysInSegment > 0) {
                         loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
-                        Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, daysInSegment);
+                        Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, segmentStart, daysInSegment);
                         extraInterest = extraInterest.plus(segmentInterest);
                     }
                 }
@@ -306,7 +306,7 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
                 int daysInSegment = getDifferenceInDays(segmentStart, periodEnd, loanApplicationTerms);
                 if (daysInSegment > 0) {
                     loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
-                    Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, daysInSegment);
+                    Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, segmentStart, daysInSegment);
                     extraInterest = extraInterest.plus(segmentInterest);
                 }
             }
@@ -322,8 +322,8 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
     }
 
     private Money calculateInterestForSegment(final LoanApplicationTerms loanApplicationTerms, final MathContext mc,
-            final int daysInSegment) {
-        BigDecimal dailyInterestRatePercentage = MnzlLoanScheduleMath.getDailyNominalInterestRate(loanApplicationTerms, mc);
+            final LocalDate referenceDate, final int daysInSegment) {
+        BigDecimal dailyInterestRatePercentage = MnzlLoanScheduleMath.getDailyNominalInterestRate(loanApplicationTerms, referenceDate, mc);
         BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100), mc);
         BigDecimal totalInterest = loanApplicationTerms.getPrincipal().getAmount().multiply(dailyInterestRate, mc)
                 .multiply(BigDecimal.valueOf(daysInSegment), mc);
