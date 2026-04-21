@@ -20,7 +20,6 @@ package org.apache.fineract.integrationtests;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
@@ -44,7 +43,6 @@ import org.junit.jupiter.api.Test;
 @Order(1)
 public class SchedulerJobsTest {
 
-    private static final String PERIODIC_LOAN_CHARGES_JOB_NAME = "Apply Periodic Loan Charges";
     private final Map<Integer, Boolean> originalJobStatus = new HashMap<>();
     private RequestSpecification requestSpec;
     private SchedulerJobHelper schedulerJobHelper;
@@ -108,9 +106,7 @@ public class SchedulerJobsTest {
     @Test
     public void testNumberOfJobs() {
         List<Integer> jobIds = schedulerJobHelper.getAllSchedulerJobIds();
-        assertTrue(schedulerJobHelper.getAllSchedulerJobNames().contains(PERIODIC_LOAN_CHARGES_JOB_NAME),
-                "Expected custom periodic loan charges job to be registered");
-        assertEquals(JobName.values().length + 1, jobIds.size(), "Number of jobs in database and code do not match: " + jobIds);
+        assertEquals(JobName.values().length, jobIds.size(), "Number of jobs in database and code do not match: " + jobIds);
     }
 
     @Test

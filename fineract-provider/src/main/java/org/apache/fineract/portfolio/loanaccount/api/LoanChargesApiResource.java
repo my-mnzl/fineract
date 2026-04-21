@@ -542,7 +542,7 @@ public class LoanChargesApiResource {
         Long resolvedLoanId = loanId == null ? loanReadPlatformService.getResolvedLoanId(loanExternalId) : loanId;
 
         final List<ChargeData> chargeOptions = this.chargeReadPlatformService.retrieveLoanAccountApplicableCharges(resolvedLoanId,
-                new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.LOAN_PERIODIC });
+                new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT });
         final LoanChargeData loanChargeTemplate = LoanChargeData.template(chargeOptions);
 
         final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
