@@ -36,6 +36,8 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.PaymentPeri
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.PrincipalInterest;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanproduct.domain.AmortizationMethod;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -65,6 +67,8 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "mnzl.loan.schedule.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator extends AbstractCumulativeLoanScheduleGenerator {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
 
     private final ScheduledDateGenerator scheduledDateGenerator;
     private final PaymentPeriodsInOneYearCalculator paymentPeriodsInOneYearCalculator;
@@ -225,7 +229,14 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
             // (principal=650k EGP + disbursement=2026-02-17 + first repayment=2026-04-01) and
             // shift the period end back one day, which restores the legacy day count without
             // touching 30E/360 globally. Remove this guard once loan 13516 is closed.
-            LocalDate effectivePeriodEndDate = isRehabLegacyOneOffLoan(loanApplicationTerms) ? periodEndDate.minusDays(1) : periodEndDate;
+            boolean rehabGuard = isRehabLegacyOneOffLoan(loanApplicationTerms);
+            LocalDate effectivePeriodEndDate = rehabGuard ? periodEndDate.minusDays(1) : periodEndDate;
+            if (rehabGuard) {
+                LOG.warn(
+                        "[REHAB-13516-GUARD] Legacy 30/360 day-count guard fired: principal={}, disbursement={}, firstRepayment={}, originalPeriodEnd={}, adjustedPeriodEnd={}",
+                        REHAB_LEGACY_PRINCIPAL, REHAB_LEGACY_DISBURSEMENT, REHAB_LEGACY_FIRST_REPAYMENT, periodEndDate,
+                        effectivePeriodEndDate);
+            }
             int actualPeriodDays = getDifferenceInDays(interestStartForFirstPeriod, effectivePeriodEndDate, loanApplicationTerms);
             if (actualPeriodDays != idealPeriodDays && actualPeriodDays > 0) {
                 Money fixedInterest = calculateFixedInterestWithRateChanges(loanApplicationTerms, calculator, mc, outstandingBalance,
@@ -332,10 +343,10 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
     }
 
     /**
-     * One-off match for production rehab loan 13516. Identified by the three terms that uniquely
-     * pin it: principal exactly 650,000, expected disbursement 2026-02-17, first repayment
-     * 2026-04-01. Used solely to anchor the first stub period to the pre-d5d8cf882 (legacy 30/360)
-     * day count so recalc reproduces m_loan_repayment_schedule_history v3 every time.
+     * One-off match for production rehab loan 13516. Identified by the three terms that uniquely pin it: principal
+     * exactly 650,000, expected disbursement 2026-02-17, first repayment 2026-04-01. Used solely to anchor the first
+     * stub period to the pre-d5d8cf882 (legacy 30/360) day count so recalc reproduces m_loan_repayment_schedule_history
+     * v3 every time.
      */
     private static boolean isRehabLegacyOneOffLoan(final LoanApplicationTerms terms) {
         if (terms == null || terms.getPrincipal() == null) {

@@ -222,9 +222,9 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             // Recalc is intentionally disabled to match production rehab loans (product 2): the schedule must stay
             // frozen at origination, and lateness is handled via penalty charges rather than principal/interest
             // redistribution. See the SQL migration that flips m_loan.interest_recalculation_enabled to 0 on prod.
-            PostLoanProductsResponse loanProduct = loanProductHelper.createLoanProduct(buildDecliningBalanceProduct(30, 360)
-                    .principal(650000.0).maxPrincipal(2000000.0).numberOfRepayments(12).interestRatePerPeriod(25.0)
-                    .allowPartialPeriodInterestCalcualtion(true).isInterestRecalculationEnabled(false));
+            PostLoanProductsResponse loanProduct = loanProductHelper.createLoanProduct(
+                    buildDecliningBalanceProduct(30, 360).principal(650000.0).maxPrincipal(2000000.0).numberOfRepayments(12)
+                            .interestRatePerPeriod(25.0).allowPartialPeriodInterestCalcualtion(true).isInterestRecalculationEnabled(false));
             Long productId = loanProduct.getResourceId();
             setMnzlProductStrategy(productId);
 
@@ -307,8 +307,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             }
 
             double totalInterestAfter = recalculated.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
-            assertEquals(totalInterestBaseline, totalInterestAfter, 0.01,
-                    "Total interest must not change after late payment + recalc");
+            assertEquals(totalInterestBaseline, totalInterestAfter, 0.01, "Total interest must not change after late payment + recalc");
         });
     }
 
