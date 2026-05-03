@@ -202,7 +202,118 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     }
 
     /**
-     * Test 3: Verify MNZL 30/360 interest formula across all repayment periods.
+     * Test 3: Late repayment must not drift the rehab loan schedule.
+     *
+     * Reproduces production loan 13516 (650,000 EGP, 25% nominal, 12 monthly installments, disbursed 2026-02-17, first
+     * repayment 2026-04-01, declining balance, 30/360). Two behaviors are locked in:
+     * <ul>
+     * <li>Origination matches the v3 history — first stub period is 43 days (legacy 30/360), not 44 (current 30E/360).
+     * The custom generator carries a one-off signature guard that shifts the stub end date one day for this loan.</li>
+     * <li>Schedule is frozen on lateness — interest recalculation is disabled at the product/loan level, so paying
+     * installment 1 four days late and running COB past installment 2's due date does not redistribute principal or
+     * interest. Lateness is expected to surface only as penalty charges, not as schedule drift.</li>
+     * </ul>
+     */
+    @Test
+    public void testRehabLoanLatePaymentDoesNotDriftSchedule() {
+        runAt("06 February 2026", () -> {
+            Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
+
+            // Recalc is intentionally disabled to match production rehab loans (product 2): the schedule must stay
+            // frozen at origination, and lateness is handled via penalty charges rather than principal/interest
+            // redistribution. See the SQL migration that flips m_loan.interest_recalculation_enabled to 0 on prod.
+            PostLoanProductsResponse loanProduct = loanProductHelper.createLoanProduct(buildDecliningBalanceProduct(30, 360)
+                    .principal(650000.0).maxPrincipal(2000000.0).numberOfRepayments(12).interestRatePerPeriod(25.0)
+                    .allowPartialPeriodInterestCalcualtion(true).isInterestRecalculationEnabled(false));
+            Long productId = loanProduct.getResourceId();
+            setMnzlProductStrategy(productId);
+
+            String submittedDate = "06 February 2026";
+            String disbursementDate = "17 February 2026";
+            String firstRepaymentDate = "01 April 2026";
+            Map<String, Object> applyBody = new HashMap<>();
+            applyBody.put("clientId", clientId);
+            applyBody.put("productId", productId);
+            applyBody.put("principal", 650000.0);
+            applyBody.put("loanTermFrequency", 12);
+            applyBody.put("loanTermFrequencyType", 2);
+            applyBody.put("numberOfRepayments", 12);
+            applyBody.put("repaymentEvery", 1);
+            applyBody.put("repaymentFrequencyType", 2);
+            applyBody.put("interestRatePerPeriod", 25.0);
+            applyBody.put("amortizationType", 1);
+            applyBody.put("interestType", 0);
+            applyBody.put("interestCalculationPeriodType", 1);
+            applyBody.put("allowPartialPeriodInterestCalcualtion", true);
+            applyBody.put("transactionProcessingStrategyCode", "mifos-standard-strategy");
+            applyBody.put("submittedOnDate", submittedDate);
+            applyBody.put("expectedDisbursementDate", disbursementDate);
+            applyBody.put("repaymentsStartingFromDate", firstRepaymentDate);
+            applyBody.put("interestChargedFromDate", disbursementDate);
+            applyBody.put("dateFormat", DATETIME_PATTERN);
+            applyBody.put("locale", "en");
+            applyBody.put("loanType", "individual");
+            String applyResponseJson = Utils.performServerPost(requestSpec, responseSpec,
+                    "/fineract-provider/api/v1/loans?" + Utils.TENANT_IDENTIFIER, new Gson().toJson(applyBody));
+            Long loanId = ((Number) new Gson().fromJson(applyResponseJson, java.util.Map.class).get("loanId")).longValue();
+
+            loanTransactionHelper.approveLoan(loanId, new PostLoansLoanIdRequest().approvedLoanAmount(BigDecimal.valueOf(650000.0))
+                    .dateFormat(DATETIME_PATTERN).approvedOnDate(submittedDate).locale("en"));
+
+            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+                    .date(disbursementDate).dateFormat(DATETIME_PATTERN).locale("en"));
+            loanTransactionHelper.disburseLoan(loanId, new PostLoansLoanIdRequest().actualDisbursementDate(disbursementDate)
+                    .dateFormat(DATETIME_PATTERN).transactionAmount(BigDecimal.valueOf(650000.0)).locale("en"));
+
+            GetLoansLoanIdResponse loanDetails = loanTransactionHelper.getLoanDetails(loanId);
+            verifyLoanStatus(loanDetails, status -> status.getActive());
+            List<GetLoansLoanIdRepaymentPeriod> baseline = getRepaymentPeriods(loanDetails);
+            assertEquals(12, baseline.size(), "Baseline schedule should have 12 installments");
+
+            assertEquals(48237.06, Utils.getDoubleValue(baseline.get(0).getPrincipalDue()), 0.01,
+                    "Baseline installment 1 principal must match v3");
+            assertEquals(19409.72, Utils.getDoubleValue(baseline.get(0).getInterestDue()), 0.01,
+                    "Baseline installment 1 interest must match v3 (43-day rehab stub)");
+            assertEquals(60517.98, Utils.getDoubleValue(baseline.get(11).getPrincipalDue()), 0.01,
+                    "Baseline installment 12 principal must match v3");
+            assertEquals(1260.79, Utils.getDoubleValue(baseline.get(11).getInterestDue()), 0.01,
+                    "Baseline installment 12 interest must match v3");
+            double totalInterestBaseline = baseline.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
+            assertEquals(97212.85, totalInterestBaseline, 0.01, "Baseline total interest must match v3");
+
+            double inst1Due = Utils.getDoubleValue(baseline.get(0).getTotalDueForPeriod());
+            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+                    .date("05 April 2026").dateFormat(DATETIME_PATTERN).locale("en"));
+            loanTransactionHelper.makeLoanRepayment(loanId, "repayment", "05 April 2026", inst1Due);
+
+            businessDateHelper.updateBusinessDate(new BusinessDateUpdateRequest().type(BusinessDateUpdateRequest.TypeEnum.BUSINESS_DATE)
+                    .date("03 May 2026").dateFormat(DATETIME_PATTERN).locale("en"));
+            inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
+
+            loanDetails = loanTransactionHelper.getLoanDetails(loanId);
+            List<GetLoansLoanIdRepaymentPeriod> recalculated = getRepaymentPeriods(loanDetails);
+            assertEquals(baseline.size(), recalculated.size(), "Recalc must not change number of installments");
+
+            for (int i = 0; i < baseline.size(); i++) {
+                int periodNumber = i + 1;
+                assertEquals(baseline.get(i).getDueDate(), recalculated.get(i).getDueDate(),
+                        "Installment " + periodNumber + " due date drifted after late payment + recalc");
+                assertEquals(Utils.getDoubleValue(baseline.get(i).getPrincipalDue()),
+                        Utils.getDoubleValue(recalculated.get(i).getPrincipalDue()), 0.01,
+                        "Installment " + periodNumber + " principalDue drifted after late payment + recalc");
+                assertEquals(Utils.getDoubleValue(baseline.get(i).getInterestDue()),
+                        Utils.getDoubleValue(recalculated.get(i).getInterestDue()), 0.01,
+                        "Installment " + periodNumber + " interestDue drifted after late payment + recalc");
+            }
+
+            double totalInterestAfter = recalculated.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
+            assertEquals(totalInterestBaseline, totalInterestAfter, 0.01,
+                    "Total interest must not change after late payment + recalc");
+        });
+    }
+
+    /**
+     * Test 4: Verify MNZL 30/360 interest formula across all repayment periods.
      *
      * Each period's interest must equal outstanding_principal * 12% * 30/360 (i.e., 1% monthly rate). This validates
      * the custom schedule generator uses 30/360 day counting for every period, not just the first.
