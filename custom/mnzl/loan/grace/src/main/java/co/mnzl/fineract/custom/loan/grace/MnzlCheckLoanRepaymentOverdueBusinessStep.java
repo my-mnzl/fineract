@@ -65,8 +65,13 @@ public class MnzlCheckLoanRepaymentOverdueBusinessStep implements LoanCOBBusines
         final LocalDate currentDate = DateUtils.getBusinessLocalDate();
         final Long officeId = loan.getOffice() != null ? loan.getOffice().getId() : null;
         // Hoist working-days config + holiday list once per loan; the per-installment loop reuses them.
+        // Anchor the holiday lookup at the earliest unmet due date (not currentDate) — addWorkingDays iterates
+        // forward from each installment's dueDate, which is typically before currentDate, and
+        // findByOfficeIdAndGreaterThanDate excludes anything <= the anchor.
         final WorkingDays workingDays = workingDayCalculator.getWorkingDays();
-        final List<Holiday> holidays = workingDayCalculator.getActiveHolidaysForOffice(officeId, currentDate);
+        final LocalDate earliestUnmetDueDate = loan.getRepaymentScheduleInstallments().stream().filter(i -> !i.isObligationsMet())
+                .map(LoanRepaymentScheduleInstallment::getDueDate).min(LocalDate::compareTo).orElse(currentDate);
+        final List<Holiday> holidays = workingDayCalculator.getActiveHolidaysForOffice(officeId, earliestUnmetDueDate);
         for (LoanRepaymentScheduleInstallment installment : loan.getRepaymentScheduleInstallments()) {
             if (installment.isObligationsMet()) {
                 continue;

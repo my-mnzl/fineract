@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainService;
 import org.apache.fineract.portfolio.delinquency.validator.LoanDelinquencyActionData;
 import org.apache.fineract.portfolio.loanaccount.data.CollectionData;
@@ -34,6 +35,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
  * {@code delinquentDate} (push later by the extra weekend/holiday days) and {@code delinquentDays} (subtract the same
  * offset, clamped at zero).
  */
+@Slf4j
 @RequiredArgsConstructor
 public class MnzlLoanDelinquencyDomainService implements LoanDelinquencyDomainService {
 
@@ -80,8 +82,17 @@ public class MnzlLoanDelinquencyDomainService implements LoanDelinquencyDomainSe
         // would leak the mutation back to the cache.
         data.setDelinquentDate(workingDelinquentDate);
         Long currentDelinquentDays = data.getDelinquentDays();
+        Long adjustedDelinquentDays = currentDelinquentDays;
         if (currentDelinquentDays != null && currentDelinquentDays > 0) {
-            data.setDelinquentDays(Math.max(0L, currentDelinquentDays - extraGraceDays));
+            adjustedDelinquentDays = Math.max(0L, currentDelinquentDays - extraGraceDays);
+            data.setDelinquentDays(adjustedDelinquentDays);
         }
+        // Audit trail so ops can explain "why is this loan's delinquentDate later than I expected" without code
+        // spelunking.
+        log.info(
+                "Working-day grace shifted delinquency for loan id [{}]: delinquentDate {} -> {} (+{} calendar days for weekends/holidays), "
+                        + "delinquentDays {} -> {} (graceOnArrearsAgeing={} working days)",
+                loan.getId(), calendarDelinquentDate, workingDelinquentDate, extraGraceDays, currentDelinquentDays, adjustedDelinquentDays,
+                graceDays);
     }
 }

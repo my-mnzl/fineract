@@ -67,13 +67,21 @@ public class MnzlWorkingDayCalculator {
         if (start == null || workingDays <= 0) {
             return start;
         }
+        // Safety cap. With a healthy RRULE (>=1 working day per week) and reasonable holiday density, advancing
+        // N working days takes at most ~N*7/5 calendar days; the buffer covers long holiday runs. If the RRULE
+        // is misconfigured (e.g. no working days), this prevents the COB thread from hanging forever.
+        final int maxIterations = workingDays * 7 + 14;
         LocalDate cursor = start;
         int counted = 0;
-        while (counted < workingDays) {
+        for (int i = 0; i < maxIterations && counted < workingDays; i++) {
             cursor = cursor.plusDays(1);
             if (isWorkingDay(cursor, config, holidays)) {
                 counted++;
             }
+        }
+        if (counted < workingDays) {
+            throw new IllegalStateException("Could not advance " + workingDays + " working days from " + start + " within " + maxIterations
+                    + " iterations — check m_working_days RRULE and m_holiday entries (RRULE was: " + config.getRecurrence() + ")");
         }
         return cursor;
     }

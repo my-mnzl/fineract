@@ -152,6 +152,20 @@ class MnzlCheckLoanRepaymentOverdueBusinessStepTest {
     }
 
     @Test
+    void anchorsHolidayLookupAtEarliestUnmetDueDateNotBusinessDate() {
+        // Holiday Jan 8 sits between the installment due date (Jan 5) and today (Jan 12). Anchoring at currentDate
+        // would miss it; anchor at the earliest unmet due date so addWorkingDays sees it.
+        setBusinessDate(LocalDate.of(2025, 1, 12));
+        // Stub addWorkingDays to a non-null value so the rest of the loop doesn't NPE; the assertion below is
+        // about the anchor passed to getActiveHolidaysForOffice.
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
+
+        step.execute(loan);
+
+        verify(workingDayCalculator).getActiveHolidaysForOffice(eq(OFFICE_ID), eq(DUE_DATE));
+    }
+
+    @Test
     void negativeOffsetFallsBackToCalendarArithmetic() {
         // Upstream supports "raise event N days BEFORE due"; preserve that for negative configs.
         LocalDate businessDate = LocalDate.of(2025, 1, 3); // due 2025-01-05 minus 2 calendar days

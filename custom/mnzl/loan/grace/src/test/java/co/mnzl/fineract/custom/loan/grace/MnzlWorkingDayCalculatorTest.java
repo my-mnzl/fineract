@@ -106,6 +106,18 @@ class MnzlWorkingDayCalculatorTest {
     }
 
     @Test
+    void throwsInsteadOfLoopingForeverWhenNoWorkingDayCanBeFoundInTheCap() {
+        // Pathological case: every day in the iteration window is a holiday. Without the safety cap this hangs the
+        // COB thread; with it, we throw a diagnosable error.
+        LocalDate start = LocalDate.of(2025, 1, 5);
+        WorkingDays config = new WorkingDays("FREQ=WEEKLY;BYDAY=SU,MO,TU,WE,TH", RepaymentRescheduleType.SAME_DAY.getValue(), false, false);
+        Holiday blanket = activeHoliday(start.plusDays(1), start.plusDays(120));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> calculator.addWorkingDays(start, 5, config, List.of(blanket)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("m_working_days RRULE");
+    }
+
+    @Test
     void workingDaysToCalendarDaysReportsTheDistanceIncludingSkippedDays() {
         LocalDate sunday = LocalDate.of(2025, 1, 5);
         when(holidayRepository.findByOfficeIdAndGreaterThanDate(eq(OFFICE_ID), any(LocalDate.class))).thenReturn(Collections.emptyList());
