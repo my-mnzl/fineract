@@ -20,20 +20,12 @@
 dependencies {
     implementation(project(':fineract-core'))
     implementation(project(':fineract-cob'))
+    implementation(project(':fineract-charge'))
     implementation(project(':fineract-loan'))
     implementation(project(':fineract-provider'))
-    implementation(project(':custom:mnzl:instrument:balloon-loan'))
-    implementation(project(':custom:mnzl:instrument:loan-api'))
-    implementation(project(':custom:mnzl:loan:cob'))
-    implementation(project(':custom:mnzl:loan:grace'))
-    implementation(project(':custom:mnzl:loan:job'))
-    implementation(project(':custom:mnzl:loan:schedule-api'))
-    implementation(project(':custom:mnzl:loan:schedule-engine'))
     implementation('org.springframework.boot:spring-boot-starter')
-    testImplementation(project(':fineract-provider'))
-    testImplementation('org.springframework.boot:spring-boot-starter-jdbc')
-    testImplementation('org.springframework.boot:spring-boot-starter-data-jpa')
-    testImplementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
+    implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+    implementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
         exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
     }
     testImplementation('org.springframework.boot:spring-boot-starter-test')
