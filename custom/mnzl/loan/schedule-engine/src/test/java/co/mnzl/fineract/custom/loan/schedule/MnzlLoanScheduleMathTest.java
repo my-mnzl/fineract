@@ -208,4 +208,122 @@ class MnzlLoanScheduleMathTest {
                 .daysInMonthType(daysInMonthType).daysInYearType(DaysInYearType.DAYS_360).annualNominalInterestRate(BigDecimal.valueOf(12))
                 .mc(MC).build();
     }
+
+    // ---- Additional 30E/360 edge case tests (Tasks C.1) ----
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_endOfFebToStartOfMar() {
+        // adjustedStart=28, adjustedEnd=1: 0*360 + (3-2)*30 + (1-28) = 30 - 27 = 3
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 2, 28), LocalDate.of(2026, 3, 1))).isEqualTo(3);
+    }
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_leapFeb29() {
+        // Same formula as non-leap: leap year does not change 30E/360 outcome
+        // adjustedStart=28, adjustedEnd=1: 0 + 30 + (1-28) = 3
+        int leap = MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2024, 2, 28), LocalDate.of(2024, 3, 1));
+        int nonLeap = MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 2, 28), LocalDate.of(2026, 3, 1));
+        assertThat(leap).isEqualTo(3);
+        assertThat(leap).isEqualTo(nonLeap);
+    }
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_yearCross() {
+        // start day-31 capped to 30, end day=1: (2026-2025)*360 + (1-12)*30 + (1-30) = 360 - 330 - 29 = 1
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2025, 12, 31), LocalDate.of(2026, 1, 1)))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_identicalDates() {
+        LocalDate date = LocalDate.of(2026, 6, 15);
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(date, date)).isZero();
+    }
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_day31AtStart() {
+        // start capped to 30: 0*360 + (2-1)*30 + (15-30) = 30 - 15 = 15
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 2, 15)))
+                .isEqualTo(15);
+    }
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_day31AtEnd() {
+        // end capped to 30: 0 + 0 + (30-15) = 15
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 1, 31)))
+                .isEqualTo(15);
+    }
+
+    @Test
+    void getDifferenceInDaysFor30DayMonth_bothDay31() {
+        // both capped to 30: 0 + 2*30 + 0 = 60
+        assertThat(MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 31)))
+                .isEqualTo(60);
+    }
+
+    // ---- Additional getDailyNominalInterestRate tests ----
+
+    @Test
+    void getDailyNominalInterestRate_360_15pct() {
+        LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal("15.00"), DaysInYearType.DAYS_360);
+        BigDecimal expected = new BigDecimal("15.00").divide(BigDecimal.valueOf(360), MC);
+        assertThat(MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, MC)).isEqualByComparingTo(expected);
+    }
+
+    @Test
+    void getDailyNominalInterestRate_365_15pct() {
+        LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal("15.00"), DaysInYearType.DAYS_365);
+        BigDecimal expected = new BigDecimal("15.00").divide(BigDecimal.valueOf(365), MC);
+        assertThat(MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, MC)).isEqualByComparingTo(expected);
+    }
+
+    @Test
+    void getDailyNominalInterestRate_5pct_360() {
+        LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal("5.00"), DaysInYearType.DAYS_360);
+        BigDecimal expected = new BigDecimal("5.00").divide(BigDecimal.valueOf(360), MC);
+        assertThat(MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, MC)).isEqualByComparingTo(expected);
+    }
+
+    @Test
+    void getDailyNominalInterestRate_25pct_360() {
+        LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal("25.00"), DaysInYearType.DAYS_360);
+        BigDecimal expected = new BigDecimal("25.00").divide(BigDecimal.valueOf(360), MC);
+        assertThat(MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, MC)).isEqualByComparingTo(expected);
+    }
+
+    @Test
+    void getDailyNominalInterestRate_actual_365NonLeap() {
+        // ACTUAL day count uses lengthOfYear() of reference date; 2025 = 365 days.
+        LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal("15.00"), DaysInYearType.ACTUAL);
+        BigDecimal expected = new BigDecimal("15.00").divide(BigDecimal.valueOf(365), MC);
+        assertThat(MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, LocalDate.of(2025, 6, 1), MC)).isEqualByComparingTo(expected);
+    }
+
+    @Test
+    void getDailyNominalInterestRate_actual_366Leap() {
+        // ACTUAL day count uses lengthOfYear() of reference date; 2024 = 366 days (leap).
+        LoanApplicationTerms terms = termsWithAnnualNominalRate(new BigDecimal("15.00"), DaysInYearType.ACTUAL);
+        BigDecimal expected = new BigDecimal("15.00").divide(BigDecimal.valueOf(366), MC);
+        assertThat(MnzlLoanScheduleMath.getDailyNominalInterestRate(terms, LocalDate.of(2024, 6, 1), MC)).isEqualByComparingTo(expected);
+    }
+
+    // ---- Additional getDifferenceInDays dispatch tests ----
+
+    @Test
+    void getDifferenceInDays_30360PathSelected_byDaysInMonth30() {
+        // With DAYS_30 configured, dispatcher should use 30E/360 convention.
+        // 2026-01-31 -> 2026-03-31 with both capped: 60 days (vs actual 59)
+        LoanApplicationTerms terms = termsWithDaysInMonth(DaysInMonthType.DAYS_30);
+        int days = MnzlLoanScheduleMath.getDifferenceInDays(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 31), terms);
+        assertThat(days).isEqualTo(60);
+    }
+
+    @Test
+    void getDifferenceInDays_actualDaysPath_otherwise() {
+        // With ACTUAL configured, dispatcher should use exact day difference.
+        // 2026-01-31 -> 2026-03-31 actual = 59 days
+        LoanApplicationTerms terms = termsWithDaysInMonth(DaysInMonthType.ACTUAL);
+        int days = MnzlLoanScheduleMath.getDifferenceInDays(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 31), terms);
+        assertThat(days).isEqualTo(59);
+    }
 }
