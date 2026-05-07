@@ -1,0 +1,41 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package co.mnzl.fineract.custom.loan.simulator.data;
+
+import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
+import java.util.List;
+import lombok.Builder;
+import lombok.Getter;
+
+@Getter
+@Builder
+public class SimulationResult {
+
+    private final String uuid;
+    private final String name;
+    private final SimulationStatus status;
+    private final String errorMessage;
+    private final List<SimulationSnapshot> snapshots;
+    /**
+     * Original request that produced this run. Populated when reading saved simulations so callers can rehydrate the
+     * inputs (loan product, principal, dates, actions). May be null on transient results returned mid-flight (e.g. the
+     * synchronous response from POST /simulations before the run starts).
+     */
+    private final SimulationRequest request;
+}
