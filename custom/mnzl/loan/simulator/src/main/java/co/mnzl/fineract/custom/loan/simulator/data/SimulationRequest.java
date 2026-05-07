@@ -31,6 +31,7 @@ public class SimulationRequest {
     private final Long loanProductId;
     private final BigDecimal principal;
     private final BigDecimal interestRatePerPeriod;
+    private final BigDecimal interestRateDifferential;
     private final Integer numberOfRepayments;
     private final Integer repaymentEvery;
     private final Integer repaymentFrequencyType;
@@ -38,6 +39,7 @@ public class SimulationRequest {
     private final String submittedOnDate;
     private final String approvedOnDate;
     private final String interestChargedFromDate;
+    private final String firstRepaymentOnDate;
     private final List<SimulationActionRequest> actions;
 
     public String getEffectiveSubmittedOnDate() {

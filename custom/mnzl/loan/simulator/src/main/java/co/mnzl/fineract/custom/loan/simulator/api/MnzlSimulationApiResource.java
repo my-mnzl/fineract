@@ -18,6 +18,7 @@
  */
 package co.mnzl.fineract.custom.loan.simulator.api;
 
+import co.mnzl.fineract.custom.loan.simulator.data.SchedulePreviewPeriod;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.service.MnzlSimulationReadService;
 import co.mnzl.fineract.custom.loan.simulator.service.MnzlSimulationWriteService;
@@ -52,6 +53,7 @@ public class MnzlSimulationApiResource {
     private final MnzlSimulationReadService readService;
     private final MnzlSimulationWriteService writeService;
     private final DefaultToApiJsonSerializer<SimulationResult> serializer;
+    private final DefaultToApiJsonSerializer<SchedulePreviewPeriod> scheduleSerializer;
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
@@ -78,6 +80,16 @@ public class MnzlSimulationApiResource {
         context.authenticatedUser().validateHasReadPermission(PERMISSION_RESOURCE);
         SimulationResult result = readService.findByUuid(uuid);
         return serializer.serialize(result);
+    }
+
+    @POST
+    @Path("/preview-schedule")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public String previewSchedule(final String apiRequestBodyAsJson) {
+        context.authenticatedUser().validateHasReadPermission(PERMISSION_RESOURCE);
+        List<SchedulePreviewPeriod> schedule = writeService.previewSchedule(apiRequestBodyAsJson);
+        return scheduleSerializer.serialize(schedule);
     }
 
     @POST
