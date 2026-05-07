@@ -275,7 +275,9 @@ public class MnzlLoanSimulationRunner {
     }
 
     private Long resolveSavingsProductId() {
-        if (savingsProductId > 0) return savingsProductId;
+        if (savingsProductId > 0) {
+            return savingsProductId;
+        }
         try {
             return jdbcTemplate.queryForObject("SELECT id FROM m_savings_product ORDER BY id LIMIT 1", Long.class);
         } catch (Exception ignored) {
@@ -419,7 +421,9 @@ public class MnzlLoanSimulationRunner {
     }
 
     private Long resolveInsuranceChargeId() {
-        if (insuranceChargeId > 0) return insuranceChargeId;
+        if (insuranceChargeId > 0) {
+            return insuranceChargeId;
+        }
         try {
             return jdbcTemplate.queryForObject("SELECT id FROM m_charge WHERE name = ? AND is_active = 1 LIMIT 1", Long.class,
                     insuranceChargeName);
@@ -635,7 +639,9 @@ public class MnzlLoanSimulationRunner {
 
         List<SchedulePreviewPeriod> periods = new ArrayList<>();
         for (LoanScheduleModelPeriod p : model.getPeriods()) {
-            if (!p.isRepaymentPeriod()) continue;
+            if (!p.isRepaymentPeriod()) {
+                continue;
+            }
             BigDecimal totalDue = safe(p.principalDue()).add(safe(p.interestDue())).add(safe(p.feeChargesDue()))
                     .add(safe(p.penaltyChargesDue()));
             periods.add(SchedulePreviewPeriod.builder().period(p.periodNumber()).dueDate(p.periodDueDate().format(DATE_FORMAT))
