@@ -33,9 +33,8 @@ public class MnzlJobNameConfig {
 
     @Bean
     public JobNameProvider mnzlJobNameProvider() {
-        return new SimpleJobNameProvider(List.of(
-                new JobNameData(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), JobName.EXECUTE_STANDING_INSTRUCTIONS.toString()),
-                new JobNameData(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.toString()),
-                new JobNameData(MnzlJobName.APPLY_PERIODIC_LOAN_CHARGES.name(), MnzlJobName.APPLY_PERIODIC_LOAN_CHARGES.toString())));
+        return new SimpleJobNameProvider(
+                List.of(new JobNameData(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), JobName.EXECUTE_STANDING_INSTRUCTIONS.toString()),
+                        new JobNameData(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.toString())));
     }
 }

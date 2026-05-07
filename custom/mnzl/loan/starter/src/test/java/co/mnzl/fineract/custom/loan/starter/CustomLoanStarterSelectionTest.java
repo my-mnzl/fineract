@@ -57,7 +57,8 @@ class CustomLoanStarterSelectionTest {
     void customLoanStarterProvidesPrimaryCheckDueInstallmentsStep() {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
-                        "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false")
+                        "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
+                        "mnzl.loan.grace.workingDays.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     COBBusinessStepService businessStepService = ctx.getBean(COBBusinessStepService.class);
                     var result = businessStepService.getCOBBusinessSteps(LoanCOBBusinessStep.class, "JOB");

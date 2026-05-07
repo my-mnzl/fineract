@@ -1201,10 +1201,10 @@ public class LoansApiResource {
             repaymentStrategyOptions = this.dropdownReadPlatformService.retrieveTransactionProcessingStrategies();
             if (product.getMultiDisburseLoan()) {
                 chargeOptions = this.chargeReadPlatformService.retrieveLoanAccountApplicableCharges(resolvedLoanId,
-                        new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.LOAN_PERIODIC });
+                        new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT });
             } else {
-                chargeOptions = this.chargeReadPlatformService.retrieveLoanAccountApplicableCharges(resolvedLoanId, new ChargeTimeType[] {
-                        ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.TRANCHE_DISBURSEMENT, ChargeTimeType.LOAN_PERIODIC });
+                chargeOptions = this.chargeReadPlatformService.retrieveLoanAccountApplicableCharges(resolvedLoanId,
+                        new ChargeTimeType[] { ChargeTimeType.OVERDUE_INSTALLMENT, ChargeTimeType.TRANCHE_DISBURSEMENT });
             }
             chargeTemplate = this.loanChargeReadPlatformService.retrieveLoanChargeTemplate();
 

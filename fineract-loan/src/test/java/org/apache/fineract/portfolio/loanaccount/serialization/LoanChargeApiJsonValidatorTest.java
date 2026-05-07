@@ -18,22 +18,13 @@
  */
 package org.apache.fineract.portfolio.loanaccount.serialization;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
-import com.google.gson.JsonElement;
-import java.util.ArrayList;
 import java.util.List;
-import org.apache.fineract.infrastructure.core.data.ApiParameterError;
-import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.charge.domain.Charge;
-import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
-import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
-import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
-import org.apache.fineract.portfolio.charge.exception.LoanChargeCannotBeAddedException;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanChargeRepository;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,61 +58,28 @@ class LoanChargeApiJsonValidatorTest {
         fromJsonHelper = new FromJsonHelper();
         underTest = new LoanChargeApiJsonValidator(fromJsonHelper, chargeRepository, loanChargeRepository, List.of());
 
-        when(chargeRepository.findOneWithNotFoundDetection(CHARGE_ID)).thenReturn(charge);
+        lenient().when(chargeRepository.findOneWithNotFoundDetection(CHARGE_ID)).thenReturn(charge);
     }
 
     @Test
-    void validateAddLoanChargeRejectsPeriodicCharges() {
-        when(charge.isLoanPeriodic()).thenReturn(true);
-
-        assertThatThrownBy(() -> underTest.validateAddLoanCharge("""
+    void validateAddLoanChargeAllowsCharges() {
+        assertDoesNotThrow(() -> underTest.validateAddLoanCharge("""
                 {
                   "chargeId": 1,
                   "amount": 100,
                   "locale": "en"
                 }
-                """)).isInstanceOf(LoanChargeCannotBeAddedException.class)
-                .hasMessageContaining("Periodic charge cannot be added to the loan manually.");
+                """));
     }
 
     @Test
-    void validateLoanChargesRejectsPeriodicChargesInLoanPayload() {
-        when(charge.isLoanPeriodic()).thenReturn(true);
-        when(charge.getCurrencyCode()).thenReturn("USD");
-        when(charge.getChargeTimeType()).thenReturn(ChargeTimeType.LOAN_PERIODIC.getValue());
-        when(charge.getChargeCalculation()).thenReturn(ChargeCalculationType.FLAT.getValue());
-        when(charge.getChargePaymentMode()).thenReturn(ChargePaymentMode.REGULAR.getValue());
-        when(loanProduct.hasCurrencyCodeOf("USD")).thenReturn(true);
-
-        JsonElement element = fromJsonHelper.parse("""
-                {
-                  "locale": "en",
-                  "dateFormat": "dd MMMM yyyy",
-                  "expectedDisbursementDate": "01 January 2024",
-                  "charges": [
-                    {
-                      "chargeId": 1,
-                      "amount": 100,
-                      "dueDate": "15 January 2024"
-                    }
-                  ]
-                }
-                """);
-        DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(new ArrayList<ApiParameterError>()).resource("loan");
-
-        assertThatThrownBy(() -> underTest.validateLoanCharges(element, loanProduct, baseDataValidator))
-                .isInstanceOf(LoanChargeCannotBeAddedException.class)
-                .hasMessageContaining("Periodic charge cannot be added to the loan manually.");
-    }
-
-    @Test
-    void validateAddLoanChargeAllowsNonPeriodicCharges() {
-        when(charge.isLoanPeriodic()).thenReturn(false);
-
+    void validateAddLoanChargeAllowsChargesWithDueDate() {
         assertDoesNotThrow(() -> underTest.validateAddLoanCharge("""
                 {
                   "chargeId": 1,
                   "amount": 100,
+                  "dueDate": "15 January 2024",
+                  "dateFormat": "dd MMMM yyyy",
                   "locale": "en"
                 }
                 """));

@@ -31,18 +31,18 @@ class MnzlJobNameConfigTest {
     void providerExposesMnzlManagedLoanJobs() {
         var provider = new MnzlJobNameConfig().mnzlJobNameProvider();
 
-        assertThat(provider.provide()).extracting("enumStyleName").contains(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(),
-                JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), MnzlJobName.APPLY_PERIODIC_LOAN_CHARGES.name());
+        assertThat(provider.provide()).extracting("enumStyleName").containsExactlyInAnyOrder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(),
+                JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name());
     }
 
     @Test
-    void changelogContainsPeriodicLoanChargeJobMetadata() throws IOException {
+    void changelogRemovesLegacyPeriodicLoanChargeJobRow() throws IOException {
         try (var inputStream = getClass().getClassLoader().getResourceAsStream("db/custom-changelog/0001_mnzl_loan_job.xml")) {
             assertThat(inputStream).isNotNull();
             final String changelog = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
 
-            assertThat(changelog).contains("Apply Periodic Loan Charges");
-            assertThat(changelog).contains("LA_PLC");
+            assertThat(changelog).contains("<delete tableName=\"job\">");
+            assertThat(changelog).contains("name='Apply Periodic Loan Charges'");
         }
     }
 }

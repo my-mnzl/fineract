@@ -16,20 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package co.mnzl.fineract.custom.loan.job;
 
-public enum MnzlJobName {
-
-    APPLY_PERIODIC_LOAN_CHARGES("Apply Periodic Loan Charges");
-
-    private final String name;
-
-    MnzlJobName(final String name) {
-        this.name = name;
+dependencies {
+    implementation(project(':fineract-core'))
+    implementation(project(':fineract-cob'))
+    implementation(project(':fineract-charge'))
+    implementation(project(':fineract-loan'))
+    implementation(project(':fineract-provider'))
+    implementation('org.springframework.boot:spring-boot-starter')
+    implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+    implementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
+        exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
     }
-
-    @Override
-    public String toString() {
-        return this.name;
-    }
+    testImplementation('org.springframework.boot:spring-boot-starter-test')
 }

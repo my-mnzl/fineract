@@ -332,26 +332,11 @@ public final class DateUtils {
             return -getDifferenceInDaysFor30DayMonth(second, first);
         }
 
+        // 30E/360 convention
         final int adjustedStartDay = Math.min(30, first.getDayOfMonth());
         final int adjustedEndDay = Math.min(30, second.getDayOfMonth());
-        if (first.getMonthValue() == second.getMonthValue() && first.getYear() == second.getYear()) {
-            return adjustedEndDay - adjustedStartDay;
-        }
-
-        int daysRemainingInStartMonth = 30 - adjustedStartDay;
-        if (first.getDayOfMonth() > 30) {
-            daysRemainingInStartMonth++;
-        }
-
-        final LocalDate startOfNextMonth = first.withDayOfMonth(1).plusMonths(1);
-        final LocalDate startOfEndMonth = second.withDayOfMonth(1);
-        int fullMonthsBetween = 0;
-        if (!startOfNextMonth.isAfter(startOfEndMonth)) {
-            fullMonthsBetween = getExactDifference(startOfNextMonth, startOfEndMonth, ChronoUnit.MONTHS);
-        }
-
-        final int daysIntoEndMonth = adjustedEndDay - 1;
-        return daysRemainingInStartMonth + (fullMonthsBetween * 30) + daysIntoEndMonth;
+        return ((second.getYear() - first.getYear()) * 360) + ((second.getMonthValue() - first.getMonthValue()) * 30)
+                + (adjustedEndDay - adjustedStartDay);
     }
 
     public static LocalDate minusDays(LocalDate first, int days) {
