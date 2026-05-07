@@ -51,6 +51,7 @@ import org.apache.fineract.portfolio.common.domain.DaysInMonthType;
 import org.apache.fineract.portfolio.common.domain.DaysInYearType;
 import org.apache.fineract.portfolio.loanaccount.data.HolidayDetailDTO;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.CumulativeDecliningBalanceInterestLoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.DefaultPaymentPeriodsInOneYearCalculator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.DefaultScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
@@ -142,6 +143,190 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
         // the unguarded 650k baseline (97,664.24) and be strictly above the guarded rehab value (97,212.85).
         assertThat(schedule.getTotalInterestCharged()).as("near-miss principal uses unguarded 30E/360 path")
                 .isGreaterThan(new BigDecimal("97500.00"));
+    }
+
+    @Test
+    void idealPeriodPath_matchesUpstreamReference() {
+        // Branch coverage: when actualPeriodDays == idealPeriodDays the extra-interest branch in
+        // calculatePrincipalInterestComponentsForPeriod must not fire and the custom generator must reproduce the
+        // upstream reference output exactly. Use a 120k @ 12% loan with disbursement on first-of-month so the first
+        // period is a normal 30-day period under 30E/360, sidestepping the rehab guard (650k principal) entirely.
+        BigDecimal idealPrincipal = BigDecimal.valueOf(120_000L);
+        BigDecimal idealRate = BigDecimal.valueOf(12);
+        LocalDate idealDisburse = LocalDate.of(2026, 4, 1);
+        LocalDate idealFirstRepayment = LocalDate.of(2026, 5, 1);
+
+        LoanApplicationTerms terms = idealLoanApplicationTerms(idealPrincipal, idealRate, idealDisburse, idealFirstRepayment, null, null);
+        LoanScheduleModel custom = newGenerator().generate(MC, terms, Collections.emptySet(), holidayDetailDTO());
+
+        LoanApplicationTerms termsForUpstream = idealLoanApplicationTerms(idealPrincipal, idealRate, idealDisburse, idealFirstRepayment,
+                null, null);
+        LoanScheduleModel upstream = new CumulativeDecliningBalanceInterestLoanScheduleGenerator(new DefaultScheduledDateGenerator(),
+                new DefaultPaymentPeriodsInOneYearCalculator(), mock(LoanTransactionRepository.class), mock(CurrencyMapper.class))
+                .generate(MC, termsForUpstream, Collections.emptySet(), holidayDetailDTO());
+
+        assertThat(custom.getTotalInterestCharged()).as("ideal-period total interest matches upstream reference")
+                .isEqualByComparingTo(upstream.getTotalInterestCharged());
+        for (int n = 1; n <= 12; n++) {
+            LoanScheduleModelPeriod customP = period(custom, n);
+            LoanScheduleModelPeriod upstreamP = period(upstream, n);
+            assertThat(customP.principalDue()).as("ideal-period principal_%d matches upstream", n).isCloseTo(upstreamP.principalDue(),
+                    org.assertj.core.data.Offset.offset(new BigDecimal("0.01")));
+            assertThat(customP.interestDue()).as("ideal-period interest_%d matches upstream", n).isCloseTo(upstreamP.interestDue(),
+                    org.assertj.core.data.Offset.offset(new BigDecimal("0.01")));
+            assertThat(customP.periodDueDate()).as("ideal-period due-date_%d matches upstream", n).isEqualTo(upstreamP.periodDueDate());
+        }
+    }
+
+    @Test
+    void extendedFirstPeriod_withoutFixedEmi_scalesInterest() {
+        // Stub first period: disburse Apr-15 -> first repayment Jun-1 (46 days under 30E/360). With no explicit
+        // fixedEmiAmount supplied, the cumulative path still populates fixedEmi internally via pmtForInstallment, so
+        // the extended-period branch fires and routes the stub through calculateFixedInterestWithRateChanges.
+        // We assert: (a) total principal balances out to disbursed, (b) first-period interest is greater than the
+        // standard 30-day base (1200) because the 46-day stub charges proportionally more interest.
+        BigDecimal idealPrincipal = BigDecimal.valueOf(120_000L);
+        BigDecimal idealRate = BigDecimal.valueOf(12);
+        LocalDate disburse = LocalDate.of(2026, 4, 15);
+        LocalDate firstRepayment = LocalDate.of(2026, 6, 1);
+
+        LoanApplicationTerms terms = idealLoanApplicationTerms(idealPrincipal, idealRate, disburse, firstRepayment, null, null);
+        LoanScheduleModel schedule = newGenerator().generate(MC, terms, Collections.emptySet(), holidayDetailDTO());
+
+        BigDecimal totalPrincipal = schedule.getPeriods().stream().filter(p -> p.principalDue() != null)
+                .map(LoanScheduleModelPeriod::principalDue).reduce(ZERO, BigDecimal::add);
+        assertThat(totalPrincipal).as("total principal balances to disbursed").isEqualByComparingTo(idealPrincipal);
+
+        BigDecimal firstInterest = period(schedule, 1).interestDue();
+        BigDecimal secondInterest = period(schedule, 2).interestDue();
+        // Normal 30-day period interest at 12%/360 on 120k = 1200. The 46-day stub must charge strictly more.
+        BigDecimal normalPeriodInterest = new BigDecimal("1200.00");
+        assertThat(firstInterest).as("extended first-period interest exceeds normal-period interest").isGreaterThan(normalPeriodInterest);
+        assertThat(firstInterest).as("extended first-period interest exceeds installment-2 interest").isGreaterThan(secondInterest);
+    }
+
+    @Test
+    void extendedFirstPeriod_withFixedEmi_preservesEmi_recalcInterest() {
+        // Same stubbed schedule with an explicit fixedEmiAmount. The cumulative generator preserves EMI on
+        // installments 2..N and routes the stub interest through calculateFixedInterestWithRateChanges. Note: the
+        // first installment is NOT total-due-equal-to-EMI by design (the principal_1 follows the ideal-EMI
+        // distribution while interest_1 reflects the actual stub day count) — see
+        // ExtendedFirstPeriodFixedExtraInterestTest.
+        BigDecimal idealPrincipal = BigDecimal.valueOf(120_000L);
+        BigDecimal idealRate = BigDecimal.valueOf(12);
+        LocalDate disburse = LocalDate.of(2026, 4, 15);
+        LocalDate firstRepayment = LocalDate.of(2026, 6, 1);
+        BigDecimal fixedEmi = new BigDecimal("10661.85");
+
+        LoanApplicationTerms terms = idealLoanApplicationTerms(idealPrincipal, idealRate, disburse, firstRepayment, null, fixedEmi);
+        LoanScheduleModel schedule = newGenerator().generate(MC, terms, Collections.emptySet(), holidayDetailDTO());
+
+        // Installments 2..11 (excluding final period rounding) must equal the explicit fixedEmi within 1.00 EGP.
+        for (int n = 2; n <= 11; n++) {
+            LoanScheduleModelPeriod p = period(schedule, n);
+            BigDecimal totalDue = p.principalDue().add(p.interestDue());
+            assertThat(totalDue).as("installment %d totalDue ~= fixedEmiAmount", n).isCloseTo(fixedEmi,
+                    org.assertj.core.data.Offset.offset(new BigDecimal("1.00")));
+        }
+        // First-period interest must exceed normal-period interest (46-day stub vs 30-day base).
+        BigDecimal firstInterest = period(schedule, 1).interestDue();
+        BigDecimal secondInterest = period(schedule, 2).interestDue();
+        assertThat(firstInterest).as("first-period interest scales with stub days under fixedEmi").isGreaterThan(secondInterest);
+    }
+
+    @Test
+    void contractedFirstPeriod_rehabSignature_appliesMinusOneDay() {
+        // Pins the rehab one-off guard. The production guard matches on (principal=650k, disbursement=2026-02-17,
+        // first repayment=2026-04-01) — there is no loanId field in LoanApplicationTerms. When the signature hits,
+        // the generator subtracts one day from the stub period end (Feb 17 -> Apr 1: 44 -> 43 days under 30E/360),
+        // yielding the legacy v3 first-installment interest of 19409.72 EGP. This is the exact rehab path locked by
+        // m_loan_repayment_schedule_history v3.
+        LoanScheduleModel schedule = newGenerator().generate(MC, loanApplicationTerms(), Collections.emptySet(), holidayDetailDTO());
+        LoanScheduleModelPeriod first = period(schedule, 1);
+        assertThat(first.interestDue()).as("rehab guard yields v3 first-period interest").isEqualByComparingTo(new BigDecimal("19409.72"));
+    }
+
+    @Test
+    void contractedFirstPeriod_otherLoanShape_doesNotApplyAdjustment() {
+        // The guard does NOT key on loanId — there is no such field. It keys on the full three-part signature.
+        // Vary just the principal (650_001 vs 650_000); disbursement + first-repayment match. The guard must NOT fire
+        // and the generator must take the standard 30E/360 44-day stub path. The expected first-period interest in
+        // this configuration scales linearly with principal, so it is strictly greater than the rehab 19409.72 value
+        // (which used 43 days on 650k).
+        BigDecimal nearMissPrincipal = new BigDecimal("650001");
+        LoanScheduleModel schedule = newGenerator().generate(MC, loanApplicationTerms(nearMissPrincipal, FIRST_REPAYMENT_DATE),
+                Collections.emptySet(), holidayDetailDTO());
+        LoanScheduleModelPeriod first = period(schedule, 1);
+        assertThat(first.interestDue()).as("non-rehab signature must not snap to 19409.72")
+                .isNotEqualByComparingTo(new BigDecimal("19409.72"));
+        // 44-day stub on 650_001 @ 25%/360 = 19861.14, strictly greater than the guarded 43-day rehab value.
+        assertThat(first.interestDue()).as("standard 30E/360 44-day stub interest is strictly above rehab value")
+                .isGreaterThan(new BigDecimal("19409.72"));
+    }
+
+    @Test
+    void repaymentsStartingFromDate_explicitStubVsImplicitOnePeriod_diverges() {
+        // The schedule output diverges when repaymentsStartingFromDate is set to a stubbed value (Jun-1) versus the
+        // natural one-period-out implicit/explicit case (May-1). FirstPeriodNoRepaymentsStartingFromDateTest already
+        // pins the implicit-vs-explicit-equal case; this test captures the explicit-stub vs implicit-natural
+        // divergence.
+        BigDecimal idealPrincipal = BigDecimal.valueOf(120_000L);
+        BigDecimal idealRate = BigDecimal.valueOf(12);
+        LocalDate disburse = LocalDate.of(2026, 4, 1);
+
+        LoanApplicationTerms implicitNaturalTerms = idealLoanApplicationTerms(idealPrincipal, idealRate, disburse, null, null, null);
+        LoanApplicationTerms explicitStubTerms = idealLoanApplicationTerms(idealPrincipal, idealRate, disburse, LocalDate.of(2026, 6, 1),
+                null, null);
+
+        LoanScheduleModel implicit = newGenerator().generate(MC, implicitNaturalTerms, Collections.emptySet(), holidayDetailDTO());
+        LoanScheduleModel explicitStub = newGenerator().generate(MC, explicitStubTerms, Collections.emptySet(), holidayDetailDTO());
+
+        assertThat(period(explicitStub, 1).periodDueDate()).as("explicit-stub first due-date differs from implicit-natural")
+                .isNotEqualTo(period(implicit, 1).periodDueDate());
+        assertThat(explicitStub.getTotalInterestCharged()).as("explicit-stub total interest differs from implicit-natural")
+                .isNotEqualByComparingTo(implicit.getTotalInterestCharged());
+    }
+
+    @Test
+    void interestChargedFromDate_setVsUnset_diverges() {
+        // interestChargedFromDate shifts the first-period interest accrual start. Compare a loan with
+        // interestChargedFromDate equal to disbursement (no-op) against one with interestChargedFromDate ten days
+        // before disbursement; the latter must charge more first-period interest because the accrual window is wider.
+        BigDecimal idealPrincipal = BigDecimal.valueOf(120_000L);
+        BigDecimal idealRate = BigDecimal.valueOf(12);
+        LocalDate disburse = LocalDate.of(2026, 4, 15);
+        LocalDate firstRepayment = LocalDate.of(2026, 6, 1);
+
+        LoanApplicationTerms baselineTerms = idealLoanApplicationTerms(idealPrincipal, idealRate, disburse, firstRepayment, disburse, null);
+        LoanApplicationTerms shiftedTerms = idealLoanApplicationTerms(idealPrincipal, idealRate, disburse, firstRepayment,
+                disburse.minusDays(10), null);
+
+        LoanScheduleModel baseline = newGenerator().generate(MC, baselineTerms, Collections.emptySet(), holidayDetailDTO());
+        LoanScheduleModel shifted = newGenerator().generate(MC, shiftedTerms, Collections.emptySet(), holidayDetailDTO());
+
+        BigDecimal baselineFirstInterest = period(baseline, 1).interestDue();
+        BigDecimal shiftedFirstInterest = period(shifted, 1).interestDue();
+        assertThat(shiftedFirstInterest).as("interestChargedFromDate=disburse-10d charges more first-period interest")
+                .isGreaterThan(baselineFirstInterest);
+    }
+
+    private static LoanScheduleModelPeriod period(LoanScheduleModel schedule, int number) {
+        return schedule.getPeriods().stream().filter(p -> p.periodNumber() != null && p.periodNumber() == number).findFirst()
+                .orElseThrow(() -> new AssertionError("missing installment " + number));
+    }
+
+    private LoanApplicationTerms idealLoanApplicationTerms(BigDecimal principal, BigDecimal annualRate, LocalDate disbursementDate,
+            LocalDate firstRepaymentDate, LocalDate interestChargedFromDate, BigDecimal fixedEmiAmount) {
+        Money principalMoney = Money.of(fromApplicationCurrency(CURRENCY), principal);
+        Money zeroTolerance = Money.of(fromApplicationCurrency(CURRENCY), ZERO);
+        return LoanApplicationTerms.assembleFrom(CURRENCY.toData(), 12, MONTHS, 12, 1, MONTHS, null, INVALID, EQUAL_INSTALLMENTS,
+                DECLINING_BALANCE, ZERO, MONTHS, annualRate, SAME_AS_REPAYMENT_PERIOD, true, principalMoney, disbursementDate,
+                firstRepaymentDate, firstRepaymentDate, null, null, null, null, interestChargedFromDate, zeroTolerance, false,
+                fixedEmiAmount, Collections.emptyList(), principal, null, DaysInMonthType.DAYS_30, DaysInYearType.DAYS_360, true,
+                RecalculationFrequencyType.SAME_AS_REPAYMENT_PERIOD, null, InterestRecalculationCompoundingMethod.NONE, null, null, ZERO,
+                null, NONE, null, ZERO, Collections.emptyList(), true, 0, false, holidayDetailDTO(), false, false, false, null, false,
+                false, null, false, DISBURSEMENT_DATE, SUBMITTED_ON_DATE, CUMULATIVE, LoanScheduleProcessingType.HORIZONTAL, null, false,
+                null, null, false, null, false, null, null, null, false, null, null, null, false);
     }
 
     private static void assertInstallment(LoanScheduleModel schedule, int number, LocalDate dueDate, String principal, String interest) {
