@@ -86,25 +86,33 @@ public final class MnzlProductBuilder {
 
     /** Standard mnzl declining balance product with 30/360 day count. */
     public PostLoanProductsRequest decliningBalance30_360() {
-        return base().daysInMonthType(30).daysInYearType(360);
+        return base("MNZL declining 30/360").daysInMonthType(30).daysInYearType(360);
     }
 
     /** Standard mnzl declining balance product with 30/365 day count. */
     public PostLoanProductsRequest decliningBalance30_365() {
-        return base().daysInMonthType(30).daysInYearType(365);
+        return base("MNZL declining 30/365").daysInMonthType(30).daysInYearType(365);
     }
 
     /** Standard mnzl declining balance product with ACTUAL/ACTUAL day count (Fineract enum value 1 = ACTUAL). */
     public PostLoanProductsRequest decliningBalanceActual() {
-        return base().daysInMonthType(1).daysInYearType(1);
+        return base("MNZL declining ACTUAL").daysInMonthType(1).daysInYearType(1);
     }
 
-    /** Balloon-flavored product (same product config as standard; balloon vs standard is selected via strategy). */
+    /**
+     * Balloon variant. Same product shape as {@link #decliningBalance30_360()} — the balloon flag is selected via the
+     * {@code MNZL_BALLOON_LOAN} instrument code on the strategy table, not via the product config itself. Use this
+     * method via {@link MnzlProductStrategyHelper#setMnzlBalloon} to pin the strategy after creation.
+     */
     public PostLoanProductsRequest balloon30_360() {
-        return base().daysInMonthType(30).daysInYearType(360);
+        return decliningBalance30_360();
     }
 
-    /** Appends charges to the supplied request and returns it. */
+    /**
+     * Replaces the charges on {@code base} with the supplied charge IDs and returns the same instance. Unlike the
+     * variant factory methods on this class, this is a mutator — call it as the last step in the chain when you've
+     * already chosen which variant to use. Existing charges on {@code base} are discarded.
+     */
     public PostLoanProductsRequest withCharges(PostLoanProductsRequest base, Long... chargeIds) {
         List<LoanProductChargeData> charges = new ArrayList<>();
         for (Long id : Arrays.asList(chargeIds)) {
@@ -114,11 +122,11 @@ public final class MnzlProductBuilder {
         return base;
     }
 
-    private PostLoanProductsRequest base() {
+    private PostLoanProductsRequest base(String description) {
         return new PostLoanProductsRequest().name(Utils.uniqueRandomStringGenerator("MNZL_TEST_", 6))
-                .shortName(Utils.uniqueRandomStringGenerator("", 4)).description("MNZL test product").currencyCode("USD")
-                .digitsAfterDecimal(2).principal(120000.0).minPrincipal(1000.0).maxPrincipal(1000000.0).numberOfRepayments(12)
-                .repaymentEvery(1).repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).interestRatePerPeriod(12.0)
+                .shortName(Utils.uniqueRandomStringGenerator("", 4)).description(description).currencyCode("USD").digitsAfterDecimal(2)
+                .principal(120000.0).minPrincipal(1000.0).maxPrincipal(1000000.0).numberOfRepayments(12).repaymentEvery(1)
+                .repaymentFrequencyType(RepaymentFrequencyType.MONTHS_L).interestRatePerPeriod(12.0)
                 .interestRateFrequencyType(InterestRateFrequencyType.YEARS).amortizationType(AmortizationType.EQUAL_INSTALLMENTS)
                 .interestType(InterestType.DECLINING_BALANCE)
                 .interestCalculationPeriodType(InterestCalculationPeriodType.SAME_AS_REPAYMENT_PERIOD).includeInBorrowerCycle(false)
@@ -145,6 +153,8 @@ public final class MnzlProductBuilder {
                 .goodwillCreditAccountId(goodwillExpenseAccount.getAccountID().longValue())
                 .incomeFromGoodwillCreditInterestAccountId(interestIncomeChargeOffAccount.getAccountID().longValue())
                 .incomeFromGoodwillCreditFeesAccountId(feeChargeOffAccount.getAccountID().longValue())
+                // TODO(mnzl): mirrors a pre-existing bug at MnzlDecliningBalanceLoanIntegrationTest.java:397
+                // — should likely be penaltyChargeOffAccount; preserved here so any fix lands in one place
                 .incomeFromGoodwillCreditPenaltyAccountId(feeChargeOffAccount.getAccountID().longValue())
                 .incomeFromChargeOffInterestAccountId(interestIncomeChargeOffAccount.getAccountID().longValue())
                 .incomeFromChargeOffFeesAccountId(feeChargeOffAccount.getAccountID().longValue())
