@@ -33,11 +33,13 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.service.InlineExecutorService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
@@ -45,6 +47,9 @@ import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +57,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class MnzlLoanSimulationRunnerTest {
@@ -68,6 +74,14 @@ class MnzlLoanSimulationRunnerTest {
     @Mock
     private PlatformSecurityContext securityContext;
     @Mock
+    private LoanProductRepository loanProductRepository;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+    @Mock
+    private LoanScheduleCalculationPlatformService scheduleCalculationService;
+    @Mock
+    private FromJsonHelper fromJsonHelper;
+    @Mock
     private AppUser appUser;
     @Mock
     private Office office;
@@ -76,6 +90,8 @@ class MnzlLoanSimulationRunnerTest {
     @Mock
     private LoanSummary loanSummary;
     @Mock
+    private LoanProduct loanProduct;
+    @Mock
     private CommandProcessingResult commandResult;
 
     private MnzlLoanSimulationRunner runner;
@@ -83,7 +99,8 @@ class MnzlLoanSimulationRunnerTest {
 
     @BeforeEach
     void setUp() {
-        runner = new MnzlLoanSimulationRunner(commandService, loanRepositoryWrapper, inlineLoanCOBExecutorService, securityContext);
+        runner = new MnzlLoanSimulationRunner(commandService, loanRepositoryWrapper, inlineLoanCOBExecutorService, securityContext,
+                loanProductRepository, jdbcTemplate, scheduleCalculationService, fromJsonHelper);
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "Asia/Kolkata", null));
         originalDates = new HashMap<>();
         originalDates.put(BusinessDateType.BUSINESS_DATE, LocalDate.of(2026, 1, 1));
@@ -115,10 +132,8 @@ class MnzlLoanSimulationRunnerTest {
         lenient().when(loan.getRepaymentScheduleInstallments()).thenReturn(Collections.emptyList());
         lenient().when(loan.getLoanTransactions()).thenReturn(Collections.emptyList());
         lenient().when(loan.getApprovedPrincipal()).thenReturn(BigDecimal.valueOf(100000));
-
-        // During cleanup: first call -> written-off (triggers undo), after undo -> not written-off
-        when(loan.isClosedWrittenOff()).thenReturn(true, false);
-        when(loan.isOpen()).thenReturn(true);
+        lenient().when(loan.isClosedWrittenOff()).thenReturn(true, false);
+        lenient().when(loan.isOpen()).thenReturn(true);
         lenient().when(loan.isApproved()).thenReturn(true);
 
         SimulationRequest request = SimulationRequest.builder().name("Write-off test").loanProductId(1L)
@@ -164,6 +179,8 @@ class MnzlLoanSimulationRunnerTest {
         lenient().when(securityContext.authenticatedUser()).thenReturn(appUser);
         lenient().when(appUser.getOffice()).thenReturn(office);
         lenient().when(office.getId()).thenReturn(1L);
+        lenient().when(loanProductRepository.findById(any())).thenReturn(Optional.of(loanProduct));
+        lenient().when(loanProduct.isLinkedToFloatingInterestRate()).thenReturn(false);
     }
 
     private void setupCommandService() {
