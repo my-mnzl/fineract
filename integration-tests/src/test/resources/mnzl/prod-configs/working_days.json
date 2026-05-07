@@ -1,0 +1,9 @@
+[
+  {
+    "id": 1,
+    "recurrence": "FREQ=WEEKLY;INTERVAL=1;BYDAY=SU,MO,TU,WE,TH,",
+    "repaymentReschedulingEnum": 2,
+    "extendTermDailyRepayments": 0,
+    "extendTermHolidayRepayment": 0
+  }
+]
