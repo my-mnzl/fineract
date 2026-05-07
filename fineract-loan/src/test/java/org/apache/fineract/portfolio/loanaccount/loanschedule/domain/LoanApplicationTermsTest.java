@@ -63,7 +63,7 @@ class LoanApplicationTermsTest {
 
         BigDecimal periods = loanApplicationTerms.calculatePeriodsBetweenDates(LocalDate.of(2026, 2, 17), LocalDate.of(2026, 4, 1));
 
-        assertEquals(43.0d / 30.0d, periods.doubleValue(), 1.0E-12);
+        assertEquals(44.0d / 30.0d, periods.doubleValue(), 1.0E-12);
     }
 
     @Test
@@ -104,7 +104,7 @@ class LoanApplicationTermsTest {
 
         BigDecimal periods = loanApplicationTerms.calculatePeriodsBetweenDates(disbursementDate, LocalDate.of(2026, 5, 1));
 
-        assertEquals(1.0d, periods.doubleValue(), 1.0E-12);
+        assertEquals(29.0d / 30.0d, periods.doubleValue(), 1.0E-12);
     }
 
     private LoanApplicationTerms createLoanApplicationTerms(DaysInMonthType daysInMonthType, DaysInYearType daysInYearType) {

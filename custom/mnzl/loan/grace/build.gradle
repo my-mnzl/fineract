@@ -16,19 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+description = 'Custom Loan Working-Day Grace'
 
-dependencies {
-    implementation(project(':fineract-charge'))
-    implementation(project(':fineract-core'))
-    implementation(project(':fineract-loan'))
-    implementation(project(':fineract-provider'))
-    implementation(project(':fineract-savings'))
-    implementation('org.springframework.boot:spring-boot-starter-batch')
-    implementation('org.springframework.boot:spring-boot-starter')
-    implementation('org.springframework.boot:spring-boot-starter-data-jpa')
-    implementation('com.google.code.gson:gson')
-    implementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
-        exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
-    }
-    testImplementation('org.springframework.boot:spring-boot-starter-test')
+group = 'co.mnzl.fineract.custom'
+
+base {
+    archivesName = 'custom-mnzl-loan-grace'
 }
+
+apply from: 'dependencies.gradle'

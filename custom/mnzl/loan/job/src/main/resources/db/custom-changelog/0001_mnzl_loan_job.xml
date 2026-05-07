@@ -64,4 +64,10 @@
             <where>name='Apply Periodic Loan Charges'</where>
         </update>
     </changeSet>
+
+    <changeSet author="mnzl" id="5">
+        <delete tableName="job">
+            <where>name='Apply Periodic Loan Charges'</where>
+        </delete>
+    </changeSet>
 </databaseChangeLog>

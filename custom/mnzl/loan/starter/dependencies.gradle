@@ -25,6 +25,7 @@ dependencies {
     implementation(project(':custom:mnzl:instrument:balloon-loan'))
     implementation(project(':custom:mnzl:instrument:loan-api'))
     implementation(project(':custom:mnzl:loan:cob'))
+    implementation(project(':custom:mnzl:loan:grace'))
     implementation(project(':custom:mnzl:loan:job'))
     implementation(project(':custom:mnzl:loan:schedule-api'))
     implementation(project(':custom:mnzl:loan:schedule-engine'))
