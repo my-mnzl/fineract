@@ -20,7 +20,6 @@ package co.mnzl.fineract.custom.loan.simulator.service;
 
 import co.mnzl.fineract.custom.loan.simulator.data.SchedulePreviewPeriod;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationActionRequest;
-import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationSnapshot;
@@ -43,23 +42,24 @@ import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformS
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.jobs.service.InlineExecutorService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
-import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
-import org.springframework.jdbc.core.ConnectionCallback;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModelPeriod;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -129,7 +129,7 @@ public class MnzlLoanSimulationRunner {
             log.info("Simulation: created test client {}", clientId);
 
             // 2. Open a linked savings account (needed for ACCOUNT_TRANSFER charges
-            //    like the insurance fee — mirrors the production origination flow).
+            // like the insurance fee — mirrors the production origination flow).
             savingsId = createSimulatedSavingsAccount(clientId);
             if (savingsId != null) {
                 log.info("Simulation: created linked savings account {}", savingsId);
@@ -230,12 +230,11 @@ public class MnzlLoanSimulationRunner {
     }
 
     /**
-     * Open a linked savings account for the simulated client. Mirrors production:
-     * create → approve → activate, all dated at the client activation date so the
-     * account exists before the loan submission date.
+     * Open a linked savings account for the simulated client. Mirrors production: create → approve → activate, all
+     * dated at the client activation date so the account exists before the loan submission date.
      *
-     * Returns null (and logs) when no savings product exists — the simulation
-     * continues, but ACCOUNT_TRANSFER-mode charges won't attach.
+     * Returns null (and logs) when no savings product exists — the simulation continues, but ACCOUNT_TRANSFER-mode
+     * charges won't attach.
      */
     private Long createSimulatedSavingsAccount(Long clientId) {
         Long productId = resolveSavingsProductId();
@@ -317,12 +316,13 @@ public class MnzlLoanSimulationRunner {
     }
 
     /**
-     * Build the loan-application JSON that Fineract's loan APIs accept.
-     * Shared between {@link #createLoanApplication} and schedule preview so
-     * both go through the exact same rate / product / date logic.
+     * Build the loan-application JSON that Fineract's loan APIs accept. Shared between {@link #createLoanApplication}
+     * and schedule preview so both go through the exact same rate / product / date logic.
      *
-     * @param clientId  clientId for real applications; null/omitted for previews
-     * @param savingsId linked savings account id; null to skip the linkAccountId field
+     * @param clientId
+     *            clientId for real applications; null/omitted for previews
+     * @param savingsId
+     *            linked savings account id; null to skip the linkAccountId field
      */
     JsonObject buildLoanApplicationJson(SimulationRequest request, Long clientId, Long savingsId) {
         LoanProduct loanProduct = loanProductRepository.findById(request.getLoanProductId())
@@ -335,7 +335,8 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("productId", request.getLoanProductId());
         json.addProperty("principal", request.getPrincipal());
         int repaymentEvery = request.getRepaymentEvery() != null ? request.getRepaymentEvery() : 1;
-        int frequencyType = request.getRepaymentFrequencyType() != null ? request.getRepaymentFrequencyType() : 2; // default MONTHS
+        int frequencyType = request.getRepaymentFrequencyType() != null ? request.getRepaymentFrequencyType() : 2; // default
+                                                                                                                   // MONTHS
         json.addProperty("loanTermFrequency", request.getNumberOfRepayments() * repaymentEvery);
         json.addProperty("loanTermFrequencyType", frequencyType);
         json.addProperty("numberOfRepayments", request.getNumberOfRepayments());
@@ -617,12 +618,12 @@ public class MnzlLoanSimulationRunner {
     }
 
     /**
-     * Calculate the expected repayment schedule for a request without creating a loan.
-     * Reuses {@link #buildLoanApplicationJson} so the preview exactly matches what
-     * {@link #run} would produce at disbursement time.
+     * Calculate the expected repayment schedule for a request without creating a loan. Reuses
+     * {@link #buildLoanApplicationJson} so the preview exactly matches what {@link #run} would produce at disbursement
+     * time.
      *
-     * Used by the frontend to seed presets (Happy Path, etc.) with the exact
-     * per-installment amounts the loan will actually bill.
+     * Used by the frontend to seed presets (Happy Path, etc.) with the exact per-installment amounts the loan will
+     * actually bill.
      */
     public List<SchedulePreviewPeriod> previewSchedule(SimulationRequest request) {
         // Preview doesn't create a client/loan, so omit clientId and skip
@@ -637,12 +638,10 @@ public class MnzlLoanSimulationRunner {
             if (!p.isRepaymentPeriod()) continue;
             BigDecimal totalDue = safe(p.principalDue()).add(safe(p.interestDue())).add(safe(p.feeChargesDue()))
                     .add(safe(p.penaltyChargesDue()));
-            periods.add(SchedulePreviewPeriod.builder().period(p.periodNumber())
-                    .dueDate(p.periodDueDate().format(DATE_FORMAT)).principalDue(safe(p.principalDue()))
-                    .interestDue(safe(p.interestDue())).feeChargesDue(safe(p.feeChargesDue()))
-                    .penaltyChargesDue(safe(p.penaltyChargesDue())).totalDue(totalDue)
-                    .principalOutstanding(safe(p.principalDue())).interestOutstanding(safe(p.interestDue()))
-                    .totalOutstanding(totalDue).build());
+            periods.add(SchedulePreviewPeriod.builder().period(p.periodNumber()).dueDate(p.periodDueDate().format(DATE_FORMAT))
+                    .principalDue(safe(p.principalDue())).interestDue(safe(p.interestDue())).feeChargesDue(safe(p.feeChargesDue()))
+                    .penaltyChargesDue(safe(p.penaltyChargesDue())).totalDue(totalDue).principalOutstanding(safe(p.principalDue()))
+                    .interestOutstanding(safe(p.interestDue())).totalOutstanding(totalDue).build());
         }
         return periods;
     }

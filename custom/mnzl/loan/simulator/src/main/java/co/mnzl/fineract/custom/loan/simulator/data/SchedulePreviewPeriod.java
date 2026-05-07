@@ -16,10 +16,9 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * Wire-format schedule row for the preview endpoint. Uses a {@code String}
- * dueDate so the default serializer emits an ISO date string, matching the
- * frontend's SchedulePeriod type. (Fineract's shared Gson adapter for
- * LocalDate isn't applied to this custom module's responses.)
+ * Wire-format schedule row for the preview endpoint. Uses a {@code String} dueDate so the default serializer emits an
+ * ISO date string, matching the frontend's SchedulePeriod type. (Fineract's shared Gson adapter for LocalDate isn't
+ * applied to this custom module's responses.)
  */
 @Getter
 @Builder
