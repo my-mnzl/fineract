@@ -19,8 +19,10 @@
 package org.apache.fineract.integrationtests.mnzl.helpers;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -56,7 +58,7 @@ public final class MnzlProductStrategyHelper {
     }
 
     /** Convenience: full mnzl override (declining balance + interest&penalties + custom COB). */
-    public void setMnzlOverride(Long productId) {
+    public void setMnzl(Long productId) {
         setStrategy(productId, INSTRUMENT_STANDARD, SCHEDULE_MNZL_DECLINING, CHARGE_MNZL_INTEREST_PENALTIES, COB_MNZL_DUE);
     }
 
@@ -66,13 +68,13 @@ public final class MnzlProductStrategyHelper {
     }
 
     /** Convenience: pin product to core/upstream behavior (for diff tests). */
-    public void setCoreOverride(Long productId) {
+    public void setCore(Long productId) {
         setStrategy(productId, INSTRUMENT_STANDARD, SCHEDULE_CORE, CHARGE_CORE, COB_CORE);
     }
 
-    @SuppressWarnings("unchecked")
     public Map<String, String> getStrategy(Long productId) {
         String body = Utils.performServerGet(request, response, String.format(URL, productId), null);
-        return new Gson().fromJson(body, Map.class);
+        Type mapType = new TypeToken<Map<String, String>>() {}.getType();
+        return new Gson().fromJson(body, mapType);
     }
 }
