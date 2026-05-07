@@ -32,4 +32,10 @@ public class SimulationResult {
     private final SimulationStatus status;
     private final String errorMessage;
     private final List<SimulationSnapshot> snapshots;
+    /**
+     * Original request that produced this run. Populated when reading saved simulations so callers can rehydrate the
+     * inputs (loan product, principal, dates, actions). May be null on transient results returned mid-flight (e.g. the
+     * synchronous response from POST /simulations before the run starts).
+     */
+    private final SimulationRequest request;
 }

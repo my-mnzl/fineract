@@ -267,7 +267,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     private static final Type SNAPSHOT_LIST_TYPE = new TypeToken<List<SimulationSnapshot>>() {}.getType();
 
-    private static final class SimulationRowMapper implements RowMapper<SimulationResult> {
+    private final class SimulationRowMapper implements RowMapper<SimulationResult> {
 
         @Override
         public SimulationResult mapRow(ResultSet rs, int rowNum) throws SQLException {
@@ -275,9 +275,21 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
             List<SimulationSnapshot> snapshots = resultJson != null ? GSON.fromJson(resultJson, SNAPSHOT_LIST_TYPE)
                     : Collections.emptyList();
 
+            String scenarioJson = rs.getString("scenario_json");
+            SimulationRequest request = scenarioJson != null ? safeParseRequest(scenarioJson) : null;
+
             return SimulationResult.builder().uuid(rs.getString("uuid")).name(rs.getString("name"))
                     .status(SimulationStatus.fromString(rs.getString("status"))).errorMessage(rs.getString("error_message"))
-                    .snapshots(snapshots).build();
+                    .snapshots(snapshots).request(request).build();
+        }
+    }
+
+    private SimulationRequest safeParseRequest(String json) {
+        try {
+            return parseRequest(json);
+        } catch (RuntimeException e) {
+            log.warn("Failed to parse scenario_json for saved simulation: {}", e.getMessage());
+            return null;
         }
     }
 }
