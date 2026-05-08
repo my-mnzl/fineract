@@ -182,4 +182,91 @@ class MnzlLoanDelinquencyDomainServiceTest {
         data.setDelinquentAmount(BigDecimal.ZERO);
         return data;
     }
+
+    // ---------------------------------------------------------------------
+    // Task C.11 expansions — working-day-aware delinquency semantics
+    // ---------------------------------------------------------------------
+
+    /**
+     * Smoke: when grace=0 the wrapper is a strict passthrough — delegate result is returned unchanged and the
+     * working-day calculator is never consulted. Complements the existing noGraceConfigured / nullDelinquentDate
+     * coverage by asserting the actual returned object identity is the same as the delegate's.
+     */
+    @Test
+    void passthroughBehaviorPreserved() {
+        when(productDetail.getGraceOnArrearsAgeing()).thenReturn(0);
+        CollectionData base = collectionDataWith(LocalDate.of(2025, 2, 20), 7L);
+        when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
+
+        CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
+
+        assertThat(result).isSameAs(base);
+        assertThat(result.getDelinquentDate()).isEqualTo(LocalDate.of(2025, 2, 20));
+        assertThat(result.getDelinquentDays()).isEqualTo(7L);
+        verify(workingDayCalculator, never()).addWorkingDays(any(), anyInt(), any());
+    }
+
+    /**
+     * Weekend in the grace range — mnzl shifts the delinquent date forward and reduces delinquentDays vs upstream.
+     */
+    @Test
+    void workingDayAwareDelinquencyDays_differsFromUpstream_whenWeekendInRange() {
+        when(productDetail.getGraceOnArrearsAgeing()).thenReturn(5);
+        LocalDate overdueSince = LocalDate.of(2025, 1, 5);
+        LocalDate calendarDelinquent = LocalDate.of(2025, 1, 10);
+        // 2 weekend days inside the grace window push the working-day-aware delinquent date out by 2.
+        LocalDate workingDelinquent = LocalDate.of(2025, 1, 12);
+        Long upstreamDelinquentDays = 6L;
+        CollectionData base = collectionDataWith(calendarDelinquent, upstreamDelinquentDays);
+        when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
+        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+
+        CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
+
+        assertThat(result.getDelinquentDate()).isEqualTo(workingDelinquent);
+        assertThat(result.getDelinquentDays()).isLessThan(upstreamDelinquentDays);
+        assertThat(result.getDelinquentDays()).isEqualTo(4L); // 6 − 2 extra grace days
+    }
+
+    /**
+     * All-business-days grace range — mnzl returns the same delinquentDate / delinquentDays as upstream.
+     */
+    @Test
+    void workingDayAwareDelinquencyDays_matchesUpstream_whenNoWeekendOrHoliday() {
+        when(productDetail.getGraceOnArrearsAgeing()).thenReturn(3);
+        // Tuesday → Friday, no weekend/holiday in range.
+        LocalDate overdueSince = LocalDate.of(2025, 1, 7);
+        LocalDate sameDayBothCalcs = LocalDate.of(2025, 1, 10);
+        Long upstreamDelinquentDays = 4L;
+        CollectionData base = collectionDataWith(sameDayBothCalcs, upstreamDelinquentDays);
+        when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
+        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(3), eq(OFFICE_ID))).thenReturn(sameDayBothCalcs);
+
+        CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
+
+        assertThat(result.getDelinquentDate()).isEqualTo(sameDayBothCalcs);
+        assertThat(result.getDelinquentDays()).isEqualTo(upstreamDelinquentDays);
+    }
+
+    /**
+     * Holiday in the grace range — mnzl skips the holiday and returns fewer delinquentDays than upstream.
+     */
+    @Test
+    void workingDayAwareDelinquencyDays_holidayInRange_skipsHoliday() {
+        when(productDetail.getGraceOnArrearsAgeing()).thenReturn(3);
+        LocalDate overdueSince = LocalDate.of(2025, 3, 3); // Monday
+        LocalDate calendarDelinquent = LocalDate.of(2025, 3, 6); // 3 calendar days later
+        // One mid-week holiday inside the window pushes the working-day-aware delinquent date out by 1.
+        LocalDate workingDelinquent = LocalDate.of(2025, 3, 7);
+        Long upstreamDelinquentDays = 5L;
+        CollectionData base = collectionDataWith(calendarDelinquent, upstreamDelinquentDays);
+        when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
+        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(3), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+
+        CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
+
+        assertThat(result.getDelinquentDate()).isEqualTo(workingDelinquent);
+        assertThat(result.getDelinquentDays()).isLessThan(upstreamDelinquentDays);
+        assertThat(result.getDelinquentDays()).isEqualTo(4L); // 5 − 1 extra grace day
+    }
 }
