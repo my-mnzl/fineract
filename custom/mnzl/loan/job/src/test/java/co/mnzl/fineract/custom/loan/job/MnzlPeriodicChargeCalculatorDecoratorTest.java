@@ -220,4 +220,47 @@ class MnzlPeriodicChargeCalculatorDecoratorTest {
         final JsonElement parsed = JsonParser.parseString(json);
         return JsonQuery.from(json, parsed, null);
     }
+
+    // ---------------- C.8 expansions ----------------
+    //
+    // Skipped (already covered by existing methods above):
+    // * previewSchedule_includesProjectedPeriodicCharges -> see
+    // appendsProjectedChargesAndInvokesDelegateTwiceWhenProductHasPeriodicCharges
+    // * previewSchedule_dedupesExistingChargeWithSameKey -> see skipsOccurrencesAlreadyPresentInRequest
+    //
+    // Adapted: the prompt asked about repaymentsStartingFromDate overriding disbursement, but the decorator derives
+    // anchor/maturity from the LoanScheduleModel returned by the delegate, NOT from JSON fields directly. The test
+    // below pins this production behaviour: anchor always comes from the schedule model regardless of JSON values.
+
+    @Test
+    void anchorComesFromScheduleModelEvenWhenJsonHasRepaymentsStartingFromDate() {
+        final LocalDate scheduleAnchor = LocalDate.of(2026, 7, 1);
+        final LocalDate scheduleMaturity = LocalDate.of(2027, 6, 1);
+        final LoanScheduleModelPeriod start = period(scheduleAnchor, true, false);
+        final LoanScheduleModelPeriod end = period(scheduleMaturity, true, false);
+        when(scheduleModel.getPeriods()).thenReturn(List.of(start, end));
+        when(delegate.calculateLoanSchedule(any(JsonQuery.class), anyBoolean())).thenReturn(scheduleModel);
+        when(projectionService.occurrencesBetween(eq(periodicCharge), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(scheduleAnchor));
+
+        final JsonQuery query = makeQuery("""
+                {
+                  "productId": 2,
+                  "dateFormat": "dd MMMM yyyy",
+                  "locale": "en",
+                  "expectedDisbursementDate": "01 January 2026",
+                  "repaymentsStartingFromDate": "01 February 2026",
+                  "charges": []
+                }
+                """);
+
+        decorator.calculateLoanSchedule(query, false);
+
+        final ArgumentCaptor<LocalDate> anchorCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        final ArgumentCaptor<LocalDate> maturityCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        verify(projectionService).occurrencesBetween(eq(periodicCharge), anchorCaptor.capture(), maturityCaptor.capture());
+        // Decorator anchor = schedule model first repayment (07/01), NOT JSON repaymentsStartingFromDate (02/01).
+        assertThat(anchorCaptor.getValue()).isEqualTo(scheduleAnchor);
+        assertThat(maturityCaptor.getValue()).isEqualTo(scheduleMaturity);
+    }
 }

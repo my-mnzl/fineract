@@ -276,4 +276,53 @@ class MnzlLoanChargeAssemblerTest {
         root.getAsJsonArray("charges").forEach(e -> entries.add(e.getAsJsonObject()));
         return entries;
     }
+
+    // ---------------- C.8 expansions ----------------
+    //
+    // Skipped (already covered by existing methods above):
+    // * expandPeriodicChargesWithoutDueDate_singleCharge_expandsToN -> see
+    // expandsPeriodicEntryWithoutDueDateIntoOccurrencesAcrossLoanTerm
+    // * expandPeriodicChargesWithoutDueDate_existingDueDateNotExpanded -> see leavesEntriesWithExplicitDueDateUnchanged
+    // * expandPeriodicChargesWithoutDueDate_anchorFromRepaymentsStartingFromDate -> see
+    // anchorUsesRepaymentsStartingFromDateWhenPresent
+    //
+    // Skipped (not applicable at this layer):
+    // * expandPeriodicChargesWithoutDueDate_dedupeByChargeIdAndDueDate -> the assembler does not dedupe at the
+    // JSON-entry
+    // level; dedupe is enforced downstream (decorator + projection service). Verified against production source.
+
+    @Test
+    void expandPeriodicChargesWithoutDueDate_mixedPeriodicAndOneTime_onlyExpandsPeriodic() {
+        when(projectionService.occurrencesBetween(eq(periodicCharge), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(LocalDate.of(2026, 5, 20), LocalDate.of(2026, 6, 20), LocalDate.of(2026, 7, 20)));
+
+        final JsonObject root = parse("""
+                {
+                  "productId": 2,
+                  "expectedDisbursementDate": "20 April 2026",
+                  "loanTermFrequency": 12,
+                  "loanTermFrequencyType": 2,
+                  "repaymentEvery": 1,
+                  "repaymentFrequencyType": 2,
+                  "dateFormat": "dd MMMM yyyy",
+                  "locale": "en",
+                  "charges": [
+                    {"chargeId": 9, "amount": 0.01},
+                    {"chargeId": 13, "amount": 100.00, "dueDate": "01 May 2026"}
+                  ]
+                }
+                """);
+
+        assembler.expandPeriodicChargesWithoutDueDate(root);
+
+        final List<JsonObject> entries = chargeEntries(root);
+        // 3 expanded periodic occurrences + 1 untouched one-time entry = 4 total entries.
+        assertThat(entries).hasSize(4);
+        // Periodic entries (chargeId=9) keep their amount and gain dueDate.
+        assertThat(entries).filteredOn(e -> e.get("chargeId").getAsLong() == 9L).hasSize(3).extracting(e -> e.get("dueDate").getAsString())
+                .containsExactly("20 May 2026", "20 June 2026", "20 July 2026");
+        // One-time entry (chargeId=13) is preserved verbatim with its original dueDate.
+        assertThat(entries).filteredOn(e -> e.get("chargeId").getAsLong() == 13L).hasSize(1).first()
+                .satisfies(e -> assertThat(e.get("dueDate").getAsString()).isEqualTo("01 May 2026"));
+    }
 }

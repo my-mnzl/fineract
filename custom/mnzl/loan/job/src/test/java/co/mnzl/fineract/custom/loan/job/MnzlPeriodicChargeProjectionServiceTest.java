@@ -18,6 +18,7 @@
  */
 package co.mnzl.fineract.custom.loan.job;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -178,5 +179,212 @@ class MnzlPeriodicChargeProjectionServiceTest {
         when(installment.getDueDate()).thenReturn(dueDate);
         when(installment.isDownPayment()).thenReturn(downPayment);
         return installment;
+    }
+
+    // ---------------- C.8 expansions ----------------
+
+    @Test
+    void occurrencesBetween_daily_returnsEmptyBecauseDailyIsRejected() {
+        // Production explicitly rejects DAILY frequency in occurrencesBetween (treats it like WHOLE_TERM/INVALID).
+        when(chargeDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.DAYS.getValue());
+        when(chargeDefinition.feeInterval()).thenReturn(1);
+
+        final LocalDate anchor = LocalDate.of(2026, 1, 1);
+        final LocalDate maturity = anchor.plusDays(5);
+
+        final List<LocalDate> dates = projectionService.occurrencesBetween(chargeDefinition, anchor, maturity);
+
+        assertThat(dates).isEmpty();
+    }
+
+    @Test
+    void occurrencesBetween_weekly_yieldsExpectedCount() {
+        final LocalDate anchor = LocalDate.of(2026, 1, 5); // Monday
+        final LocalDate maturity = anchor.plusWeeks(4);
+        when(chargeDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.WEEKS.getValue());
+        when(chargeDefinition.feeInterval()).thenReturn(1);
+        // Stub each step (production walks anchor -> anchor+4w inclusive while !isAfter(maturity)).
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.WEEKS, 1, anchor)).thenReturn(anchor.plusWeeks(1));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.WEEKS, 1, anchor.plusWeeks(1)))
+                .thenReturn(anchor.plusWeeks(2));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.WEEKS, 1, anchor.plusWeeks(2)))
+                .thenReturn(anchor.plusWeeks(3));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.WEEKS, 1, anchor.plusWeeks(3)))
+                .thenReturn(anchor.plusWeeks(4));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.WEEKS, 1, anchor.plusWeeks(4)))
+                .thenReturn(anchor.plusWeeks(5));
+
+        final List<LocalDate> dates = projectionService.occurrencesBetween(chargeDefinition, anchor, maturity);
+
+        // anchor + each week up to and including maturity (anchor + 4w) -> 5 dates.
+        assertThat(dates).hasSize(5);
+        assertThat(dates).containsExactly(anchor, anchor.plusWeeks(1), anchor.plusWeeks(2), anchor.plusWeeks(3), anchor.plusWeeks(4));
+    }
+
+    @Test
+    void occurrencesBetween_monthly_yieldsExpectedCount() {
+        final LocalDate anchor = LocalDate.of(2026, 1, 1);
+        final LocalDate maturity = LocalDate.of(2026, 12, 1);
+        when(chargeDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.MONTHS.getValue());
+        when(chargeDefinition.feeInterval()).thenReturn(1);
+        for (int i = 0; i <= 12; i++) {
+            when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, anchor.plusMonths(i)))
+                    .thenReturn(anchor.plusMonths(i + 1));
+        }
+
+        final List<LocalDate> dates = projectionService.occurrencesBetween(chargeDefinition, anchor, maturity);
+
+        // Jan 1 .. Dec 1 inclusive = 12 occurrences.
+        assertThat(dates).hasSize(12);
+        assertThat(dates.get(0)).isEqualTo(anchor);
+        assertThat(dates.get(dates.size() - 1)).isEqualTo(maturity);
+    }
+
+    @Test
+    void occurrencesBetween_quarterly_yieldsExpectedCount() {
+        final LocalDate anchor = LocalDate.of(2026, 1, 1);
+        final LocalDate maturity = LocalDate.of(2026, 12, 31);
+        when(chargeDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.MONTHS.getValue());
+        when(chargeDefinition.feeInterval()).thenReturn(3);
+        for (int i = 0; i <= 4; i++) {
+            when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 3, anchor.plusMonths(i * 3L)))
+                    .thenReturn(anchor.plusMonths((i + 1) * 3L));
+        }
+
+        final List<LocalDate> dates = projectionService.occurrencesBetween(chargeDefinition, anchor, maturity);
+
+        // Jan 1, Apr 1, Jul 1, Oct 1 -> 4 occurrences (Jan 1 next year is past maturity).
+        assertThat(dates).hasSize(4);
+        assertThat(dates).containsExactly(anchor, anchor.plusMonths(3), anchor.plusMonths(6), anchor.plusMonths(9));
+    }
+
+    @Test
+    void occurrencesBetween_anchorAfterMaturity_empty() {
+        when(chargeDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.MONTHS.getValue());
+        when(chargeDefinition.feeInterval()).thenReturn(1);
+
+        final LocalDate anchor = LocalDate.of(2026, 6, 1);
+        final LocalDate maturity = LocalDate.of(2026, 1, 1);
+
+        final List<LocalDate> dates = projectionService.occurrencesBetween(chargeDefinition, anchor, maturity);
+
+        assertThat(dates).isEmpty();
+    }
+
+    @Test
+    void occurrencesBetween_anchorEqualsMaturity_singleOccurrence() {
+        final LocalDate anchor = LocalDate.of(2026, 1, 15);
+        when(chargeDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.MONTHS.getValue());
+        when(chargeDefinition.feeInterval()).thenReturn(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, anchor)).thenReturn(anchor.plusMonths(1));
+
+        final List<LocalDate> dates = projectionService.occurrencesBetween(chargeDefinition, anchor, anchor);
+
+        assertThat(dates).containsExactly(anchor);
+    }
+
+    @Test
+    void projectFullTermPeriodicCharges_multiCharge_yieldsAllOccurrences() {
+        final LocalDate anchor = LocalDate.of(2026, 1, 15);
+        final LocalDate maturity = LocalDate.of(2026, 4, 15);
+        final Charge secondDefinition = org.mockito.Mockito.mock(Charge.class);
+        when(secondDefinition.isActive()).thenReturn(true);
+        when(secondDefinition.isLoanCharge()).thenReturn(true);
+        when(secondDefinition.isLoanPeriodic()).thenReturn(true);
+        when(secondDefinition.getId()).thenReturn(2L);
+        when(secondDefinition.feeFrequency()).thenReturn(PeriodFrequencyType.MONTHS.getValue());
+        when(secondDefinition.feeInterval()).thenReturn(3);
+        whenChargeIsActivePeriodicMonthly(1L, 1);
+
+        // Build the mocks BEFORE calling thenReturn so we don't tear up Mockito's stubbing context.
+        final LoanRepaymentScheduleInstallment first = installment(1, anchor, false);
+        final LoanRepaymentScheduleInstallment last = installment(2, maturity, false);
+        when(loan.getExpectedFirstRepaymentOnDate()).thenReturn(anchor);
+        when(loan.getRepaymentScheduleInstallments()).thenReturn(List.of(first, last));
+        when(loanProduct.getCharges()).thenReturn(List.of(chargeDefinition, secondDefinition));
+
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, anchor)).thenReturn(anchor.plusMonths(1));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, anchor.plusMonths(1)))
+                .thenReturn(anchor.plusMonths(2));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, anchor.plusMonths(2))).thenReturn(maturity);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, maturity)).thenReturn(maturity.plusMonths(1));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 3, anchor)).thenReturn(maturity);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 3, maturity)).thenReturn(maturity.plusMonths(3));
+
+        when(loanChargeAssembler.createNewFromChargeDefinition(eqLoan(), eqCharge(chargeDefinition), any(LocalDate.class)))
+                .thenAnswer(inv -> newCharge(inv.getArgument(2)));
+        when(loanChargeAssembler.createNewFromChargeDefinition(eqLoan(), eqCharge(secondDefinition), any(LocalDate.class)))
+                .thenAnswer(inv -> newCharge(inv.getArgument(2)));
+
+        final int added = projectionService.projectFullTermPeriodicCharges(loan);
+
+        // chargeDefinition (monthly): 4 occurrences (Jan 15, Feb 15, Mar 15, Apr 15). secondDefinition (quarterly): 2
+        // (Jan 15, Apr 15).
+        assertThat(added).isEqualTo(6);
+        verify(loanChargeService, times(6)).addLoanCharge(any(Loan.class), any(LoanCharge.class));
+    }
+
+    @Test
+    void projectFullTermPeriodicCharges_anchorFromExpectedFirstRepaymentDate() {
+        // determineAnchorDate prefers loan.getExpectedFirstRepaymentOnDate() when set.
+        final LocalDate explicitAnchor = LocalDate.of(2026, 6, 1);
+        final LocalDate maturity = LocalDate.of(2026, 12, 1);
+        final LoanRepaymentScheduleInstallment firstInst = installment(1, explicitAnchor, false);
+        final LoanRepaymentScheduleInstallment lastInst = installment(2, maturity, false);
+        when(loan.getExpectedFirstRepaymentOnDate()).thenReturn(explicitAnchor);
+        when(loan.getRepaymentScheduleInstallments()).thenReturn(List.of(firstInst, lastInst));
+        when(loanProduct.getCharges()).thenReturn(List.of(chargeDefinition));
+        whenChargeIsActivePeriodicMonthly(1L, 6);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 6, explicitAnchor)).thenReturn(maturity);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 6, maturity)).thenReturn(maturity.plusMonths(6));
+        // Build LoanCharge mocks BEFORE stubbing to keep Mockito's stubbing chain unbroken.
+        final LoanCharge anchorCharge = newCharge(explicitAnchor);
+        final LoanCharge maturityCharge = newCharge(maturity);
+        when(loanChargeAssembler.createNewFromChargeDefinition(loan, chargeDefinition, explicitAnchor)).thenReturn(anchorCharge);
+        when(loanChargeAssembler.createNewFromChargeDefinition(loan, chargeDefinition, maturity)).thenReturn(maturityCharge);
+
+        final int added = projectionService.projectFullTermPeriodicCharges(loan);
+
+        assertThat(added).isEqualTo(2);
+        verify(loanChargeAssembler, times(1)).createNewFromChargeDefinition(loan, chargeDefinition, explicitAnchor);
+        verify(loanChargeAssembler, times(1)).createNewFromChargeDefinition(loan, chargeDefinition, maturity);
+    }
+
+    @Test
+    void projectFullTermPeriodicCharges_anchorFromInstallmentsWhenNoExpectedFirstRepaymentDate() {
+        // When expectedFirstRepaymentOnDate is null, anchor comes from the lowest-numbered non-downpayment installment.
+        final LocalDate firstInstallment = LocalDate.of(2026, 2, 1);
+        final LocalDate maturity = LocalDate.of(2026, 5, 1);
+        final LoanRepaymentScheduleInstallment inst2 = installment(2, LocalDate.of(2026, 3, 1), false);
+        final LoanRepaymentScheduleInstallment inst1 = installment(1, firstInstallment, false);
+        final LoanRepaymentScheduleInstallment inst3 = installment(3, maturity, false);
+        when(loan.getExpectedFirstRepaymentOnDate()).thenReturn(null);
+        when(loan.getRepaymentScheduleInstallments()).thenReturn(List.of(inst2, inst1, inst3));
+        when(loanProduct.getCharges()).thenReturn(List.of(chargeDefinition));
+        whenChargeIsActivePeriodicMonthly(1L, 1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, firstInstallment))
+                .thenReturn(firstInstallment.plusMonths(1));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, firstInstallment.plusMonths(1)))
+                .thenReturn(firstInstallment.plusMonths(2));
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, firstInstallment.plusMonths(2)))
+                .thenReturn(maturity);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, maturity)).thenReturn(maturity.plusMonths(1));
+        when(loanChargeAssembler.createNewFromChargeDefinition(eqLoan(), eqCharge(chargeDefinition), any(LocalDate.class)))
+                .thenAnswer(inv -> newCharge(inv.getArgument(2)));
+
+        final int added = projectionService.projectFullTermPeriodicCharges(loan);
+
+        // Feb 1, Mar 1, Apr 1, May 1 -> 4 occurrences from anchor=Feb 1 (the lowest installment number).
+        assertThat(added).isEqualTo(4);
+        // Anchor must be the lowest-numbered installment date, NOT the earliest by date if numbers differ.
+        verify(loanChargeAssembler, times(1)).createNewFromChargeDefinition(loan, chargeDefinition, firstInstallment);
+    }
+
+    private Loan eqLoan() {
+        return org.mockito.ArgumentMatchers.eq(loan);
+    }
+
+    private Charge eqCharge(final Charge c) {
+        return org.mockito.ArgumentMatchers.eq(c);
     }
 }

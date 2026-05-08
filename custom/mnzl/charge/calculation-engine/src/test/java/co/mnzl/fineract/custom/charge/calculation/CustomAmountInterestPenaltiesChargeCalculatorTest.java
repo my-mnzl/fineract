@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
@@ -137,6 +138,75 @@ class CustomAmountInterestPenaltiesChargeCalculatorTest {
 
         // With zero penalties, both should produce the same result
         assertThat(customBase).isEqualByComparingTo(defaultBase);
+    }
+
+    @Test
+    void calculateCreationAmountPercentageAppliedTo_withInstallment_includesInstallmentPenalty() {
+        // Loan summary penalty (4242) intentionally differs from installment penalty (200) so we can
+        // verify the custom calculator pulls from the installment, not the loan summary, when an installment
+        // is supplied.
+        Loan loan = mockLoan(BigDecimal.valueOf(100000), BigDecimal.valueOf(5000), BigDecimal.valueOf(4242));
+        JsonCommand command = mock(JsonCommand.class);
+        lenient().when(command.hasParameter("principal")).thenReturn(false);
+        lenient().when(command.hasParameter("interest")).thenReturn(false);
+
+        LoanRepaymentScheduleInstallment installment = mockInstallment(BigDecimal.valueOf(10000), BigDecimal.valueOf(500),
+                BigDecimal.valueOf(200));
+
+        BigDecimal customBase = calculator.calculateCreationAmountPercentageAppliedTo(loan, command, installment);
+        BigDecimal defaultBase = defaultCalculator.calculateCreationAmountPercentageAppliedTo(loan, command, installment);
+
+        // Default: principal outstanding + interest outstanding = 10000 + 500 = 10500
+        assertThat(defaultBase).isEqualByComparingTo(BigDecimal.valueOf(10500));
+
+        // Custom: + installment penalty outstanding (200), NOT loan summary (4242) = 10700
+        assertThat(customBase).isEqualByComparingTo(BigDecimal.valueOf(10700));
+        assertThat(customBase.subtract(defaultBase)).isEqualByComparingTo(BigDecimal.valueOf(200));
+    }
+
+    @Test
+    void calculateCreationAmountPercentageAppliedTo_nullInstallment_usesLoanSummary() {
+        Loan loan = mockLoan(BigDecimal.valueOf(100000), BigDecimal.valueOf(5000), BigDecimal.valueOf(2000));
+        JsonCommand command = mock(JsonCommand.class);
+        lenient().when(command.hasParameter("principal")).thenReturn(false);
+        lenient().when(command.hasParameter("interest")).thenReturn(false);
+
+        BigDecimal customBase = calculator.calculateCreationAmountPercentageAppliedTo(loan, command, null);
+        BigDecimal defaultBase = defaultCalculator.calculateCreationAmountPercentageAppliedTo(loan, command, null);
+
+        // Default: principal + totalInterest = 100000 + 5000 = 105000
+        assertThat(defaultBase).isEqualByComparingTo(BigDecimal.valueOf(105000));
+
+        // Custom: + loan summary penalty outstanding = 105000 + 2000 = 107000
+        assertThat(customBase).isEqualByComparingTo(BigDecimal.valueOf(107000));
+        assertThat(customBase.subtract(defaultBase)).isEqualByComparingTo(BigDecimal.valueOf(2000));
+    }
+
+    @Test
+    void calculateCreationAmountPercentageAppliedTo_zeroPenaltiesNullInstallment_parity() {
+        Loan loan = mockLoan(BigDecimal.valueOf(100000), BigDecimal.valueOf(5000), BigDecimal.ZERO);
+        JsonCommand command = mock(JsonCommand.class);
+        lenient().when(command.hasParameter("principal")).thenReturn(false);
+        lenient().when(command.hasParameter("interest")).thenReturn(false);
+
+        BigDecimal customBase = calculator.calculateCreationAmountPercentageAppliedTo(loan, command, null);
+        BigDecimal defaultBase = defaultCalculator.calculateCreationAmountPercentageAppliedTo(loan, command, null);
+
+        assertThat(customBase).isEqualByComparingTo(defaultBase);
+    }
+
+    @Test
+    void comparisonWithDefault_positivePenalties_diffEqualsPenalties() {
+        BigDecimal penaltyOutstanding = BigDecimal.valueOf(2000);
+        Loan loan = mockLoan(BigDecimal.valueOf(100000), BigDecimal.valueOf(5000), penaltyOutstanding);
+        LoanCharge loanCharge = mock(LoanCharge.class);
+        lenient().when(loanCharge.isDisbursementCharge()).thenReturn(false);
+
+        BigDecimal customBase = calculator.calculateAmountPercentageAppliedTo(loan, loanCharge);
+        BigDecimal defaultBase = defaultCalculator.calculateAmountPercentageAppliedTo(loan, loanCharge);
+
+        // Difference is exactly the loan summary penalty outstanding.
+        assertThat(customBase.subtract(defaultBase)).isEqualByComparingTo(penaltyOutstanding);
     }
 
     // ---- Helpers ----

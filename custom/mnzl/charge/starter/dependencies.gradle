@@ -23,4 +23,6 @@ dependencies {
     implementation(project(':fineract-provider'))
     implementation(project(':custom:mnzl:charge:calculation-engine'))
     implementation('org.springframework.boot:spring-boot-starter')
+    testImplementation(project(':custom:mnzl:instrument:loan-api'))
+    testImplementation('org.springframework.boot:spring-boot-starter-test')
 }

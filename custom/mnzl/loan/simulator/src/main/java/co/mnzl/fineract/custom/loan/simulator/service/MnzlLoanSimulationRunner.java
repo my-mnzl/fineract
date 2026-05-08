@@ -432,11 +432,17 @@ public class MnzlLoanSimulationRunner {
         }
     }
 
-    private void postLoanCharge(Long loanId, long chargeId, BigDecimal amount) {
+    private void postLoanCharge(Long loanId, long chargeId, BigDecimal amount, LocalDate dueDate) {
         JsonObject json = new JsonObject();
         json.addProperty("chargeId", chargeId);
         if (amount != null) {
             json.addProperty("amount", amount);
+        }
+        if (dueDate != null) {
+            // OVERDUE_INSTALLMENT, SPECIFIED_DUE_DATE, and LOAN_PERIODIC charge types require a dueDate per
+            // LoanChargeService.create. Pass the simulator action's date so the ADD_CHARGE action works for
+            // those charge categories instead of failing with "Loan charge is missing due date".
+            json.addProperty("dueDate", dueDate.format(DATE_FORMAT));
         }
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
@@ -472,7 +478,7 @@ public class MnzlLoanSimulationRunner {
     }
 
     private void addCharge(Long loanId, SimulationActionRequest action) {
-        postLoanCharge(loanId, action.getChargeId(), action.getAmount());
+        postLoanCharge(loanId, action.getChargeId(), action.getAmount(), action.getDate());
     }
 
     private void writeOff(Long loanId, SimulationActionRequest action) {
@@ -630,25 +636,38 @@ public class MnzlLoanSimulationRunner {
      * actually bill.
      */
     public List<SchedulePreviewPeriod> previewSchedule(SimulationRequest request) {
-        // Preview doesn't create a client/loan, so omit clientId and skip
-        // Fineract's validateForCreate (which requires clientId/groupId).
-        JsonObject json = buildLoanApplicationJson(request, null, null);
-        String jsonString = json.toString();
-        JsonQuery query = JsonQuery.from(jsonString, fromJsonHelper.parse(jsonString), fromJsonHelper);
-        LoanScheduleModel model = scheduleCalculationService.calculateLoanSchedule(query, false);
+        // We have to pass a real clientId here even though preview doesn't persist a loan: upstream
+        // LoanScheduleAssembler resolves the loan's office through the client (or group) — when both are
+        // absent, officeId stays null and the holiday lookup binds null as a typeless parameter, which
+        // MariaDB silently coerces but PostgreSQL rejects with "operator does not exist: bigint = character
+        // varying". Creating + cleaning up a short-lived simulated client is the cheapest cross-DB fix.
+        HashMap<BusinessDateType, LocalDate> originalDates = ThreadLocalContextUtil.getBusinessDates();
+        Long previewClientId = null;
+        try {
+            previewClientId = createSimulatedClient();
+            JsonObject json = buildLoanApplicationJson(request, previewClientId, null);
+            String jsonString = json.toString();
+            JsonQuery query = JsonQuery.from(jsonString, fromJsonHelper.parse(jsonString), fromJsonHelper);
+            LoanScheduleModel model = scheduleCalculationService.calculateLoanSchedule(query, false);
 
-        List<SchedulePreviewPeriod> periods = new ArrayList<>();
-        for (LoanScheduleModelPeriod p : model.getPeriods()) {
-            if (!p.isRepaymentPeriod()) {
-                continue;
+            List<SchedulePreviewPeriod> periods = new ArrayList<>();
+            for (LoanScheduleModelPeriod p : model.getPeriods()) {
+                if (!p.isRepaymentPeriod()) {
+                    continue;
+                }
+                BigDecimal totalDue = safe(p.principalDue()).add(safe(p.interestDue())).add(safe(p.feeChargesDue()))
+                        .add(safe(p.penaltyChargesDue()));
+                periods.add(SchedulePreviewPeriod.builder().period(p.periodNumber()).dueDate(p.periodDueDate().format(DATE_FORMAT))
+                        .principalDue(safe(p.principalDue())).interestDue(safe(p.interestDue())).feeChargesDue(safe(p.feeChargesDue()))
+                        .penaltyChargesDue(safe(p.penaltyChargesDue())).totalDue(totalDue).principalOutstanding(safe(p.principalDue()))
+                        .interestOutstanding(safe(p.interestDue())).totalOutstanding(totalDue).build());
             }
-            BigDecimal totalDue = safe(p.principalDue()).add(safe(p.interestDue())).add(safe(p.feeChargesDue()))
-                    .add(safe(p.penaltyChargesDue()));
-            periods.add(SchedulePreviewPeriod.builder().period(p.periodNumber()).dueDate(p.periodDueDate().format(DATE_FORMAT))
-                    .principalDue(safe(p.principalDue())).interestDue(safe(p.interestDue())).feeChargesDue(safe(p.feeChargesDue()))
-                    .penaltyChargesDue(safe(p.penaltyChargesDue())).totalDue(totalDue).principalOutstanding(safe(p.principalDue()))
-                    .interestOutstanding(safe(p.interestDue())).totalOutstanding(totalDue).build());
+            return periods;
+        } finally {
+            if (previewClientId != null) {
+                cleanupSimulatedClient(previewClientId);
+            }
+            ThreadLocalContextUtil.setBusinessDates(originalDates);
         }
-        return periods;
     }
 }

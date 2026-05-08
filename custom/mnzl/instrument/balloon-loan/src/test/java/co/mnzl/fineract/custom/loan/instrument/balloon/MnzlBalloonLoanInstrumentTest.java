@@ -32,4 +32,33 @@ class MnzlBalloonLoanInstrumentTest {
         assertThat(instrument.supports(MnzlLoanProductStrategyCodes.INSTRUMENT_BALLOON_LOAN)).isTrue();
         assertThat(instrument.supports(MnzlLoanProductStrategyCodes.INSTRUMENT_STANDARD_LOAN)).isFalse();
     }
+
+    @Test
+    void supports_mnzlBalloon_returnsTrue() {
+        MnzlBalloonLoanInstrument instrument = new MnzlBalloonLoanInstrument();
+
+        assertThat(instrument.supports("MNZL_BALLOON_LOAN")).isTrue();
+    }
+
+    @Test
+    void supports_otherCode_returnsFalse() {
+        MnzlBalloonLoanInstrument instrument = new MnzlBalloonLoanInstrument();
+
+        assertThat(instrument.supports("MNZL_STANDARD_LOAN")).isFalse();
+        assertThat(instrument.supports("WHATEVER")).isFalse();
+    }
+
+    @Test
+    void supports_null_returnsFalse() {
+        MnzlBalloonLoanInstrument instrument = new MnzlBalloonLoanInstrument();
+
+        assertThat(instrument.supports(null)).isFalse();
+    }
+
+    @Test
+    void supports_emptyString_returnsFalse() {
+        MnzlBalloonLoanInstrument instrument = new MnzlBalloonLoanInstrument();
+
+        assertThat(instrument.supports("")).isFalse();
+    }
 }

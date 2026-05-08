@@ -137,4 +137,156 @@ class CustomLoanScheduleGeneratorFactoryTest {
         assertThat(result).isSameAs(defaultGenerator);
         verifyNoInteractions(custom);
     }
+
+    // ---- Additional routing tests (Tasks C.2) ----
+
+    private CustomLoanScheduleGeneratorFactory newFactory(ProgressiveLoanScheduleGenerator progressive,
+            CumulativeFlatInterestLoanScheduleGenerator flat, CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom,
+            DefaultLoanScheduleGeneratorFactory defaultFactory, MnzlLoanProductStrategyReadService strategyReadService) {
+        return new CustomLoanScheduleGeneratorFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+    }
+
+    @Test
+    void create_progressiveDecliningBalance_returnsUpstream() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(LoanScheduleType.PROGRESSIVE, InterestMethod.DECLINING_BALANCE);
+
+        assertThat(result).isNotInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(progressive);
+    }
+
+    @Test
+    void create_cumulativeFlat_returnsUpstream() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(LoanScheduleType.CUMULATIVE, InterestMethod.FLAT);
+
+        assertThat(result).isNotInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(flat);
+    }
+
+    @Test
+    void create_cumulativeDecliningBalance_returnsCustom() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(LoanScheduleType.CUMULATIVE, InterestMethod.DECLINING_BALANCE);
+
+        assertThat(result).isInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(custom);
+    }
+
+    @Test
+    void create_withContext_strategyCoreDefault_returnsUpstream() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+        LoanScheduleGenerator defaultGenerator = mock(LoanScheduleGenerator.class);
+        LoanScheduleSelectionContext selectionContext = LoanScheduleSelectionContext.builder().loanScheduleType(LoanScheduleType.CUMULATIVE)
+                .interestMethod(InterestMethod.DECLINING_BALANCE).loanProductId(101L).build();
+        when(strategyReadService.findScheduleStrategyCode(101L))
+                .thenReturn(java.util.Optional.of(MnzlLoanProductStrategyCodes.SCHEDULE_CORE));
+        when(defaultFactory.create(selectionContext)).thenReturn(defaultGenerator);
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(selectionContext);
+
+        assertThat(result).isNotInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(defaultGenerator);
+        verifyNoInteractions(custom);
+    }
+
+    @Test
+    void create_withContext_strategyMnzl_returnsCustom() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+        LoanScheduleSelectionContext selectionContext = LoanScheduleSelectionContext.builder().loanScheduleType(LoanScheduleType.CUMULATIVE)
+                .interestMethod(InterestMethod.DECLINING_BALANCE).loanProductId(202L).build();
+        when(strategyReadService.findScheduleStrategyCode(202L))
+                .thenReturn(java.util.Optional.of(MnzlLoanProductStrategyCodes.SCHEDULE_MNZL_DECLINING_BALANCE));
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(selectionContext);
+
+        assertThat(result).isInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(custom);
+        verifyNoInteractions(defaultFactory);
+    }
+
+    @Test
+    void create_withContext_strategyNull_returnsUpstream() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+        LoanScheduleGenerator defaultGenerator = mock(LoanScheduleGenerator.class);
+        LoanScheduleSelectionContext selectionContext = LoanScheduleSelectionContext.builder().loanScheduleType(LoanScheduleType.CUMULATIVE)
+                .interestMethod(InterestMethod.DECLINING_BALANCE).loanProductId(303L).build();
+        when(strategyReadService.findScheduleStrategyCode(303L)).thenReturn(java.util.Optional.empty());
+        when(defaultFactory.create(selectionContext)).thenReturn(defaultGenerator);
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(selectionContext);
+
+        assertThat(result).isNotInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(defaultGenerator);
+        verifyNoInteractions(custom);
+    }
+
+    @Test
+    void create_withContext_strategyUnknown_returnsUpstream() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+        LoanScheduleGenerator defaultGenerator = mock(LoanScheduleGenerator.class);
+        // Unknown strategy code: bypasses readService entirely (scheduleStrategyCode is non-null on the context)
+        LoanScheduleSelectionContext selectionContext = LoanScheduleSelectionContext.builder().loanScheduleType(LoanScheduleType.CUMULATIVE)
+                .interestMethod(InterestMethod.DECLINING_BALANCE).loanProductId(404L).scheduleStrategyCode("WHATEVER_NOT_REAL").build();
+        when(defaultFactory.create(selectionContext)).thenReturn(defaultGenerator);
+
+        CustomLoanScheduleGeneratorFactory factory = newFactory(progressive, flat, custom, defaultFactory, strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(selectionContext);
+
+        assertThat(result).isNotInstanceOf(CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        assertThat(result).isSameAs(defaultGenerator);
+        verifyNoInteractions(custom);
+        verifyNoInteractions(strategyReadService);
+    }
 }

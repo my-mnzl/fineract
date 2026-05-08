@@ -192,4 +192,87 @@ class MnzlCheckLoanRepaymentOverdueBusinessStepTest {
         when(money.isGreaterThanZero()).thenReturn(true);
         return money;
     }
+
+    // ---------------------------------------------------------------------
+    // Task C.11 expansions — working-day trigger date semantics
+    // ---------------------------------------------------------------------
+
+    /**
+     * Due Friday + 3 working-day grace lands on the next Wednesday (skipping Sat/Sun). Event must NOT fire on Monday
+     * (which is only 1 working day past due) but MUST fire on Wednesday (the third working day).
+     */
+    @Test
+    void triggerDate_pastWeekend_addsExtraDays() {
+        LocalDate fridayDue = LocalDate.of(2025, 1, 3); // Friday
+        LocalDate nextWednesday = LocalDate.of(2025, 1, 8); // 3 working days past Friday with Sat/Sun off
+        when(installment.getDueDate()).thenReturn(fridayDue);
+        when(configurationDomainService.retrieveRepaymentOverdueDays()).thenReturn(3L);
+
+        // Day before trigger — calendar would say Monday is past 3 days too, but only 1 working day has elapsed.
+        setBusinessDate(LocalDate.of(2025, 1, 6)); // Monday
+        when(workingDayCalculator.addWorkingDays(eq(fridayDue), eq(3), eq(WORKING_DAYS), any())).thenReturn(nextWednesday);
+
+        step.execute(loan);
+        verify(businessEventNotifierService, never()).notifyPostBusinessEvent(any());
+
+        // On the trigger date — Wednesday — event fires.
+        setBusinessDate(nextWednesday);
+        Money outstandingWed = positiveMoney();
+        when(installment.getTotalOutstanding(currency)).thenReturn(outstandingWed);
+
+        step.execute(loan);
+        verify(businessEventNotifierService).notifyPostBusinessEvent(any(LoanRepaymentOverdueBusinessEvent.class));
+    }
+
+    /**
+     * Due Monday + 3-day grace, with Tue-Thu as holidays, pushes the trigger date to the following Monday (3 working
+     * days = Fri/Sun/Mon when Tue-Thu skipped — exact landing depends on the calculator stub).
+     */
+    @Test
+    void triggerDate_pastHolidayBlock_addsExtraDays() {
+        LocalDate mondayDue = LocalDate.of(2025, 1, 6); // Monday
+        LocalDate triggerAfterHolidays = LocalDate.of(2025, 1, 13); // Mon a week later (after Tue-Thu holiday block)
+        when(installment.getDueDate()).thenReturn(mondayDue);
+        when(configurationDomainService.retrieveRepaymentOverdueDays()).thenReturn(3L);
+        when(workingDayCalculator.addWorkingDays(eq(mondayDue), eq(3), eq(WORKING_DAYS), any())).thenReturn(triggerAfterHolidays);
+
+        // Calendar day 3 past Monday is Thursday — but Tue-Thu are holidays so trigger shouldn't fire yet.
+        setBusinessDate(LocalDate.of(2025, 1, 9));
+
+        step.execute(loan);
+        verify(businessEventNotifierService, never()).notifyPostBusinessEvent(any());
+
+        // On the actual working-day trigger date.
+        setBusinessDate(triggerAfterHolidays);
+        Money outstandingHoliday = positiveMoney();
+        when(installment.getTotalOutstanding(currency)).thenReturn(outstandingHoliday);
+
+        step.execute(loan);
+        verify(businessEventNotifierService).notifyPostBusinessEvent(any(LoanRepaymentOverdueBusinessEvent.class));
+    }
+
+    /**
+     * Configurable multi-day grace (5 working days here) routes through the calculator with the configured offset.
+     */
+    @Test
+    void triggerDate_multiDayGrace() {
+        when(configurationDomainService.retrieveRepaymentOverdueDays()).thenReturn(5L);
+        LocalDate businessDate = LocalDate.of(2025, 1, 12);
+        setBusinessDate(businessDate);
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(businessDate);
+        Money outstandingMulti = positiveMoney();
+        when(installment.getTotalOutstanding(currency)).thenReturn(outstandingMulti);
+
+        step.execute(loan);
+
+        // Verifies the configured offset (5) is the value passed to the working-day calculator.
+        verify(workingDayCalculator).addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any());
+        verify(businessEventNotifierService).notifyPostBusinessEvent(any(LoanRepaymentOverdueBusinessEvent.class));
+    }
+
+    // bypassesForCoreDefaultStrategyCode / firesForMnzlDecliningStrategy SKIPPED:
+    // Production class MnzlCheckLoanRepaymentOverdueBusinessStep does NOT route by product strategy code — it
+    // unconditionally applies the working-day grace to every loan. There is no MnzlLoanProductStrategyReadService
+    // dependency in the constructor (verified against the file at commit 31f23ee00). Tests for routing behaviour
+    // would have to either bend production semantics or fabricate a non-existent code path.
 }

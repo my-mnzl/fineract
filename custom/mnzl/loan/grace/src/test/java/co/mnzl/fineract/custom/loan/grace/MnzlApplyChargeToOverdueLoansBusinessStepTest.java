@@ -193,4 +193,55 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
         dates.put(BusinessDateType.COB_DATE, date.minusDays(1));
         ThreadLocalContextUtil.setBusinessDates(dates);
     }
+
+    // ---------------------------------------------------------------------
+    // Task C.11 expansions — grace-window boundary semantics
+    // ---------------------------------------------------------------------
+
+    /**
+     * Past the working-day grace window, with backdating enabled, the charge is applied. (Without backdating,
+     * production only fires on the first day past expiry — see existing skipsLaterDaysWhenBackdatePenaltiesIsDisabled.)
+     */
+    @Test
+    void chargeApplied_afterWorkingDayGraceExpires() {
+        when(configurationDomainService.isBackdatePenaltiesEnabled()).thenReturn(true);
+        LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13);
+        LocalDate dayAfterGrace = LocalDate.of(2025, 1, 15);
+        setBusinessDate(dayAfterGrace);
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+
+        step.execute(loan);
+
+        verify(loanChargeWritePlatformService).applyOverdueChargesForLoan(eq(LOAN_ID), argThat(list -> list.size() == 1));
+    }
+
+    /**
+     * Inside the working-day grace window — businessDate strictly before the first-penalty date — no charge is applied.
+     */
+    @Test
+    void chargeNotApplied_duringGraceWindow() {
+        LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13);
+        LocalDate insideGrace = LocalDate.of(2025, 1, 11);
+        setBusinessDate(insideGrace);
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+
+        step.execute(loan);
+
+        verify(loanChargeWritePlatformService, never()).applyOverdueChargesForLoan(anyLong(), any());
+    }
+
+    /**
+     * Boundary: on the exact first-penalty date the charge IS applied. Production uses {@code !businessDate.isBefore
+     * (firstPenaltyDate)} so equality counts as "due".
+     */
+    @Test
+    void chargeApplied_onExactlyExpiryDay() {
+        LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13);
+        setBusinessDate(firstPenaltyDate);
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+
+        step.execute(loan);
+
+        verify(loanChargeWritePlatformService).applyOverdueChargesForLoan(eq(LOAN_ID), argThat(list -> list.size() == 1));
+    }
 }

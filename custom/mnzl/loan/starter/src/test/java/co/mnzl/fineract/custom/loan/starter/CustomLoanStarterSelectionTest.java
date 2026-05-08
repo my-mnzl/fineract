@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import co.mnzl.fineract.custom.loan.instrument.MnzlLoanProductStrategyReadService;
+import co.mnzl.fineract.custom.loan.instrument.balloon.MnzlBalloonLoanInstrument;
 import java.util.List;
 import org.apache.fineract.cob.COBBusinessStepService;
 import org.apache.fineract.cob.COBBusinessStepServiceImpl;
@@ -67,6 +68,53 @@ class CustomLoanStarterSelectionTest {
                     assertThat(result).extracting(BusinessStepNameAndOrder::getStepName).contains("customCheckDueInstallmentsBusinessStep");
                 });
     }
+
+    @Test
+    void mnzlLoanEnabled_true_loadsModule() {
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
+                .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
+                        "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
+                        "mnzl.loan.grace.workingDays.enabled=false")
+                .withUserConfiguration(TestConfiguration.class).run(ctx -> {
+                    assertThat(ctx).hasSingleBean(CustomLoanAutoConfiguration.class);
+                    assertThat(ctx).hasBean("customCheckDueInstallmentsBusinessStep");
+                });
+    }
+
+    @Test
+    void mnzlLoanEnabled_false_doesNotLoadModule() {
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
+                .withPropertyValues("mnzl.loan.enabled=false").withUserConfiguration(TestConfiguration.class).run(ctx -> {
+                    assertThat(ctx).doesNotHaveBean(CustomLoanAutoConfiguration.class);
+                    assertThat(ctx).doesNotHaveBean("customCheckDueInstallmentsBusinessStep");
+                    assertThat(ctx).doesNotHaveBean(MnzlBalloonLoanInstrument.class);
+                });
+    }
+
+    @Test
+    void mnzlLoanInstrumentEnabled_false_doesNotLoadInstrumentBeans() {
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
+                .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
+                        "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
+                        "mnzl.loan.grace.workingDays.enabled=false")
+                .withUserConfiguration(TestConfiguration.class).run(ctx -> {
+                    assertThat(ctx).doesNotHaveBean(MnzlBalloonLoanInstrument.class);
+                });
+    }
+
+    // Skipped "*_true_loads*Beans" toggle tests (production wins): tests for `mnzl.loan.schedule.enabled`,
+    // `mnzl.loan.job.enabled`, `mnzl.loan.simulator.enabled`, `mnzl.loan.instrument.enabled`, and
+    // `mnzl.loan.grace.workingDays.enabled` are not feasible at the L1 unit-test tier because turning those
+    // flags on activates many @Primary @Bean methods plus standalone @Component classes (e.g.
+    // JdbcMnzlLoanProductStrategyService, MnzlLoanProductStrategyApiResource, MnzlSimulationApiJsonValidator,
+    // MnzlSimulationApiResource, JdbcMnzlSimulationService, MnzlLoanScheduleApiConfiguration's read service,
+    // MnzlGraceConfiguration's delinquency service, MnzlLoanJobConfiguration's tasklets / charge assembler).
+    // Their constructors pull in heavy collaborators (LoanScheduleGeneratorFactory, LoanProductRepository,
+    // FromJsonHelper, ChargeRepositoryWrapper, DelinquencyEffectivePauseHelper, LoanTransactionReadService,
+    // LoanChargeService, ChargeAmountCalculatorRegistry, PlatformSecurityContext, ApiRequestParameterHelper,
+    // etc.) that would all need to be mocked here. These flags are exercised by L2 Spring slice tests under
+    // Phase D. The "*_false_*" disabled-flag variants remain in this file because they only require asserting
+    // bean absence and don't trigger any wiring.
 
     @EnableConfigurationProperties({ FineractProperties.class })
     static class TestConfiguration {

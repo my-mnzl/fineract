@@ -36,6 +36,34 @@ class MnzlJobNameConfigTest {
     }
 
     @Test
+    void executeStandingInstructions_displayNamePresent() {
+        var provider = new MnzlJobNameConfig().mnzlJobNameProvider();
+
+        assertThat(provider.provide())
+                .filteredOn(jobNameData -> JobName.EXECUTE_STANDING_INSTRUCTIONS.name().equals(jobNameData.getEnumStyleName()))
+                .singleElement().satisfies(jobNameData -> assertThat(jobNameData.getHumanReadableName())
+                        .isEqualTo(JobName.EXECUTE_STANDING_INSTRUCTIONS.toString()));
+    }
+
+    @Test
+    void transferFeeChargeForLoans_displayNamePresent() {
+        var provider = new MnzlJobNameConfig().mnzlJobNameProvider();
+
+        assertThat(provider.provide())
+                .filteredOn(jobNameData -> JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name().equals(jobNameData.getEnumStyleName()))
+                .singleElement().satisfies(jobNameData -> assertThat(jobNameData.getHumanReadableName())
+                        .isEqualTo(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.toString()));
+    }
+
+    @Test
+    void bothJobsRegistered_inSameProvider() {
+        var provider = new MnzlJobNameConfig().mnzlJobNameProvider();
+
+        assertThat(provider.provide()).hasSize(2).extracting("enumStyleName")
+                .containsExactlyInAnyOrder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name());
+    }
+
+    @Test
     void changelogRemovesLegacyPeriodicLoanChargeJobRow() throws IOException {
         try (var inputStream = getClass().getClassLoader().getResourceAsStream("db/custom-changelog/0001_mnzl_loan_job.xml")) {
             assertThat(inputStream).isNotNull();
