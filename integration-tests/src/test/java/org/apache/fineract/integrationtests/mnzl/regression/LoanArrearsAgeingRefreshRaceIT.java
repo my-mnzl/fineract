@@ -18,8 +18,6 @@
  */
 package org.apache.fineract.integrationtests.mnzl.regression;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.math.BigDecimal;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;

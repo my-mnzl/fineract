@@ -19,7 +19,6 @@
 package org.apache.fineract.integrationtests.mnzl.scenarios;
 
 import static org.apache.fineract.integrationtests.mnzl.helpers.MnzlAssertions.assertSimulationCompleted;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
 import java.time.LocalDate;

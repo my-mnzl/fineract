@@ -22,6 +22,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import java.io.FileWriter;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -317,7 +318,7 @@ public final class MnzlProdConfigExtractor {
 
     private static void writeJson(Object data, String filename) throws Exception {
         Path out = OUT_DIR.resolve(filename);
-        try (Writer w = new FileWriter(out.toFile())) {
+        try (Writer w = new FileWriter(out.toFile(), StandardCharsets.UTF_8)) {
             GSON.toJson(data, w);
             w.write('\n');
         }

@@ -18,7 +18,6 @@
  */
 package org.apache.fineract.integrationtests.mnzl.golden;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
 import java.time.LocalDate;

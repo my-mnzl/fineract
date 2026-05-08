@@ -128,7 +128,7 @@ class MnzlLoanProductStrategyApiJsonValidatorTest {
                   "chargeStrategyCode": "MNZL_INTEREST_AND_PENALTIES",
                   "cobStrategyCode": "MNZL_DUE_INSTALLMENTS"
                 }
-                """.formatted(overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
+                """.replace("%s", overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
                 .satisfies(ex -> assertThat(((PlatformApiDataValidationException) ex).getErrors())
                         .anySatisfy(err -> assertThat(err.getParameterName()).isEqualTo("instrumentCode")));
     }
@@ -142,7 +142,7 @@ class MnzlLoanProductStrategyApiJsonValidatorTest {
                   "chargeStrategyCode": "MNZL_INTEREST_AND_PENALTIES",
                   "cobStrategyCode": "MNZL_DUE_INSTALLMENTS"
                 }
-                """.formatted(overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
+                """.replace("%s", overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
                 .satisfies(ex -> assertThat(((PlatformApiDataValidationException) ex).getErrors())
                         .anySatisfy(err -> assertThat(err.getParameterName()).isEqualTo("scheduleStrategyCode")));
     }
@@ -156,7 +156,7 @@ class MnzlLoanProductStrategyApiJsonValidatorTest {
                   "chargeStrategyCode": "%s",
                   "cobStrategyCode": "MNZL_DUE_INSTALLMENTS"
                 }
-                """.formatted(overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
+                """.replace("%s", overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
                 .satisfies(ex -> assertThat(((PlatformApiDataValidationException) ex).getErrors())
                         .anySatisfy(err -> assertThat(err.getParameterName()).isEqualTo("chargeStrategyCode")));
     }
@@ -170,7 +170,7 @@ class MnzlLoanProductStrategyApiJsonValidatorTest {
                   "chargeStrategyCode": "MNZL_INTEREST_AND_PENALTIES",
                   "cobStrategyCode": "%s"
                 }
-                """.formatted(overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
+                """.replace("%s", overLength()))).isInstanceOf(PlatformApiDataValidationException.class)
                 .satisfies(ex -> assertThat(((PlatformApiDataValidationException) ex).getErrors())
                         .anySatisfy(err -> assertThat(err.getParameterName()).isEqualTo("cobStrategyCode")));
     }

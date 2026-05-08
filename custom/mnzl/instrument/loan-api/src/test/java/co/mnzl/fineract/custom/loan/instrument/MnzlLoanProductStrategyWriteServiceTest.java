@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -76,7 +77,7 @@ class MnzlLoanProductStrategyWriteServiceTest {
         service = new JdbcMnzlLoanProductStrategyService(jdbcTemplate, loanProductRepository, fromJsonHelper);
         when(loanProductRepository.findById(anyLong())).thenReturn(Optional.of(Mockito.mock(LoanProduct.class)));
         // Default: post-update findOne returns whatever the test stubs — not interested in the return value here.
-        when(jdbcTemplate.queryForObject(any(String.class), any(RowMapper.class), eq(PRODUCT_ID)))
+        when(jdbcTemplate.queryForObject(any(String.class), ArgumentMatchers.<RowMapper<MnzlLoanProductStrategyData>>any(), eq(PRODUCT_ID)))
                 .thenReturn(MnzlLoanProductStrategyData.builder().loanProductId(PRODUCT_ID).build());
     }
 
@@ -196,6 +197,6 @@ class MnzlLoanProductStrategyWriteServiceTest {
 
         service.update(PRODUCT_ID, FULL_JSON);
 
-        verify(jdbcTemplate, times(1)).queryForObject(contains("where loan_product_id = ?"), any(RowMapper.class), eq(PRODUCT_ID));
+        verify(jdbcTemplate, times(1)).queryForObject(contains("where loan_product_id = ?"), ArgumentMatchers.<RowMapper<MnzlLoanProductStrategyData>>any(), eq(PRODUCT_ID));
     }
 }

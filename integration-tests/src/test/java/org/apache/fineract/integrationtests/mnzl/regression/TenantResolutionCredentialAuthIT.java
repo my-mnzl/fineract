@@ -19,7 +19,6 @@
 package org.apache.fineract.integrationtests.mnzl.regression;
 
 import static io.restassured.RestAssured.given;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.oneOf;
 
@@ -29,6 +28,7 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.integrationtests.BaseLoanIntegrationTest;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -74,7 +74,8 @@ public class TenantResolutionCredentialAuthIT extends BaseLoanIntegrationTest {
     @Test
     public void basicAuthRequest_withInvalidCredentials_returns401() {
         RequestSpecification badAuth = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        badAuth.header("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString("nope:nope".getBytes()));
+        badAuth.header("Authorization",
+                "Basic " + java.util.Base64.getEncoder().encodeToString("nope:nope".getBytes(StandardCharsets.UTF_8)));
 
         ResponseSpecification expectUnauthorized = new ResponseSpecBuilder().expectStatusCode(oneOf(401, 403)).build();
 
