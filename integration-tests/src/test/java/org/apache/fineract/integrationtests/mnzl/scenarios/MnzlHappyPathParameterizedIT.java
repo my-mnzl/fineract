@@ -58,7 +58,7 @@ public class MnzlHappyPathParameterizedIT extends BaseLoanIntegrationTest {
             MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
             int terms = ((Number) productConfig.get("numberOfRepayments")).intValue();
             double principal = ((Number) productConfig.get("principalAmount")).doubleValue();
-            double rate = 12.0; // annual; mnzl prod configs don't carry a per-period rate field
+            double rate = readRate(productConfig);
 
             // Preview the schedule to read EMI amounts and due dates.
             MnzlSimulationDriver.ScenarioBuilder previewScenario = driver.scenario("happy_preview_" + configName, productId)
@@ -102,6 +102,15 @@ public class MnzlHappyPathParameterizedIT extends BaseLoanIntegrationTest {
 
     private String formatIsoToDateString(String iso) {
         return LocalDate.parse(iso).format(DATE_FMT);
+    }
+
+    private double readRate(Map<String, Object> productConfig) {
+        Object raw = productConfig.get("annualNominalInterestRate");
+        if (raw == null) {
+            throw new IllegalStateException("Prod-config fixture missing 'annualNominalInterestRate' for " + productConfig.get("configName")
+                    + " — re-run :integration-tests:refreshMnzlProdConfigs");
+        }
+        return ((Number) raw).doubleValue();
     }
 
     private Long createProductFromConfig(Map<String, Object> productConfig) {

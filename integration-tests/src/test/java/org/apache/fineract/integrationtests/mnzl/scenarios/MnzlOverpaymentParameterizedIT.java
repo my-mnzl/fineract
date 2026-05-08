@@ -57,7 +57,7 @@ public class MnzlOverpaymentParameterizedIT extends BaseLoanIntegrationTest {
             MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
             int terms = ((Number) productConfig.get("numberOfRepayments")).intValue();
             double principal = ((Number) productConfig.get("principalAmount")).doubleValue();
-            double rate = 12.0;
+            double rate = readRate(productConfig);
 
             Map<String, Object> preview = driver.preview(driver.scenario("over_preview_" + configName, productId).principal(principal)
                     .rate(rate).repayments(terms).disburseDate("01 January 2026").disburse("01 January 2026").body());
@@ -128,6 +128,15 @@ public class MnzlOverpaymentParameterizedIT extends BaseLoanIntegrationTest {
             }
         }
         throw new IllegalArgumentException("no preview period " + periodNumber);
+    }
+
+    private double readRate(Map<String, Object> productConfig) {
+        Object raw = productConfig.get("annualNominalInterestRate");
+        if (raw == null) {
+            throw new IllegalStateException("Prod-config fixture missing 'annualNominalInterestRate' for " + productConfig.get("configName")
+                    + " — re-run :integration-tests:refreshMnzlProdConfigs");
+        }
+        return ((Number) raw).doubleValue();
     }
 
     private Long createProductFromConfig(Map<String, Object> productConfig) {

@@ -58,7 +58,7 @@ public class MnzlWriteOffParameterizedIT extends BaseLoanIntegrationTest {
             MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
             int terms = ((Number) productConfig.get("numberOfRepayments")).intValue();
             double principal = ((Number) productConfig.get("principalAmount")).doubleValue();
-            double rate = 12.0;
+            double rate = readRate(productConfig);
 
             // Preview the schedule to read installment due dates and EMIs.
             Map<String, Object> preview = driver.preview(driver.scenario("writeoff_preview_" + configName, productId).principal(principal)
@@ -126,6 +126,15 @@ public class MnzlWriteOffParameterizedIT extends BaseLoanIntegrationTest {
     private String addDaysFormatted(String formatted, int days) {
         LocalDate base = LocalDate.parse(formatted, DATE_FMT);
         return base.plusDays(days).format(DATE_FMT);
+    }
+
+    private double readRate(Map<String, Object> productConfig) {
+        Object raw = productConfig.get("annualNominalInterestRate");
+        if (raw == null) {
+            throw new IllegalStateException("Prod-config fixture missing 'annualNominalInterestRate' for " + productConfig.get("configName")
+                    + " — re-run :integration-tests:refreshMnzlProdConfigs");
+        }
+        return ((Number) raw).doubleValue();
     }
 
     private Long createProductFromConfig(Map<String, Object> productConfig) {

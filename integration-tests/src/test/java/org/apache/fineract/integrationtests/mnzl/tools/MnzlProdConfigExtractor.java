@@ -41,19 +41,34 @@ import java.util.Map;
  * Run via {@code ./gradlew :integration-tests:refreshMnzlProdConfigs}. Output is consumed by
  * {@code MnzlScenarioFixtures} as @MethodSource fixtures for parameterized tests.
  * <p>
+ * Database connection is configured via environment variables, with local-dev defaults matching
+ * {@code docker-compose-development.yml}. To target a different host or credential set, export before running:
+ *
+ * <pre>
+ *   export MNZL_PROD_CONFIG_JDBC_URL=jdbc:mariadb://localhost:3307/fineract_default
+ *   export MNZL_PROD_CONFIG_USER=root
+ *   export MNZL_PROD_CONFIG_PASS=...
+ * </pre>
+ *
+ * <p>
  * Anonymization: drops {@code name}, {@code short_name}, {@code description}, {@code external_id} and any
  * client-identifying free-text columns. Synthetic labels (configName, charge_&lt;id&gt;) are derived from numeric ids
  * and enum codes only.
  */
 public final class MnzlProdConfigExtractor {
 
-    private static final String JDBC_URL = "jdbc:mariadb://localhost:3307/fineract_default";
-    private static final String USER = "root";
-    private static final String PASS = "password";
+    private static final String JDBC_URL = envOrDefault("MNZL_PROD_CONFIG_JDBC_URL", "jdbc:mariadb://localhost:3307/fineract_default");
+    private static final String USER = envOrDefault("MNZL_PROD_CONFIG_USER", "root");
+    private static final String PASS = envOrDefault("MNZL_PROD_CONFIG_PASS", "password");
     private static final Path OUT_DIR = Paths.get("integration-tests/src/test/resources/mnzl/prod-configs");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     private MnzlProdConfigExtractor() {}
+
+    private static String envOrDefault(String name, String fallback) {
+        String v = System.getenv(name);
+        return v != null && !v.isEmpty() ? v : fallback;
+    }
 
     public static void main(String[] args) throws Exception {
         Files.createDirectories(OUT_DIR);
@@ -71,13 +86,21 @@ public final class MnzlProdConfigExtractor {
         // DISTINCT meaningful product configurations joined to mnzl strategy codes.
         // We deliberately drop name / short_name / description / external_id (PII / free text).
         // configName is derived from numeric productId + scheduleStrategyCode for parameterized labels.
+        // The mnzl prod products carry a NULL nominal rate at the product level (rates are set per
+        // disbursed loan in m_loan). To give parameterized scenario tests a representative rate,
+        // we project the modal annual rate observed on m_loan rows for each product as
+        // annualNominalInterestRate, falling back to the product column when set.
         String sql = "SELECT p.id AS productId," //
                 + "       p.currency_code AS currencyCode," //
                 + "       p.currency_digits AS currencyDigits," //
                 + "       p.principal_amount AS principalAmount," //
                 + "       p.nominal_interest_rate_per_period AS nominalInterestRatePerPeriod," //
                 + "       p.interest_period_frequency_enum AS interestPeriodFrequencyEnum," //
-                + "       p.annual_nominal_interest_rate AS annualNominalInterestRate," //
+                + "       COALESCE(p.annual_nominal_interest_rate, (" + "           SELECT l.annual_nominal_interest_rate FROM m_loan l"
+                + "           WHERE l.product_id = p.id AND l.annual_nominal_interest_rate IS NOT NULL"
+                + "           GROUP BY l.annual_nominal_interest_rate"
+                + "           ORDER BY COUNT(*) DESC, l.annual_nominal_interest_rate DESC" + "           LIMIT 1"
+                + "       )) AS annualNominalInterestRate," //
                 + "       p.interest_method_enum AS interestMethodEnum," //
                 + "       p.interest_calculated_in_period_enum AS interestCalculatedInPeriodEnum," //
                 + "       p.allow_partial_period_interest_calcualtion AS allowPartialPeriodInterestCalculation," //
