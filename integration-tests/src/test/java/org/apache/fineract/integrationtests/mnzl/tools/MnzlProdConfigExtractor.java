@@ -34,6 +34,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Standalone JDBC extractor that connects to the local dev DB and emits anonymized JSON snapshots of mnzl product
@@ -58,6 +60,8 @@ import java.util.Map;
  */
 public final class MnzlProdConfigExtractor {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MnzlProdConfigExtractor.class);
+
     private static final String JDBC_URL = envOrDefault("MNZL_PROD_CONFIG_JDBC_URL", "jdbc:mariadb://localhost:3307/fineract_default");
     private static final String USER = envOrDefault("MNZL_PROD_CONFIG_USER", "root");
     private static final String PASS = envOrDefault("MNZL_PROD_CONFIG_PASS", "password");
@@ -80,7 +84,7 @@ public final class MnzlProdConfigExtractor {
             writeJson(extractWorkingDays(c), "working_days.json");
             writeJson(extractRehabLoan13516(c), "loan_13516.json");
         }
-        System.out.println("Wrote prod configs to " + OUT_DIR.toAbsolutePath());
+        LOG.info("Wrote prod configs to {}", OUT_DIR.toAbsolutePath());
     }
 
     private static List<Map<String, Object>> extractProducts(Connection c) throws Exception {
@@ -322,6 +326,6 @@ public final class MnzlProdConfigExtractor {
             GSON.toJson(data, w);
             w.write('\n');
         }
-        System.out.println("Wrote " + out);
+        LOG.info("Wrote {}", out);
     }
 }
