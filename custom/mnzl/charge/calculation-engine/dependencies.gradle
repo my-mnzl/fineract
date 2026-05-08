@@ -27,4 +27,6 @@ dependencies {
     implementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
         exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
     }
+    testImplementation(project(':custom:mnzl:charge:starter'))
+    testImplementation('org.springframework.boot:spring-boot-starter-test')
 }
