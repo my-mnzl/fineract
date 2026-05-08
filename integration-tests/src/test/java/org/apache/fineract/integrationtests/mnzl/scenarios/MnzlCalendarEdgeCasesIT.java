@@ -62,7 +62,7 @@ public class MnzlCalendarEdgeCasesIT extends BaseLoanIntegrationTest {
             Long productId = createProduct30_360();
             new MnzlProductStrategyHelper(requestSpec, responseSpec).setMnzl(productId);
 
-            Map<String, Object> preview = previewSchedule(productId, "weekend_first_inst", "01 July 2026");
+            List<Map<String, Object>> preview = previewSchedule(productId, "weekend_first_inst", "01 July 2026");
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).hasSize(TERMS);
 
@@ -93,7 +93,7 @@ public class MnzlCalendarEdgeCasesIT extends BaseLoanIntegrationTest {
             Long productId = createProduct30_360();
             new MnzlProductStrategyHelper(requestSpec, responseSpec).setMnzl(productId);
 
-            Map<String, Object> preview = previewSchedule(productId, "year_end", "01 December 2026");
+            List<Map<String, Object>> preview = previewSchedule(productId, "year_end", "01 December 2026");
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).hasSize(TERMS);
 
@@ -123,7 +123,7 @@ public class MnzlCalendarEdgeCasesIT extends BaseLoanIntegrationTest {
             Long productId = createProduct30_360();
             new MnzlProductStrategyHelper(requestSpec, responseSpec).setMnzl(productId);
 
-            Map<String, Object> preview = previewSchedule(productId, "leap_feb", "01 February 2028");
+            List<Map<String, Object>> preview = previewSchedule(productId, "leap_feb", "01 February 2028");
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).hasSize(TERMS);
 
@@ -136,19 +136,15 @@ public class MnzlCalendarEdgeCasesIT extends BaseLoanIntegrationTest {
         });
     }
 
-    private Map<String, Object> previewSchedule(Long productId, String name, String disburseDate) {
+    private List<Map<String, Object>> previewSchedule(Long productId, String name, String disburseDate) {
         MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
         return driver.preview(driver.scenario(name, productId).principal(PRINCIPAL).rate(ANNUAL_RATE).repayments(TERMS)
                 .disburseDate(disburseDate).disburse(disburseDate).body());
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractSchedulePeriods(Map<String, Object> preview) {
-        Object schedule = preview.get("schedule");
-        if (schedule == null) {
-            schedule = preview.get("periods");
-        }
-        return (List<Map<String, Object>>) schedule;
+    /** preview-schedule endpoint returns a JSON array of period maps directly. */
+    private List<Map<String, Object>> extractSchedulePeriods(List<Map<String, Object>> preview) {
+        return preview;
     }
 
     private Long createProduct30_360() {

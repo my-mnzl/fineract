@@ -68,7 +68,7 @@ public class MnzlPeriodicChargesLifecycleIT extends BaseLoanIntegrationTest {
 
             // Preview the schedule via the mnzl simulator and assert each installment carries the fee.
             MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
-            Map<String, Object> preview = driver.preview(driver.scenario("periodic_fee_preview", productId).principal(PRINCIPAL)
+            List<Map<String, Object>> preview = driver.preview(driver.scenario("periodic_fee_preview", productId).principal(PRINCIPAL)
                     .rate(ANNUAL_RATE).repayments(TERMS).disburseDate("01 January 2026").disburse("01 January 2026").body());
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).as("preview periods").hasSize(TERMS);
@@ -95,12 +95,8 @@ public class MnzlPeriodicChargesLifecycleIT extends BaseLoanIntegrationTest {
         });
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractSchedulePeriods(Map<String, Object> preview) {
-        Object schedule = preview.get("schedule");
-        if (schedule == null) {
-            schedule = preview.get("periods");
-        }
-        return (List<Map<String, Object>>) schedule;
+    /** preview-schedule endpoint returns a JSON array of period maps directly. */
+    private List<Map<String, Object>> extractSchedulePeriods(List<Map<String, Object>> preview) {
+        return preview;
     }
 }

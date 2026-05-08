@@ -82,6 +82,11 @@ public class MnzlLoanSimulationRunnerSnapshotFidelityIT extends BaseLoanIntegrat
         return (List<Map<String, Object>>) schedule;
     }
 
+    /** preview-schedule endpoint returns a JSON array directly (List of period maps). */
+    private List<Map<String, Object>> extractScheduleFromPreview(List<Map<String, Object>> preview) {
+        return preview;
+    }
+
     @Test
     public void simulatorSnapshot_matchesDbQueryAtEachStep() {
         runAt(DISBURSEMENT_DATE, () -> {
@@ -89,9 +94,9 @@ public class MnzlLoanSimulationRunnerSnapshotFidelityIT extends BaseLoanIntegrat
             MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
 
             // Preview to read EMI per installment.
-            Map<String, Object> preview = driver.preview(driver.scenario("g3_fidelity_preview", productId).principal(PRINCIPAL)
+            List<Map<String, Object>> preview = driver.preview(driver.scenario("g3_fidelity_preview", productId).principal(PRINCIPAL)
                     .rate(ANNUAL_RATE).repayments(TERMS).disburseDate(DISBURSEMENT_DATE).disburse(DISBURSEMENT_DATE).body());
-            List<Map<String, Object>> previewPeriods = extractSchedule(preview);
+            List<Map<String, Object>> previewPeriods = extractScheduleFromPreview(preview);
             assertThat(previewPeriods).as("preview periods").hasSize(TERMS);
 
             // Build DISBURSE + PAY × TERMS using preview-derived totals.
@@ -113,19 +118,38 @@ public class MnzlLoanSimulationRunnerSnapshotFidelityIT extends BaseLoanIntegrat
                     within(0.01));
 
             // Cross-fidelity: the disburse snapshot's schedule should match the preview schedule one-for-one on
-            // dueDate / principalDue / interestDue.
+            // dueDate / principalDue / interestDue. The preview endpoint emits dueDate as an ISO string
+            // (yyyy-MM-dd); the snapshot endpoint emits it as a [year, month, day] array (Spring's default
+            // serializer for java.time.LocalDate). Normalize both before comparing.
             List<Map<String, Object>> disburseSchedule = extractSchedule(snapshots(result).get(0));
             assertThat(disburseSchedule).hasSize(previewPeriods.size());
             for (int i = 0; i < previewPeriods.size(); i++) {
                 Map<String, Object> p = previewPeriods.get(i);
                 Map<String, Object> s = disburseSchedule.get(i);
-                assertThat(s.get("dueDate")).as("installment %d dueDate", i + 1).isEqualTo(p.get("dueDate"));
+                assertThat(normalizeDueDate(s.get("dueDate"))).as("installment %d dueDate", i + 1)
+                        .isEqualTo(normalizeDueDate(p.get("dueDate")));
                 assertThat(((Number) s.get("principalDue")).doubleValue()).as("installment %d principalDue", i + 1)
                         .isEqualTo(((Number) p.get("principalDue")).doubleValue(), within(0.01));
                 assertThat(((Number) s.get("interestDue")).doubleValue()).as("installment %d interestDue", i + 1)
                         .isEqualTo(((Number) p.get("interestDue")).doubleValue(), within(0.01));
             }
         });
+    }
+
+    /**
+     * Normalize a Gson-deserialized dueDate value to an ISO date string. The simulator API returns dueDate as a
+     * {@code java.time.LocalDate} which Spring serializes as a JSON array {@code [year, month, day]}; the preview
+     * endpoint returns it as a pre-formatted {@code yyyy-MM-dd} string. Both shapes parse cleanly to a
+     * {@code LocalDate} and compare on its ISO form.
+     */
+    private String normalizeDueDate(Object value) {
+        if (value instanceof List<?> list && list.size() >= 3) {
+            int year = ((Number) list.get(0)).intValue();
+            int month = ((Number) list.get(1)).intValue();
+            int day = ((Number) list.get(2)).intValue();
+            return LocalDate.of(year, month, day).toString();
+        }
+        return String.valueOf(value);
     }
 
     @Test
@@ -148,9 +172,9 @@ public class MnzlLoanSimulationRunnerSnapshotFidelityIT extends BaseLoanIntegrat
             Long productId = createMnzlProduct();
             MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
 
-            Map<String, Object> preview = driver.preview(driver.scenario("g3_preview_match", productId).principal(PRINCIPAL)
+            List<Map<String, Object>> preview = driver.preview(driver.scenario("g3_preview_match", productId).principal(PRINCIPAL)
                     .rate(ANNUAL_RATE).repayments(TERMS).disburseDate(DISBURSEMENT_DATE).disburse(DISBURSEMENT_DATE).body());
-            List<Map<String, Object>> previewPeriods = extractSchedule(preview);
+            List<Map<String, Object>> previewPeriods = extractScheduleFromPreview(preview);
             assertThat(previewPeriods).hasSize(TERMS);
 
             Map<String, Object> result = driver.scenario("g3_preview_match_real", productId).principal(PRINCIPAL).rate(ANNUAL_RATE)
@@ -163,7 +187,8 @@ public class MnzlLoanSimulationRunnerSnapshotFidelityIT extends BaseLoanIntegrat
             for (int i = 0; i < previewPeriods.size(); i++) {
                 Map<String, Object> p = previewPeriods.get(i);
                 Map<String, Object> s = disburseSchedule.get(i);
-                assertThat(s.get("dueDate")).as("installment %d dueDate", i + 1).isEqualTo(p.get("dueDate"));
+                assertThat(normalizeDueDate(s.get("dueDate"))).as("installment %d dueDate", i + 1)
+                        .isEqualTo(normalizeDueDate(p.get("dueDate")));
                 assertThat(((Number) s.get("principalDue")).doubleValue()).as("installment %d principalDue", i + 1)
                         .isEqualTo(((Number) p.get("principalDue")).doubleValue(), within(0.01));
                 assertThat(((Number) s.get("interestDue")).doubleValue()).as("installment %d interestDue", i + 1)

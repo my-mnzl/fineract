@@ -432,11 +432,17 @@ public class MnzlLoanSimulationRunner {
         }
     }
 
-    private void postLoanCharge(Long loanId, long chargeId, BigDecimal amount) {
+    private void postLoanCharge(Long loanId, long chargeId, BigDecimal amount, LocalDate dueDate) {
         JsonObject json = new JsonObject();
         json.addProperty("chargeId", chargeId);
         if (amount != null) {
             json.addProperty("amount", amount);
+        }
+        if (dueDate != null) {
+            // OVERDUE_INSTALLMENT, SPECIFIED_DUE_DATE, and LOAN_PERIODIC charge types require a dueDate per
+            // LoanChargeService.create. Pass the simulator action's date so the ADD_CHARGE action works for
+            // those charge categories instead of failing with "Loan charge is missing due date".
+            json.addProperty("dueDate", dueDate.format(DATE_FORMAT));
         }
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
@@ -472,7 +478,7 @@ public class MnzlLoanSimulationRunner {
     }
 
     private void addCharge(Long loanId, SimulationActionRequest action) {
-        postLoanCharge(loanId, action.getChargeId(), action.getAmount());
+        postLoanCharge(loanId, action.getChargeId(), action.getAmount(), action.getDate());
     }
 
     private void writeOff(Long loanId, SimulationActionRequest action) {

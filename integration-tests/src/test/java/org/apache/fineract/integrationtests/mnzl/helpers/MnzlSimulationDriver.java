@@ -19,12 +19,18 @@
 package org.apache.fineract.integrationtests.mnzl.helpers;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.apache.fineract.integrationtests.common.Utils;
 
@@ -49,10 +55,15 @@ public final class MnzlSimulationDriver {
         return new ScenarioBuilder(name, loanProductId);
     }
 
-    @SuppressWarnings("unchecked")
+    /**
+     * POST a simulation and block until it reaches a terminal state (COMPLETED or FAILED). The simulator runs the
+     * scenario asynchronously, so a bare POST returns the record with {@code status="RUNNING"} before the lifecycle has
+     * actually executed. Tests need the final snapshot list, so we poll the GET endpoint until the runner exits the
+     * RUNNING state, then return that final response.
+     */
     public Map<String, Object> run(Map<String, Object> body) {
-        String json = Utils.performServerPost(request, response, BASE_URL, gson.toJson(body));
-        return gson.fromJson(json, Map.class);
+        Map<String, Object> initial = postRaw(body);
+        return awaitTerminal(initial);
     }
 
     @SuppressWarnings("unchecked")
@@ -61,16 +72,56 @@ public final class MnzlSimulationDriver {
         return gson.fromJson(json, Map.class);
     }
 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> preview(Map<String, Object> body) {
+    public List<Map<String, Object>> preview(Map<String, Object> body) {
         String json = Utils.performServerPost(request, response, PREVIEW_URL, gson.toJson(body));
+        Type type = new TypeToken<List<Map<String, Object>>>() {}.getType();
+        return gson.fromJson(json, type);
+    }
+
+    public Map<String, Object> rerun(String uuid) {
+        Map<String, Object> initial = postRawRerun(uuid);
+        return awaitTerminal(initial);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> postRaw(Map<String, Object> body) {
+        String json = Utils.performServerPost(request, response, BASE_URL, gson.toJson(body));
         return gson.fromJson(json, Map.class);
     }
 
     @SuppressWarnings("unchecked")
-    public Map<String, Object> rerun(String uuid) {
+    private Map<String, Object> postRawRerun(String uuid) {
         String json = Utils.performServerPost(request, response, String.format(RERUN_URL, uuid), "{}");
         return gson.fromJson(json, Map.class);
+    }
+
+    /**
+     * Poll the simulation's GET endpoint until status leaves {@code RUNNING}. Returns the final response (the same
+     * shape as the POST, plus a populated snapshots array on success). Times out after 60 seconds — simulations of the
+     * size we drive in ITs typically complete within a few seconds.
+     */
+    private Map<String, Object> awaitTerminal(Map<String, Object> initial) {
+        Object uuidObj = initial.get("uuid");
+        if (uuidObj == null) {
+            return initial;
+        }
+        String uuid = uuidObj.toString();
+        long deadline = System.currentTimeMillis() + 60_000L;
+        Map<String, Object> latest = initial;
+        while (System.currentTimeMillis() < deadline) {
+            Object status = latest.get("status");
+            if (status != null && !"RUNNING".equals(status) && !"PENDING".equals(status)) {
+                return latest;
+            }
+            try {
+                Thread.sleep(200L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return latest;
+            }
+            latest = get(uuid);
+        }
+        return latest;
     }
 
     public void delete(String uuid) {
@@ -86,16 +137,22 @@ public final class MnzlSimulationDriver {
         ScenarioBuilder(String name, Long loanProductId) {
             body.put("name", name);
             body.put("loanProductId", loanProductId);
+            // The validator pulls numberOfRepayments via extractIntegerWithLocaleNamed which requires a "locale"
+            // field on the JSON, and pulls principal via extractStringNamed which only accepts JSON string values.
+            // We default both to keep happy-path requests valid; callers can still override via the setters below.
+            body.put("locale", "en");
             body.put("actions", actions);
         }
 
         public ScenarioBuilder principal(double principal) {
-            body.put("principal", BigDecimal.valueOf(principal));
+            // Validator uses extractStringNamed("principal", ...) and notBlank() — must serialize as a JSON string.
+            body.put("principal", BigDecimal.valueOf(principal).toPlainString());
             return this;
         }
 
         public ScenarioBuilder rate(double pct) {
-            body.put("interestRatePerPeriod", BigDecimal.valueOf(pct));
+            // interestRatePerPeriod is also commonly extracted as a locale-aware decimal string — send as string.
+            body.put("interestRatePerPeriod", BigDecimal.valueOf(pct).toPlainString());
             return this;
         }
 
@@ -105,17 +162,17 @@ public final class MnzlSimulationDriver {
         }
 
         public ScenarioBuilder disburseDate(String d) {
-            body.put("disbursementDate", d);
+            body.put("disbursementDate", toIso(d));
             return this;
         }
 
         public ScenarioBuilder firstRepaymentOn(String d) {
-            body.put("firstRepaymentOnDate", d);
+            body.put("firstRepaymentOnDate", toIso(d));
             return this;
         }
 
         public ScenarioBuilder interestChargedFrom(String d) {
-            body.put("interestChargedFromDate", d);
+            body.put("interestChargedFromDate", toIso(d));
             return this;
         }
 
@@ -171,8 +228,25 @@ public final class MnzlSimulationDriver {
         private Map<String, Object> baseAction(String type, String date) {
             Map<String, Object> a = new HashMap<>();
             a.put("type", type);
-            a.put("date", date);
+            a.put("date", toIso(date));
             return a;
+        }
+
+        /**
+         * Normalize a date string to ISO {@code yyyy-MM-dd} which the simulator's runner parses. Accepts the IT
+         * framework's canonical {@code dd MMMM yyyy} ("01 January 2026") and already-ISO inputs.
+         */
+        private String toIso(String date) {
+            if (date == null) {
+                return null;
+            }
+            try {
+                LocalDate.parse(date, ISO);
+                return date;
+            } catch (DateTimeParseException ignored) {
+                // fall through to the human-readable parser
+            }
+            return LocalDate.parse(date, HUMAN).format(ISO);
         }
 
         public Map<String, Object> body() {
@@ -183,4 +257,7 @@ public final class MnzlSimulationDriver {
             return MnzlSimulationDriver.this.run(body);
         }
     }
+
+    private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final DateTimeFormatter HUMAN = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ENGLISH);
 }

@@ -47,6 +47,7 @@ public final class MnzlChargesHelper {
         body.put("chargeAppliesTo", 1); // LOAN
         body.put("chargeTimeType", 9); // OVERDUE_INSTALLMENT
         body.put("chargeCalculationType", MNZL_PERCENT_AMOUNT_INTEREST_PENALTIES);
+        body.put("chargePaymentMode", 0); // REGULAR — required for loan charges
         body.put("amount", percentage);
         body.put("currencyCode", "USD");
         body.put("active", true);
@@ -60,14 +61,33 @@ public final class MnzlChargesHelper {
         Map<String, Object> body = new HashMap<>();
         body.put("name", Utils.uniqueRandomStringGenerator("MNZL_PERIODIC_", 6));
         body.put("chargeAppliesTo", 1);
-        body.put("chargeTimeType", 13); // LOAN_PERIODIC (monthly anchor)
+        body.put("chargeTimeType", 17); // LOAN_PERIODIC — periodic charge applied each repayment period
         body.put("chargeCalculationType", 1); // FLAT
+        body.put("chargePaymentMode", 0); // REGULAR — required for loan charges
         body.put("amount", amount);
         body.put("currencyCode", "USD");
         body.put("active", true);
         body.put("locale", "en");
         body.put("feeFrequency", 2); // MONTHS
         body.put("feeInterval", 1);
+        return ChargesHelper.createCharges(request, response, new Gson().toJson(body));
+    }
+
+    /**
+     * Flat ad-hoc fee whose due date is supplied at attach-time (chargeTimeType = SPECIFIED_DUE_DATE). Suitable for the
+     * simulator's ADD_CHARGE action: the action's date is forwarded as the charge's dueDate by the runner.
+     */
+    public Integer createSpecifiedDueDateFee(double amount) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", Utils.uniqueRandomStringGenerator("MNZL_SPECIFIC_", 6));
+        body.put("chargeAppliesTo", 1);
+        body.put("chargeTimeType", 2); // SPECIFIED_DUE_DATE
+        body.put("chargeCalculationType", 1); // FLAT
+        body.put("chargePaymentMode", 0); // REGULAR — required for loan charges
+        body.put("amount", amount);
+        body.put("currencyCode", "USD");
+        body.put("active", true);
+        body.put("locale", "en");
         return ChargesHelper.createCharges(request, response, new Gson().toJson(body));
     }
 
@@ -78,6 +98,7 @@ public final class MnzlChargesHelper {
         body.put("chargeAppliesTo", 1);
         body.put("chargeTimeType", 1); // DISBURSEMENT
         body.put("chargeCalculationType", 1); // FLAT
+        body.put("chargePaymentMode", 0); // REGULAR — required for loan charges
         body.put("amount", amount);
         body.put("currencyCode", "USD");
         body.put("active", true);

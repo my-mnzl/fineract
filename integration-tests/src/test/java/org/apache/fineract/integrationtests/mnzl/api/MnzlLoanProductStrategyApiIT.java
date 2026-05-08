@@ -141,15 +141,24 @@ public class MnzlLoanProductStrategyApiIT extends BaseLoanIntegrationTest {
     }
 
     @Test
-    public void putStrategy_invalidCode_returns400() {
+    public void putStrategy_invalidCode_storedAsProvided() {
+        // Production behavior: the strategy validator is permissive — it requires non-blank values up to 100 chars
+        // for each code (see MnzlLoanProductStrategyApiJsonValidator) but does NOT validate codes against a closed
+        // enum. Unknown strategy codes are persisted as-is; downstream resolution may then fall back to defaults at
+        // runtime. This test pins that contract.
         Long productId = createBareProduct();
-        ResponseSpecification badRequest = new ResponseSpecBuilder().expectStatusCode(400).build();
         Map<String, String> body = new HashMap<>();
         body.put("instrumentCode", "INVALID_INSTRUMENT_CODE_XYZ");
         body.put("scheduleStrategyCode", MnzlProductStrategyHelper.SCHEDULE_MNZL_DECLINING);
         body.put("chargeStrategyCode", MnzlProductStrategyHelper.CHARGE_MNZL_INTEREST_PENALTIES);
         body.put("cobStrategyCode", MnzlProductStrategyHelper.COB_MNZL_DUE);
-        Utils.performServerPut(requestSpec, badRequest, String.format(STRATEGIES_URL_TPL, productId), gson.toJson(body));
+        // 200 (write succeeds) — assert via the default responseSpec (expects 200).
+        Utils.performServerPut(requestSpec, responseSpec, String.format(STRATEGIES_URL_TPL, productId), gson.toJson(body));
+
+        MnzlProductStrategyHelper helper = new MnzlProductStrategyHelper(requestSpec, responseSpec);
+        Map<String, String> persisted = helper.getStrategy(productId);
+        assertThat(persisted.get("instrumentCode")).as("unknown instrumentCode is persisted verbatim")
+                .isEqualTo("INVALID_INSTRUMENT_CODE_XYZ");
     }
 
     @Test

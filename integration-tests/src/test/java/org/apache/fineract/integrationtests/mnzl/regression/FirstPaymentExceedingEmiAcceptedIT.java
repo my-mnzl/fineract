@@ -70,6 +70,8 @@ public class FirstPaymentExceedingEmiAcceptedIT extends BaseLoanIntegrationTest 
             double emi = Utils.getDoubleValue(periods.get(0).getTotalDueForPeriod());
             double overpayment = Math.round(emi * 1.5 * 100.0) / 100.0;
 
+            // Advance business date to the first installment's due date so the repayment is not "in the future".
+            updateBusinessDate(FIRST_INSTALLMENT_DUE);
             // Make the over-EMI repayment on the first installment's due date — the fix must allow it.
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", FIRST_INSTALLMENT_DUE, overpayment);
 
@@ -104,10 +106,12 @@ public class FirstPaymentExceedingEmiAcceptedIT extends BaseLoanIntegrationTest 
             List<GetLoansLoanIdRepaymentPeriod> periods = getRepaymentPeriods(loanDetails);
 
             double emi1 = Utils.getDoubleValue(periods.get(0).getTotalDueForPeriod());
+            updateBusinessDate(FIRST_INSTALLMENT_DUE);
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", FIRST_INSTALLMENT_DUE, emi1);
 
             double emi2 = Utils.getDoubleValue(periods.get(1).getTotalDueForPeriod());
             double overpayment = Math.round(emi2 * 1.5 * 100.0) / 100.0;
+            updateBusinessDate(SECOND_INSTALLMENT_DUE);
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", SECOND_INSTALLMENT_DUE, overpayment);
 
             GetLoansLoanIdResponse afterPayment = loanTransactionHelper.getLoanDetails(loanId);

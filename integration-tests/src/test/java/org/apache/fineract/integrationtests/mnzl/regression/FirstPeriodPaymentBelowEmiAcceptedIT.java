@@ -73,6 +73,8 @@ public class FirstPeriodPaymentBelowEmiAcceptedIT extends BaseLoanIntegrationTes
             double partial = Math.round(emi * 0.5 * 100.0) / 100.0;
             double expectedRemainder = emi - partial;
 
+            // Advance business date to the first installment's due date so the repayment is not "in the future".
+            updateBusinessDate(FIRST_INSTALLMENT_DUE);
             loanTransactionHelper.makeLoanRepayment(loanId, "repayment", FIRST_INSTALLMENT_DUE, partial);
 
             GetLoansLoanIdResponse afterPayment = loanTransactionHelper.getLoanDetails(loanId);

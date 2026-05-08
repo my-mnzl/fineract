@@ -62,7 +62,7 @@ public class MnzlHappyPathParameterizedIT extends BaseLoanIntegrationTest {
             // Preview the schedule to read EMI amounts and due dates.
             MnzlSimulationDriver.ScenarioBuilder previewScenario = driver.scenario("happy_preview_" + configName, productId)
                     .principal(principal).rate(rate).repayments(terms).disburseDate("01 January 2026").disburse("01 January 2026");
-            Map<String, Object> preview = driver.preview(previewScenario.body());
+            List<Map<String, Object>> preview = driver.preview(previewScenario.body());
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).as("preview must have %d periods", terms).hasSize(terms);
 
@@ -81,13 +81,9 @@ public class MnzlHappyPathParameterizedIT extends BaseLoanIntegrationTest {
         });
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractSchedulePeriods(Map<String, Object> preview) {
-        Object schedule = preview.get("schedule");
-        if (schedule == null) {
-            schedule = preview.get("periods");
-        }
-        return (List<Map<String, Object>>) schedule;
+    /** preview-schedule endpoint returns a JSON array of period maps directly. */
+    private List<Map<String, Object>> extractSchedulePeriods(List<Map<String, Object>> preview) {
+        return preview;
     }
 
     @SuppressWarnings("unchecked")

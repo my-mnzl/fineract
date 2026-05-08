@@ -57,8 +57,8 @@ public class MnzlLatePaymentCompoundingIT extends BaseLoanIntegrationTest {
             double principal = ((Number) productConfig.get("principalAmount")).doubleValue();
             double rate = readRate(productConfig);
 
-            Map<String, Object> preview = driver.preview(driver.scenario("compound_preview_" + configName, productId).principal(principal)
-                    .rate(rate).repayments(terms).disburseDate("01 January 2026").disburse("01 January 2026").body());
+            List<Map<String, Object>> preview = driver.preview(driver.scenario("compound_preview_" + configName, productId)
+                    .principal(principal).rate(rate).repayments(terms).disburseDate("01 January 2026").disburse("01 January 2026").body());
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).as("preview periods").hasSize(terms);
 
@@ -82,21 +82,18 @@ public class MnzlLatePaymentCompoundingIT extends BaseLoanIntegrationTest {
             }
             Map<String, Object> result = s.run();
 
-            // Snapshot count: 1 disburse + 1 on-time + 2 skip + 1 cob + 1 catchup + (terms-3) remaining = 2 + terms.
+            // Snapshot count: 1 disburse + 1 on-time + 2 skip + 1 cob + 1 catchup + (terms-3) remaining
+            // = 6 + (terms - 3) = 3 + terms.
             assertThat(result.get("status")).isEqualTo("COMPLETED");
             @SuppressWarnings("unchecked")
             List<Object> snaps = (List<Object>) result.get("snapshots");
-            assertThat(snaps).as("snapshot count").hasSize(2 + terms);
+            assertThat(snaps).as("snapshot count").hasSize(3 + terms);
         });
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractSchedulePeriods(Map<String, Object> preview) {
-        Object schedule = preview.get("schedule");
-        if (schedule == null) {
-            schedule = preview.get("periods");
-        }
-        return (List<Map<String, Object>>) schedule;
+    /** preview-schedule endpoint returns a JSON array of period maps directly. */
+    private List<Map<String, Object>> extractSchedulePeriods(List<Map<String, Object>> preview) {
+        return preview;
     }
 
     private String dueDateOf(List<Map<String, Object>> periods, int periodNumber) {

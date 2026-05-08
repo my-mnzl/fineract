@@ -58,7 +58,7 @@ public class MnzlOverpaymentParameterizedIT extends BaseLoanIntegrationTest {
             double principal = ((Number) productConfig.get("principalAmount")).doubleValue();
             double rate = readRate(productConfig);
 
-            Map<String, Object> preview = driver.preview(driver.scenario("over_preview_" + configName, productId).principal(principal)
+            List<Map<String, Object>> preview = driver.preview(driver.scenario("over_preview_" + configName, productId).principal(principal)
                     .rate(rate).repayments(terms).disburseDate("01 January 2026").disburse("01 January 2026").body());
             List<Map<String, Object>> periods = extractSchedulePeriods(preview);
             assertThat(periods).as("preview periods").hasSize(terms);
@@ -102,13 +102,9 @@ public class MnzlOverpaymentParameterizedIT extends BaseLoanIntegrationTest {
         return ((Number) summary.get("totalOutstanding")).doubleValue();
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractSchedulePeriods(Map<String, Object> preview) {
-        Object schedule = preview.get("schedule");
-        if (schedule == null) {
-            schedule = preview.get("periods");
-        }
-        return (List<Map<String, Object>>) schedule;
+    /** preview-schedule endpoint returns a JSON array of period maps directly. */
+    private List<Map<String, Object>> extractSchedulePeriods(List<Map<String, Object>> preview) {
+        return preview;
     }
 
     private String dueDateOf(List<Map<String, Object>> periods, int periodNumber) {
