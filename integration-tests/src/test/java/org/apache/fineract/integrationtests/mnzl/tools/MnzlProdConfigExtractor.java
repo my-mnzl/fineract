@@ -319,6 +319,7 @@ public final class MnzlProdConfigExtractor {
         Path out = OUT_DIR.resolve(filename);
         try (Writer w = new FileWriter(out.toFile())) {
             GSON.toJson(data, w);
+            w.write('\n');
         }
         System.out.println("Wrote " + out);
     }
