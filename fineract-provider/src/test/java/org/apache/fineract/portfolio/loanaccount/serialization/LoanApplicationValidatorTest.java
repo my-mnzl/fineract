@@ -76,9 +76,7 @@ import org.apache.fineract.portfolio.savings.domain.SavingsAccountRepositoryWrap
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -90,8 +88,6 @@ class LoanApplicationValidatorTest {
     private static final LocalDate BUSINESS_DATE = LocalDate.of(2025, 6, 1);
     private static final String TRANSACTION_PROCESSING_STRATEGY = "mifos-standard-strategy";
 
-    @Spy
-    private FromJsonHelper fromApiJsonHelper = new FromJsonHelper();
     @Mock
     private LoanScheduleValidator loanScheduleValidator;
     @Mock
@@ -143,7 +139,6 @@ class LoanApplicationValidatorTest {
     @Mock
     private LoanMapper loanMapper;
 
-    @InjectMocks
     private LoanApplicationValidator validator;
 
     private LoanProduct floatingLoanProduct;
@@ -153,6 +148,13 @@ class LoanApplicationValidatorTest {
 
     @BeforeEach
     void setUp() {
+        validator = new LoanApplicationValidator(new FromJsonHelper(), loanScheduleValidator, clientCollateralManagementRepositoryWrapper,
+                loanChargeApiJsonValidator, loanRepaymentScheduleTransactionProcessorFactory, advancedPaymentAllocationsValidator,
+                configurationDomainService, loanProductRepository, clientRepository, groupRepository, loanReadPlatformService,
+                loanProductDataValidator, globalConfigurationRepository, entityMappingRepository, fineractEntityRelationRepository,
+                loanRepositoryWrapper, loanProductReadPlatformService, collateralAssembler, workingDaysRepository, holidayRepository,
+                savingsAccountRepository, loanLifecycleStateMachine, calendarInstanceRepository, loanUtilService,
+                entityDatatableChecksWritePlatformService, loanMapper);
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default Tenant", "UTC", null));
         HashMap<BusinessDateType, LocalDate> dates = new HashMap<>();
         dates.put(BusinessDateType.BUSINESS_DATE, BUSINESS_DATE);
@@ -268,7 +270,7 @@ class LoanApplicationValidatorTest {
                 {
                   "locale": "en",
                   "dateFormat": "dd MMMM yyyy",
-                  "productId": %s,
+                  "productId": __PRODUCT_ID__,
                   "clientId": 1,
                   "loanType": "individual",
                   "principal": 1000,
@@ -281,13 +283,13 @@ class LoanApplicationValidatorTest {
                   "interestCalculationPeriodType": 1,
                   "allowPartialPeriodInterestCalcualtion": true,
                   "isFloatingInterestRate": false,
-                  "interestRateDifferential": %s,
+                  "interestRateDifferential": __INTEREST_RATE_DIFFERENTIAL__,
                   "amortizationType": 1,
                   "expectedDisbursementDate": "01 June 2025",
                   "submittedOnDate": "01 May 2025",
                   "transactionProcessingStrategyCode": "mifos-standard-strategy"
                 }
-                """.formatted(productId, interestRateDifferential);
+                """.replace("__PRODUCT_ID__", productId.toString()).replace("__INTEREST_RATE_DIFFERENTIAL__", interestRateDifferential);
     }
 
     private static String updateLoanJson(String interestRateDifferential) {
@@ -296,9 +298,9 @@ class LoanApplicationValidatorTest {
                   "locale": "en",
                   "dateFormat": "dd MMMM yyyy",
                   "loanType": "individual",
-                  "interestRateDifferential": %s
+                  "interestRateDifferential": __INTEREST_RATE_DIFFERENTIAL__
                 }
-                """.formatted(interestRateDifferential);
+                """.replace("__INTEREST_RATE_DIFFERENTIAL__", interestRateDifferential);
     }
 
     private static void assertValidationError(Runnable action, String parameterName) {
