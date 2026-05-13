@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.organisation.holiday.domain.HolidayRepository;
@@ -34,11 +35,14 @@ import org.apache.fineract.portfolio.calendar.service.CalendarReadPlatformServic
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRateDTO;
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRateData;
 import org.apache.fineract.portfolio.floatingrates.data.FloatingRatePeriodData;
+import org.apache.fineract.portfolio.floatingrates.domain.FloatingRate;
+import org.apache.fineract.portfolio.floatingrates.domain.FloatingRatePeriod;
 import org.apache.fineract.portfolio.floatingrates.exception.FloatingRateNotFoundException;
 import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
+import org.apache.fineract.portfolio.loanproduct.domain.LoanProductFloatingRates;
 import org.apache.fineract.portfolio.note.domain.NoteRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -157,6 +161,39 @@ class MnzlLoanUtilServiceTest {
         assertThat(dto.isFloatingInterestRate()).isTrue();
         // Base lending rate periods stay null when missing — the DTO stores whatever the override passed in.
         assertThat(dto.getBaseLendingRatePeriods()).isNull();
+    }
+
+    @Test
+    void floatingLoan_forcesFloatingDtoSoFutureRatePeriodsRemainApplicableWithNegativeDifferential() {
+        Loan loan = mock(Loan.class);
+        LoanProduct product = mock(LoanProduct.class);
+        when(loan.loanProduct()).thenReturn(product);
+        when(product.isLinkedToFloatingInterestRate()).thenReturn(true);
+        when(loan.getIsFloatingInterestRate()).thenReturn(false);
+        when(loan.getInterestRateDifferential()).thenReturn(new BigDecimal("-0.25"));
+        when(loan.getDisbursementDate()).thenReturn(LocalDate.of(2025, 1, 1));
+        FloatingRateData baseRate = mock(FloatingRateData.class);
+        when(baseRate.getRatePeriods()).thenReturn(List.of());
+        when(floatingRatesReadPlatformService.retrieveBaseLendingRate()).thenReturn(baseRate);
+
+        FloatingRateDTO dto = service.exposedConstructFloatingRateDTO(loan);
+
+        FloatingRate floatingRate = new FloatingRate("MNZL floating rate", false, true,
+                List.of(new FloatingRatePeriod(LocalDate.of(2024, 12, 1), new BigDecimal("26.00"), false, true),
+                        new FloatingRatePeriod(LocalDate.of(2025, 2, 1), new BigDecimal("27.00"), false, true)));
+        LoanProductFloatingRates productFloatingRates = new LoanProductFloatingRates(floatingRate, product, BigDecimal.ZERO,
+                new BigDecimal("-5.00"), new BigDecimal("5.00"), BigDecimal.ZERO, true);
+
+        Collection<FloatingRatePeriodData> rates = productFloatingRates.fetchInterestRates(dto);
+
+        assertThat(dto).isNotNull();
+        assertThat(dto.isFloatingInterestRate()).isTrue();
+        assertThat(dto.getInterestRateDiff()).isEqualByComparingTo("-0.25");
+        assertThat(rates).extracting(FloatingRatePeriodData::getFromDateAsLocalDate).containsExactly(LocalDate.of(2024, 12, 1),
+                LocalDate.of(2025, 2, 1));
+        assertThat(rates).extracting(FloatingRatePeriodData::getInterestRate)
+                .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+                .containsExactly(new BigDecimal("25.75"), new BigDecimal("26.75"));
     }
 
     /**

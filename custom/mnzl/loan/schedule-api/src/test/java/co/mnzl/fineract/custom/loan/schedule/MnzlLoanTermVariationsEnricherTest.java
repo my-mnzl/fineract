@@ -179,6 +179,22 @@ class MnzlLoanTermVariationsEnricherTest {
         verify(floatingRateDTO).resetInterestRateDiff();
     }
 
+    @Test
+    void enrich_negativeDifferentialSurvivesResetAndContributesToApplicableRate() {
+        FloatingRateDTO dto = new FloatingRateDTO(true, TODAY.minusMonths(6), new BigDecimal("-0.25"), null);
+        dto.addInterestRateDiff(new BigDecimal("1.00"));
+        when(loanProduct.fetchInterestRates(dto)).thenAnswer(invocation -> {
+            FloatingRateDTO suppliedDto = invocation.getArgument(0);
+            assertThat(suppliedDto.getInterestRateDiff()).isEqualByComparingTo("-0.25");
+            return List.of(ratePeriod(TODAY.minusDays(10), new BigDecimal("26.00").add(suppliedDto.getInterestRateDiff())));
+        });
+
+        BigDecimal result = enricher.enrich(dto, NOMINAL_RATE, List.<LoanTermVariationsData>of(), loan);
+
+        assertThat(result).isEqualByComparingTo("25.75");
+        assertThat(dto.getInterestRateDiff()).isEqualByComparingTo("-0.25");
+    }
+
     private void stubApplicableRates(Collection<FloatingRatePeriodData> rates) {
         when(loanProduct.fetchInterestRates(floatingRateDTO)).thenReturn(rates);
     }

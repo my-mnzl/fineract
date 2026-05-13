@@ -447,7 +447,7 @@ public final class LoanApplicationValidator {
                 final BigDecimal interestRateDifferential = this.fromApiJsonHelper
                         .extractBigDecimalWithLocaleNamed(interestRateDifferentialParameterName, element);
                 baseDataValidator.reset().parameter(interestRateDifferentialParameterName).value(interestRateDifferential).notNull()
-                        .zeroOrPositiveAmount().inMinAndMaxAmountRange(loanProduct.getFloatingRates().getMinDifferentialLendingRate(),
+                        .inMinAndMaxAmountRange(loanProduct.getFloatingRates().getMinDifferentialLendingRate(),
                                 loanProduct.getFloatingRates().getMaxDifferentialLendingRate());
             } else {
 
@@ -1126,8 +1126,7 @@ public final class LoanApplicationValidator {
                     atLeastOneParameterPassedForUpdate = true;
                 }
                 baseDataValidator.reset().parameter(LoanApiConstants.interestRateDifferentialParameterName).value(interestRateDifferential)
-                        .notNull().zeroOrPositiveAmount()
-                        .inMinAndMaxAmountRange(loanProduct.getFloatingRates().getMinDifferentialLendingRate(),
+                        .notNull().inMinAndMaxAmountRange(loanProduct.getFloatingRates().getMinDifferentialLendingRate(),
                                 loanProduct.getFloatingRates().getMaxDifferentialLendingRate());
 
             } else {

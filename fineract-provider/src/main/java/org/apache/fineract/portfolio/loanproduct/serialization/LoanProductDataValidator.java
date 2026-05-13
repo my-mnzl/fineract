@@ -480,44 +480,25 @@ public final class LoanProductDataValidator {
 
             final BigDecimal interestRateDifferential = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed(INTEREST_RATE_DIFFERENTIAL,
                     element);
-            baseDataValidator.reset().parameter(INTEREST_RATE_DIFFERENTIAL).value(interestRateDifferential).notNull()
-                    .zeroOrPositiveAmount();
+            baseDataValidator.reset().parameter(INTEREST_RATE_DIFFERENTIAL).value(interestRateDifferential).notNull();
 
             final String minDifferentialLendingRateParameterName = MIN_DIFFERENTIAL_LENDING_RATE;
             BigDecimal minDifferentialLendingRate = this.fromApiJsonHelper
                     .extractBigDecimalWithLocaleNamed(minDifferentialLendingRateParameterName, element);
-            baseDataValidator.reset().parameter(minDifferentialLendingRateParameterName).value(minDifferentialLendingRate).notNull()
-                    .zeroOrPositiveAmount();
+            baseDataValidator.reset().parameter(minDifferentialLendingRateParameterName).value(minDifferentialLendingRate).notNull();
 
             final String defaultDifferentialLendingRateParameterName = DEFAULT_DIFFERENTIAL_LENDING_RATE;
             BigDecimal defaultDifferentialLendingRate = this.fromApiJsonHelper
                     .extractBigDecimalWithLocaleNamed(defaultDifferentialLendingRateParameterName, element);
-            baseDataValidator.reset().parameter(defaultDifferentialLendingRateParameterName).value(defaultDifferentialLendingRate).notNull()
-                    .zeroOrPositiveAmount();
+            baseDataValidator.reset().parameter(defaultDifferentialLendingRateParameterName).value(defaultDifferentialLendingRate)
+                    .notNull();
 
             final String maxDifferentialLendingRateParameterName = MAX_DIFFERENTIAL_LENDING_RATE;
             BigDecimal maxDifferentialLendingRate = this.fromApiJsonHelper
                     .extractBigDecimalWithLocaleNamed(maxDifferentialLendingRateParameterName, element);
-            baseDataValidator.reset().parameter(maxDifferentialLendingRateParameterName).value(maxDifferentialLendingRate).notNull()
-                    .zeroOrPositiveAmount();
-
-            if (defaultDifferentialLendingRate != null && defaultDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0
-                    && minDifferentialLendingRate != null && minDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0) {
-                baseDataValidator.reset().parameter(DEFAULT_DIFFERENTIAL_LENDING_RATE).value(defaultDifferentialLendingRate)
-                        .notLessThanMin(minDifferentialLendingRate);
-            }
-
-            if (maxDifferentialLendingRate != null && maxDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0
-                    && minDifferentialLendingRate != null && minDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0) {
-                baseDataValidator.reset().parameter(MAX_DIFFERENTIAL_LENDING_RATE).value(maxDifferentialLendingRate)
-                        .notLessThanMin(minDifferentialLendingRate);
-            }
-
-            if (maxDifferentialLendingRate != null && maxDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0
-                    && defaultDifferentialLendingRate != null && defaultDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0) {
-                baseDataValidator.reset().parameter(MAX_DIFFERENTIAL_LENDING_RATE).value(maxDifferentialLendingRate)
-                        .notLessThanMin(defaultDifferentialLendingRate);
-            }
+            baseDataValidator.reset().parameter(maxDifferentialLendingRateParameterName).value(maxDifferentialLendingRate).notNull();
+            validateFloatingRateDifferentialBounds(baseDataValidator, interestRateDifferential, minDifferentialLendingRate,
+                    defaultDifferentialLendingRate, maxDifferentialLendingRate);
 
             final Boolean isFloatingInterestRateCalculationAllowed = this.fromApiJsonHelper
                     .extractBooleanNamed(IS_FLOATING_INTEREST_RATE_CALCULATION_ALLOWED, element);
@@ -1611,8 +1592,7 @@ public final class LoanProductDataValidator {
             if (this.fromApiJsonHelper.parameterExists(INTEREST_RATE_DIFFERENTIAL, element)) {
                 interestRateDifferential = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed(INTEREST_RATE_DIFFERENTIAL, element);
             }
-            baseDataValidator.reset().parameter(INTEREST_RATE_DIFFERENTIAL).value(interestRateDifferential).notNull()
-                    .zeroOrPositiveAmount();
+            baseDataValidator.reset().parameter(INTEREST_RATE_DIFFERENTIAL).value(interestRateDifferential).notNull();
 
             final String minDifferentialLendingRateParameterName = MIN_DIFFERENTIAL_LENDING_RATE;
             BigDecimal minDifferentialLendingRate = loanProduct.getFloatingRates() == null ? null
@@ -1621,8 +1601,7 @@ public final class LoanProductDataValidator {
                 minDifferentialLendingRate = this.fromApiJsonHelper
                         .extractBigDecimalWithLocaleNamed(minDifferentialLendingRateParameterName, element);
             }
-            baseDataValidator.reset().parameter(minDifferentialLendingRateParameterName).value(minDifferentialLendingRate).notNull()
-                    .zeroOrPositiveAmount();
+            baseDataValidator.reset().parameter(minDifferentialLendingRateParameterName).value(minDifferentialLendingRate).notNull();
 
             final String defaultDifferentialLendingRateParameterName = DEFAULT_DIFFERENTIAL_LENDING_RATE;
             BigDecimal defaultDifferentialLendingRate = loanProduct.getFloatingRates() == null ? null
@@ -1631,8 +1610,8 @@ public final class LoanProductDataValidator {
                 defaultDifferentialLendingRate = this.fromApiJsonHelper
                         .extractBigDecimalWithLocaleNamed(defaultDifferentialLendingRateParameterName, element);
             }
-            baseDataValidator.reset().parameter(defaultDifferentialLendingRateParameterName).value(defaultDifferentialLendingRate).notNull()
-                    .zeroOrPositiveAmount();
+            baseDataValidator.reset().parameter(defaultDifferentialLendingRateParameterName).value(defaultDifferentialLendingRate)
+                    .notNull();
 
             final String maxDifferentialLendingRateParameterName = MAX_DIFFERENTIAL_LENDING_RATE;
             BigDecimal maxDifferentialLendingRate = loanProduct.getFloatingRates() == null ? null
@@ -1641,26 +1620,9 @@ public final class LoanProductDataValidator {
                 maxDifferentialLendingRate = this.fromApiJsonHelper
                         .extractBigDecimalWithLocaleNamed(maxDifferentialLendingRateParameterName, element);
             }
-            baseDataValidator.reset().parameter(maxDifferentialLendingRateParameterName).value(maxDifferentialLendingRate).notNull()
-                    .zeroOrPositiveAmount();
-
-            if (defaultDifferentialLendingRate != null && defaultDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0
-                    && minDifferentialLendingRate != null && minDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0) {
-                baseDataValidator.reset().parameter(DEFAULT_DIFFERENTIAL_LENDING_RATE).value(defaultDifferentialLendingRate)
-                        .notLessThanMin(minDifferentialLendingRate);
-            }
-
-            if (maxDifferentialLendingRate != null && maxDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0
-                    && minDifferentialLendingRate != null && minDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0) {
-                baseDataValidator.reset().parameter(MAX_DIFFERENTIAL_LENDING_RATE).value(maxDifferentialLendingRate)
-                        .notLessThanMin(minDifferentialLendingRate);
-            }
-
-            if (maxDifferentialLendingRate != null && maxDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0
-                    && defaultDifferentialLendingRate != null && defaultDifferentialLendingRate.compareTo(BigDecimal.ZERO) >= 0) {
-                baseDataValidator.reset().parameter(MAX_DIFFERENTIAL_LENDING_RATE).value(maxDifferentialLendingRate)
-                        .notLessThanMin(defaultDifferentialLendingRate);
-            }
+            baseDataValidator.reset().parameter(maxDifferentialLendingRateParameterName).value(maxDifferentialLendingRate).notNull();
+            validateFloatingRateDifferentialBounds(baseDataValidator, interestRateDifferential, minDifferentialLendingRate,
+                    defaultDifferentialLendingRate, maxDifferentialLendingRate);
 
             Boolean isFloatingInterestRateCalculationAllowed = loanProduct.getFloatingRates() == null ? null
                     : loanProduct.getFloatingRates().isFloatingInterestRateCalculationAllowed();
@@ -2245,6 +2207,28 @@ public final class LoanProductDataValidator {
         validatePrincipalMinMaxConstraint(element, loanProduct, baseDataValidator);
         validateNumberOfRepaymentsMinMaxConstraint(element, loanProduct, baseDataValidator);
         validateNominalInterestRatePerPeriodMinMaxConstraint(element, loanProduct, baseDataValidator);
+    }
+
+    private void validateFloatingRateDifferentialBounds(final DataValidatorBuilder baseDataValidator,
+            final BigDecimal interestRateDifferential, final BigDecimal minDifferentialLendingRate,
+            final BigDecimal defaultDifferentialLendingRate, final BigDecimal maxDifferentialLendingRate) {
+        if (defaultDifferentialLendingRate != null && minDifferentialLendingRate != null) {
+            baseDataValidator.reset().parameter(DEFAULT_DIFFERENTIAL_LENDING_RATE).value(defaultDifferentialLendingRate)
+                    .notLessThanMin(minDifferentialLendingRate);
+        }
+        if (maxDifferentialLendingRate != null && minDifferentialLendingRate != null) {
+            baseDataValidator.reset().parameter(MAX_DIFFERENTIAL_LENDING_RATE).value(maxDifferentialLendingRate)
+                    .notLessThanMin(minDifferentialLendingRate);
+        }
+        if (maxDifferentialLendingRate != null && defaultDifferentialLendingRate != null) {
+            baseDataValidator.reset().parameter(MAX_DIFFERENTIAL_LENDING_RATE).value(maxDifferentialLendingRate)
+                    .notLessThanMin(defaultDifferentialLendingRate);
+        }
+        if (interestRateDifferential != null && minDifferentialLendingRate != null && maxDifferentialLendingRate != null
+                && minDifferentialLendingRate.compareTo(maxDifferentialLendingRate) <= 0) {
+            baseDataValidator.reset().parameter(INTEREST_RATE_DIFFERENTIAL).value(interestRateDifferential)
+                    .inMinAndMaxAmountRange(minDifferentialLendingRate, maxDifferentialLendingRate);
+        }
     }
 
     public void validateMinMaxConstraints(final JsonElement element, final DataValidatorBuilder baseDataValidator,
