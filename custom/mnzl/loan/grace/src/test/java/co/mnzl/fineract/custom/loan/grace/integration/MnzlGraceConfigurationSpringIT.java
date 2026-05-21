@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import co.mnzl.fineract.custom.loan.grace.MnzlGraceConfiguration;
+import co.mnzl.fineract.custom.loan.grace.MnzlOverdueChargeGraceAspect;
 import co.mnzl.fineract.custom.loan.grace.MnzlWorkingDayCalculator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -32,6 +33,7 @@ import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
 import org.apache.fineract.portfolio.delinquency.helper.DelinquencyEffectivePauseHelper;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainService;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionReadService;
 import org.junit.jupiter.api.Test;
@@ -61,6 +63,7 @@ class MnzlGraceConfigurationSpringIT {
             .withBean(ConfigurationDomainService.class, () -> mock(ConfigurationDomainService.class))
             .withBean(BusinessEventNotifierService.class, () -> mock(BusinessEventNotifierService.class))
             .withBean(LoanChargeWritePlatformService.class, () -> mock(LoanChargeWritePlatformService.class))
+            .withBean(LoanRepositoryWrapper.class, () -> mock(LoanRepositoryWrapper.class))
             // The mock subclass of LoanTransactionReadService inherits its @PersistenceContext field, so
             // Spring's PersistenceAnnotationBeanPostProcessor still tries to find an EntityManagerFactory on
             // the slice. Provide a mock so post-processing succeeds.
@@ -76,6 +79,7 @@ class MnzlGraceConfigurationSpringIT {
             assertThat(ctx).hasSingleBean(MnzlGraceConfiguration.class);
             assertThat(ctx).hasSingleBean(MnzlWorkingDayCalculator.class);
             assertThat(ctx).hasSingleBean(LoanDelinquencyDomainService.class);
+            assertThat(ctx).hasSingleBean(MnzlOverdueChargeGraceAspect.class);
             // Two LoanCOBBusinessStep @Primary beans are exposed by the config.
             assertThat(ctx).getBeans(LoanCOBBusinessStep.class).hasSize(2);
         });
@@ -97,6 +101,7 @@ class MnzlGraceConfigurationSpringIT {
             assertThat(ctx).doesNotHaveBean(MnzlWorkingDayCalculator.class);
             assertThat(ctx).doesNotHaveBean(LoanDelinquencyDomainService.class);
             assertThat(ctx).doesNotHaveBean(LoanCOBBusinessStep.class);
+            assertThat(ctx).doesNotHaveBean(MnzlOverdueChargeGraceAspect.class);
         });
     }
 
