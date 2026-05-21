@@ -26,6 +26,7 @@ import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepository
 import org.apache.fineract.portfolio.delinquency.helper.DelinquencyEffectivePauseHelper;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainService;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainServiceImpl;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionReadService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -70,5 +71,16 @@ public class MnzlGraceConfiguration {
             LoanChargeWritePlatformService loanChargeWritePlatformService, MnzlWorkingDayCalculator workingDayCalculator) {
         return new MnzlApplyChargeToOverdueLoansBusinessStep(configurationDomainService, loanChargeWritePlatformService,
                 workingDayCalculator);
+    }
+
+    /**
+     * Enforces working-day grace at the shared write chokepoint so the standalone "Apply penalty to overdue loans"
+     * scheduled job (which bypasses the COB step) also honours working days. Spring's AspectJ auto-proxy picks up the
+     * {@code @Aspect} on this {@code @Bean}-registered class.
+     */
+    @Bean
+    public MnzlOverdueChargeGraceAspect mnzlOverdueChargeGraceAspect(MnzlWorkingDayCalculator workingDayCalculator,
+            ConfigurationDomainService configurationDomainService, LoanRepositoryWrapper loanRepositoryWrapper) {
+        return new MnzlOverdueChargeGraceAspect(workingDayCalculator, configurationDomainService, loanRepositoryWrapper);
     }
 }
