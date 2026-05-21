@@ -102,7 +102,7 @@ class MnzlOverdueChargeGraceAspectTest {
     }
 
     @Test
-    void withholdsPenaltyWhileStillWithinWorkingDayGrace() throws Throwable {
+    void withholdsPenaltyWhileStillWithinWorkingDayGrace() {
         setBusinessDate(LocalDate.of(2026, 6, 28)); // before 01 July
         Object[] args = { LOAN_ID, List.of(overdue(1)) };
         when(joinPoint.getArgs()).thenReturn(args);
@@ -110,28 +110,23 @@ class MnzlOverdueChargeGraceAspectTest {
         Object result = aspect.enforceWorkingDayGrace(joinPoint);
 
         assertThat(result).isNull();
-        verify(joinPoint, never()).proceed(any(Object[].class));
-        verify(joinPoint, never()).proceed();
+        verifyNeverProceeded();
     }
 
     @Test
-    void appliesPenaltyOnceWorkingDayGraceHasElapsed() throws Throwable {
+    void appliesPenaltyOnceWorkingDayGraceHasElapsed() {
         setBusinessDate(LocalDate.of(2026, 7, 1)); // the 5th working day
         Object[] args = { LOAN_ID, List.of(overdue(1)) };
         when(joinPoint.getArgs()).thenReturn(args);
-        when(joinPoint.proceed(any(Object[].class))).thenReturn(null);
+        stubProceedReturnsNull();
 
         aspect.enforceWorkingDayGrace(joinPoint);
 
-        ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
-        verify(joinPoint).proceed(captor.capture());
-        @SuppressWarnings("unchecked")
-        List<OverdueLoanScheduleData> passed = (List<OverdueLoanScheduleData>) captor.getValue()[1];
-        assertThat(passed).hasSize(1);
+        assertThat(capturedProceedInstallments()).hasSize(1);
     }
 
     @Test
-    void mixedSplit_onlyInstallmentsPastGraceProceed() throws Throwable {
+    void mixedSplit_onlyInstallmentsPastGraceProceed() {
         // installment 1 (due 21 Jun) has cleared its 5-working-day grace by 01 Jul; installment 2 (due 21 Jul) has not.
         // Only installment 1 should be passed through to applyOverdueChargesForLoan.
         LocalDate due2 = LocalDate.of(2026, 7, 21);
@@ -143,27 +138,54 @@ class MnzlOverdueChargeGraceAspectTest {
                                                    // in grace
         Object[] args = { LOAN_ID, List.of(overdue(1), overdue(2)) };
         when(joinPoint.getArgs()).thenReturn(args);
-        when(joinPoint.proceed(any(Object[].class))).thenReturn(null);
+        stubProceedReturnsNull();
 
         aspect.enforceWorkingDayGrace(joinPoint);
 
-        ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
-        verify(joinPoint).proceed(captor.capture());
-        @SuppressWarnings("unchecked")
-        List<OverdueLoanScheduleData> passed = (List<OverdueLoanScheduleData>) captor.getValue()[1];
+        List<OverdueLoanScheduleData> passed = capturedProceedInstallments();
         assertThat(passed).hasSize(1);
         assertThat(passed.get(0).getPeriodNumber()).isEqualTo(1);
     }
 
     @Test
-    void emptyCollectionProceedsUntouched() throws Throwable {
+    void emptyCollectionProceedsUntouched() {
         Object[] args = { LOAN_ID, List.of() };
         when(joinPoint.getArgs()).thenReturn(args);
+        stubProceedReturnsNull();
 
         aspect.enforceWorkingDayGrace(joinPoint);
 
-        verify(joinPoint).proceed();
+        assertThat(capturedProceedInstallments()).isEmpty(); // proceeded with the original (empty) collection
         verify(calculator, never()).addWorkingDays(any(), anyInt(), any(), any());
+    }
+
+    // ---- proceed(...) stub/verify helpers: wrapped so test methods need not declare `throws Throwable`. ----
+
+    private void stubProceedReturnsNull() {
+        try {
+            when(joinPoint.proceed(any(Object[].class))).thenReturn(null);
+        } catch (Throwable t) {
+            throw new AssertionError(t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<OverdueLoanScheduleData> capturedProceedInstallments() {
+        ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
+        try {
+            verify(joinPoint).proceed(captor.capture());
+        } catch (Throwable t) {
+            throw new AssertionError(t);
+        }
+        return (List<OverdueLoanScheduleData>) captor.getValue()[1];
+    }
+
+    private void verifyNeverProceeded() {
+        try {
+            verify(joinPoint, never()).proceed(any(Object[].class));
+        } catch (Throwable t) {
+            throw new AssertionError(t);
+        }
     }
 
     private static OverdueLoanScheduleData overdue(int periodNumber) {

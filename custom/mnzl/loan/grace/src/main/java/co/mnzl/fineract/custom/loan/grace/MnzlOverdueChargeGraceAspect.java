@@ -68,10 +68,10 @@ public class MnzlOverdueChargeGraceAspect {
     private final LoanRepositoryWrapper loanRepositoryWrapper;
 
     @Around("execution(* org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService.applyOverdueChargesForLoan(..))")
-    public Object enforceWorkingDayGrace(ProceedingJoinPoint joinPoint) throws Throwable {
+    public Object enforceWorkingDayGrace(ProceedingJoinPoint joinPoint) {
         Object[] args = joinPoint.getArgs();
         if (args.length < 2 || !(args[0] instanceof Long loanId) || !(args[1] instanceof Collection<?> rawData) || rawData.isEmpty()) {
-            return joinPoint.proceed();
+            return proceed(joinPoint, args);
         }
         @SuppressWarnings("unchecked")
         Collection<OverdueLoanScheduleData> overdueData = (Collection<OverdueLoanScheduleData>) rawData;
@@ -120,7 +120,18 @@ public class MnzlOverdueChargeGraceAspect {
             return null; // applyOverdueChargesForLoan is void; nothing is due yet
         }
         args[1] = due;
-        return joinPoint.proceed(args);
+        return proceed(joinPoint, args);
+    }
+
+    // Wraps joinPoint.proceed(...) so the advice need not declare `throws Throwable` (checkstyle IllegalThrows).
+    private static Object proceed(ProceedingJoinPoint joinPoint, Object[] args) {
+        try {
+            return joinPoint.proceed(args);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new RuntimeException("Error applying working-day grace to overdue charges", e);
+        }
     }
 
     private int penaltyWaitPeriodDays() {
