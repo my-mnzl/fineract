@@ -45,6 +45,7 @@ import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -60,6 +61,28 @@ import org.junit.jupiter.api.Test;
 public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegrationTest {
 
     private static final String MNZL_STRATEGY_URL = "/fineract-provider/api/v1/mnzl/loan-products/%d/strategies?" + Utils.TENANT_IDENTIFIER;
+
+    // Default working week (all 7 days = nothing reschedules) so the working-day-grace tests can restore it.
+    private static final String DEFAULT_WORKING_DAYS_RECURRENCE = "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR,SA,SU";
+
+    // Holidays created by the working-day-grace tests, deleted in @AfterEach so they don't leak into other tests.
+    private final List<Integer> createdHolidayIds = new ArrayList<>();
+
+    /**
+     * The working-day-grace tests mutate global state shared across the whole integration-test database — the working
+     * week, penalty-wait-period, backdate/business-date flags, and an office holiday. Restore all of it after every
+     * test so later tests (schedule and penalty assertions) are not affected.
+     */
+    @AfterEach
+    void restoreGlobalConfigAndHolidays() {
+        setWorkingDays(DEFAULT_WORKING_DAYS_RECURRENCE, 1);
+        globalConfigurationHelper.resetAllDefaultGlobalConfigurations();
+        for (Integer holidayId : createdHolidayIds) {
+            Utils.performServerDelete(requestSpec, responseSpec,
+                    "/fineract-provider/api/v1/holidays/" + holidayId + "?" + Utils.TENANT_IDENTIFIER, "{}", "resourceId");
+        }
+        createdHolidayIds.clear();
+    }
 
     /**
      * Test 1: Standard declining balance loan with 30/360 — full happy path.
@@ -406,6 +429,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
                 "/fineract-provider/api/v1/holidays?" + Utils.TENANT_IDENTIFIER, new Gson().toJson(body), "resourceId");
         Utils.performServerPost(requestSpec, responseSpec,
                 "/fineract-provider/api/v1/holidays/" + holidayId + "?command=activate&" + Utils.TENANT_IDENTIFIER, "{}", "resourceId");
+        createdHolidayIds.add(holidayId);
     }
 
     private PostLoanProductsResponse createMnzlDecliningBalanceProduct() {

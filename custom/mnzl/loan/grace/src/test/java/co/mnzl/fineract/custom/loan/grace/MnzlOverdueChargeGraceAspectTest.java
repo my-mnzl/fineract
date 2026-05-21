@@ -76,6 +76,8 @@ class MnzlOverdueChargeGraceAspectTest {
     @Mock
     private LoanRepaymentScheduleInstallment installment1;
     @Mock
+    private LoanRepaymentScheduleInstallment installment2;
+    @Mock
     private ProceedingJoinPoint joinPoint;
 
     private MnzlOverdueChargeGraceAspect aspect;
@@ -126,6 +128,31 @@ class MnzlOverdueChargeGraceAspectTest {
         @SuppressWarnings("unchecked")
         List<OverdueLoanScheduleData> passed = (List<OverdueLoanScheduleData>) captor.getValue()[1];
         assertThat(passed).hasSize(1);
+    }
+
+    @Test
+    void mixedSplit_onlyInstallmentsPastGraceProceed() throws Throwable {
+        // installment 1 (due 21 Jun) has cleared its 5-working-day grace by 01 Jul; installment 2 (due 21 Jul) has not.
+        // Only installment 1 should be passed through to applyOverdueChargesForLoan.
+        LocalDate due2 = LocalDate.of(2026, 7, 21);
+        when(loan.getRepaymentScheduleInstallments()).thenReturn(List.of(installment1, installment2));
+        when(installment2.getInstallmentNumber()).thenReturn(2);
+        when(installment2.getDueDate()).thenReturn(due2);
+        when(calculator.addWorkingDays(eq(due2), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2026, 7, 28));
+        setBusinessDate(LocalDate.of(2026, 7, 1)); // installment 1 due (firstPenaltyDate 01 Jul), installment 2 still
+                                                   // in grace
+        Object[] args = { LOAN_ID, List.of(overdue(1), overdue(2)) };
+        when(joinPoint.getArgs()).thenReturn(args);
+        when(joinPoint.proceed(any(Object[].class))).thenReturn(null);
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
+        verify(joinPoint).proceed(captor.capture());
+        @SuppressWarnings("unchecked")
+        List<OverdueLoanScheduleData> passed = (List<OverdueLoanScheduleData>) captor.getValue()[1];
+        assertThat(passed).hasSize(1);
+        assertThat(passed.get(0).getPeriodNumber()).isEqualTo(1);
     }
 
     @Test
