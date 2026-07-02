@@ -86,13 +86,20 @@ public class UpdateTrialBalanceDetailsTasklet implements Tasklet {
         tb.setOfficeId((Long) row[0]);
         tb.setGlAccountId((Long) row[1]);
         tb.setAmount((BigDecimal) row[2]);
-        tb.setEntryDate(toLocalDate(row[3]));
-        tb.setTransactionDate(toLocalDate(row[4]));
+        tb.setEntryDate(toLocalDate(row[3], "transactionDate", true));
+        tb.setTransactionDate(toLocalDate(row[4], "createdDate", false));
         tb.setClosingBalance((BigDecimal) row[5]);
         return tb;
     }
 
-    private LocalDate toLocalDate(Object value) {
+    private LocalDate toLocalDate(Object value, String fieldName, boolean required) {
+        if (value == null) {
+            if (required) {
+                throw new IllegalArgumentException("Expected date-like value for " + fieldName + " but got null");
+            }
+            log.warn("Null {} value while mapping trial balance row; saving null date", fieldName);
+            return null;
+        }
         if (value instanceof LocalDate localDate) {
             return localDate;
         }
@@ -102,7 +109,7 @@ public class UpdateTrialBalanceDetailsTasklet implements Tasklet {
         if (value instanceof LocalDateTime localDateTime) {
             return localDateTime.toLocalDate();
         }
-        throw new IllegalArgumentException("Expected date-like value but got " + (value == null ? "null" : value.getClass().getName()));
+        throw new IllegalArgumentException("Expected date-like value for " + fieldName + " but got " + value.getClass().getName());
     }
 
     private void updateClosingBalances(JdbcTemplate jdbcTemplate) {

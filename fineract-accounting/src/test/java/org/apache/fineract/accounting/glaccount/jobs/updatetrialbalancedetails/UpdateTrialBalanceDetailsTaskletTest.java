@@ -19,11 +19,14 @@
 package org.apache.fineract.accounting.glaccount.jobs.updatetrialbalancedetails;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -101,6 +104,49 @@ class UpdateTrialBalanceDetailsTaskletTest {
     void executeConvertsOffsetCreatedDateToLocalDateWhenSavingTrialBalance() throws Exception {
         LocalDate transactionDate = LocalDate.of(2026, 2, 1);
         OffsetDateTime createdDate = OffsetDateTime.of(2026, 2, 2, 18, 30, 0, 0, ZoneOffset.UTC);
+
+        TrialBalance trialBalance = executeWithCreatedDate(transactionDate, createdDate);
+
+        assertEquals(transactionDate, trialBalance.getEntryDate());
+        assertEquals(createdDate.toLocalDate(), trialBalance.getTransactionDate());
+    }
+
+    @Test
+    void executeConvertsLocalDateTimeCreatedDateToLocalDateWhenSavingTrialBalance() throws Exception {
+        LocalDate transactionDate = LocalDate.of(2026, 2, 1);
+        LocalDateTime createdDate = LocalDateTime.of(2026, 2, 2, 18, 30, 0);
+
+        TrialBalance trialBalance = executeWithCreatedDate(transactionDate, createdDate);
+
+        assertEquals(transactionDate, trialBalance.getEntryDate());
+        assertEquals(createdDate.toLocalDate(), trialBalance.getTransactionDate());
+    }
+
+    @Test
+    void executeAllowsNullCreatedDateWhenSavingTrialBalance() throws Exception {
+        LocalDate transactionDate = LocalDate.of(2026, 2, 1);
+
+        TrialBalance trialBalance = executeWithCreatedDate(transactionDate, null);
+
+        assertEquals(transactionDate, trialBalance.getEntryDate());
+        assertNull(trialBalance.getTransactionDate());
+    }
+
+    @Test
+    void executeRejectsUnsupportedCreatedDateType() {
+        LocalDate transactionDate = LocalDate.of(2026, 2, 1);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> executeWithCreatedDate(transactionDate, "2026-02-02", false));
+
+        assertEquals("Expected date-like value for createdDate but got java.lang.String", exception.getMessage());
+    }
+
+    private TrialBalance executeWithCreatedDate(LocalDate transactionDate, Object createdDate) throws Exception {
+        return executeWithCreatedDate(transactionDate, createdDate, true);
+    }
+
+    private TrialBalance executeWithCreatedDate(LocalDate transactionDate, Object createdDate, boolean expectSuccess) throws Exception {
         Object[] trialBalanceRow = { 10L, 20L, new BigDecimal("12.34"), transactionDate, createdDate, new BigDecimal("56.78") };
         ArgumentCaptor<List<TrialBalance>> trialBalancesCaptor = ArgumentCaptor.captor();
 
@@ -109,15 +155,15 @@ class UpdateTrialBalanceDetailsTaskletTest {
         when(trialBalanceRepository.findMaxCreatedDate()).thenReturn(LocalDate.of(2026, 1, 31));
         when(journalEntryRepository.findTransactionDatesAfter(LocalDate.of(2026, 1, 31))).thenReturn(List.of(transactionDate));
         when(journalEntryRepository.findTrialBalanceLinesForDate(transactionDate)).thenReturn(List.<Object[]>of(trialBalanceRow));
-        when(trialBalanceRepository.findDistinctOfficeIdsWithNullClosingBalance()).thenReturn(List.of());
+        if (expectSuccess) {
+            when(trialBalanceRepository.findDistinctOfficeIdsWithNullClosingBalance()).thenReturn(List.of());
+        }
 
         assertEquals(RepeatStatus.FINISHED, underTest.execute(stepContribution, chunkContext));
 
         verify(trialBalanceRepositoryWrapper).save(trialBalancesCaptor.capture());
         List<TrialBalance> trialBalances = trialBalancesCaptor.getValue();
         assertEquals(1, trialBalances.size());
-        TrialBalance trialBalance = trialBalances.getFirst();
-        assertEquals(transactionDate, trialBalance.getEntryDate());
-        assertEquals(createdDate.toLocalDate(), trialBalance.getTransactionDate());
+        return trialBalances.getFirst();
     }
 }
