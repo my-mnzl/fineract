@@ -20,6 +20,8 @@ package org.apache.fineract.accounting.glaccount.jobs.updatetrialbalancedetails;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,21 +73,43 @@ public class UpdateTrialBalanceDetailsTasklet implements Tasklet {
     private void insertTrialBalanceForDate(LocalDate tbGap) {
         List<Object[]> rows = journalEntryRepository.findTrialBalanceLinesForDate(tbGap);
 
-        List<TrialBalance> trialBalances = rows.stream().map(row -> {
-            TrialBalance tb = new TrialBalance();
-            tb.setOfficeId((Long) row[0]);
-            tb.setGlAccountId((Long) row[1]);
-            tb.setAmount((BigDecimal) row[2]);
-            tb.setEntryDate((LocalDate) row[3]);
-            tb.setTransactionDate((LocalDate) row[4]);
-            tb.setClosingBalance((BigDecimal) row[5]);
-            return tb;
-        }).toList();
+        List<TrialBalance> trialBalances = rows.stream().map(this::mapTrialBalance).toList();
 
         trialBalanceRepositoryWrapper.save(trialBalances);
 
         log.debug("{}: Records affected by updateTrialBalanceDetails: {}", ThreadLocalContextUtil.getTenant().getName(),
                 trialBalances.size());
+    }
+
+    private TrialBalance mapTrialBalance(Object[] row) {
+        TrialBalance tb = new TrialBalance();
+        tb.setOfficeId((Long) row[0]);
+        tb.setGlAccountId((Long) row[1]);
+        tb.setAmount((BigDecimal) row[2]);
+        tb.setEntryDate(toLocalDate(row[3], "transactionDate", true));
+        tb.setTransactionDate(toLocalDate(row[4], "createdDate", false));
+        tb.setClosingBalance((BigDecimal) row[5]);
+        return tb;
+    }
+
+    private LocalDate toLocalDate(Object value, String fieldName, boolean required) {
+        if (value == null) {
+            if (required) {
+                throw new IllegalArgumentException("Expected date-like value for " + fieldName + " but got null");
+            }
+            log.warn("Null {} value while mapping trial balance row; saving null date", fieldName);
+            return null;
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toLocalDate();
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toLocalDate();
+        }
+        throw new IllegalArgumentException("Expected date-like value for " + fieldName + " but got " + value.getClass().getName());
     }
 
     private void updateClosingBalances(JdbcTemplate jdbcTemplate) {
