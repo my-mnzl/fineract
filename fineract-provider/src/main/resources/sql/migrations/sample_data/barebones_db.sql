@@ -415,7 +415,7 @@ CREATE TABLE IF NOT EXISTS `job_run_history` (
   `status` varchar(10) CHARACTER SET latin1 NOT NULL,
   `error_message` text,
   `trigger_type` varchar(25) NOT NULL,
-  `error_log` text,
+  `error_log` longtext,
   PRIMARY KEY (`id`),
   KEY `scheduledjobsFK` (`job_id`),
   CONSTRAINT `scheduledjobsFK` FOREIGN KEY (`job_id`) REFERENCES `job` (`id`)
