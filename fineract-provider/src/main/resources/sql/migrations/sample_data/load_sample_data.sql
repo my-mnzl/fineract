@@ -490,7 +490,7 @@ CREATE TABLE IF NOT EXISTS `job_run_history` (
   `start_time` datetime NOT NULL,
   `end_time` datetime NOT NULL,
   `status` varchar(10) CHARACTER SET latin1 NOT NULL,
-  `error_message` text,
+  `error_message` longtext,
   `trigger_type` varchar(25) NOT NULL,
   `error_log` longtext,
   PRIMARY KEY (`id`),

@@ -23,6 +23,7 @@
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
     <changeSet author="fineract" id="1">
+        <modifyDataType tableName="job_run_history" columnName="error_message" newDataType="LONGTEXT"/>
         <modifyDataType tableName="job_run_history" columnName="error_log" newDataType="LONGTEXT"/>
     </changeSet>
 </databaseChangeLog>
