@@ -67,8 +67,19 @@ public class MnzlTransferFeeChargeForLoansTasklet extends TransferFeeChargeForLo
         this.transactionTemplate = transactionTemplate;
     }
 
+    /**
+     * MNZL policy: loan fees/charges must NEVER be auto-swept from a client's linked savings account. This job is
+     * intentionally disabled — fees may only be paid via an explicit, user-initiated payment. Set to {@code true} only
+     * if that policy is deliberately reversed.
+     */
+    private static final boolean FEE_TRANSFER_FROM_SAVINGS_ENABLED = false;
+
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+        if (!FEE_TRANSFER_FROM_SAVINGS_ENABLED) {
+            LOG.info("TransferFeeChargeForLoans job is disabled by MNZL policy; no fees transferred from savings.");
+            return RepeatStatus.FINISHED;
+        }
         final Collection<LoanChargeData> chargeDatas = loanChargeReadPlatformService
                 .retrieveLoanChargesForFeePayment(ChargePaymentMode.ACCOUNT_TRANSFER.getValue(), LoanStatus.ACTIVE.getValue());
         final boolean isRegularTransaction = true;
