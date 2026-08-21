@@ -102,6 +102,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanScheduleGeneratorService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionProcessingService;
+import org.apache.fineract.portfolio.loanaccount.service.SimpleChargeAmountCalculatorRegistry;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
 import org.apache.fineract.portfolio.tax.service.ChargeTaxApplicationService;
@@ -135,7 +136,8 @@ public class LoanAccountDelinquencyRangeEventSerializerTest {
 
     private final LoanChargeService loanChargeService = new LoanChargeService(mock(LoanChargeValidator.class),
             mock(LoanTransactionProcessingService.class), mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class),
-            mock(LoanScheduleGeneratorService.class), mock(ChargeTaxApplicationService.class));
+            mock(LoanScheduleGeneratorService.class), mock(ChargeTaxApplicationService.class),
+            new SimpleChargeAmountCalculatorRegistry(List.of()));
 
     private MockedStatic<MoneyHelper> moneyHelper = Mockito.mockStatic(MoneyHelper.class);
 

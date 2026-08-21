@@ -47,6 +47,7 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
+import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
@@ -175,9 +176,7 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.amountPaid = BigDecimal.ZERO;
         this.amountWaived = BigDecimal.ZERO;
         this.amountWrittenOff = BigDecimal.ZERO;
-        this.amountOutstanding = calculateAmountOutstanding(currency);
-        this.paid = false;
-        this.waived = false;
+        syncAmountOutstandingAndPaidState(currency);
         for (final LoanInstallmentCharge installmentCharge : this.loanInstallmentCharge) {
             installmentCharge.resetToOriginal(currency);
         }
@@ -185,8 +184,7 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
     public void resetPaidAmount(final MonetaryCurrency currency) {
         this.amountPaid = BigDecimal.ZERO;
-        this.amountOutstanding = calculateAmountOutstanding(currency);
-        this.paid = false;
+        syncAmountOutstandingAndPaidState(currency);
         for (final LoanInstallmentCharge installmentCharge : this.loanInstallmentCharge) {
             installmentCharge.resetPaidAmount(currency);
         }
@@ -239,8 +237,21 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         this.waived = false;
     }
 
-    private BigDecimal calculateAmountOutstanding(final MonetaryCurrency currency) {
-        return getAmount(currency).minus(getAmountWaived(currency)).minus(getAmountPaid(currency)).getAmount();
+    private Money calculateAmountOutstanding(final MonetaryCurrency currency) {
+        return Money.of(currency, calculateOutstanding());
+    }
+
+    private MonetaryCurrency resolveCurrency() {
+        return this.loan == null ? null : this.loan.getCurrency();
+    }
+
+    private void syncAmountOutstandingAndPaidState(final MonetaryCurrency currency) {
+        final Money outstandingAmount = calculateAmountOutstanding(currency);
+        this.amountOutstanding = outstandingAmount.getAmount();
+        final boolean fullySettled = outstandingAmount.isZero();
+        final boolean hasWaivedAmount = getAmountWaived(currency).isGreaterThanZero();
+        this.paid = fullySettled && !hasWaivedAmount;
+        this.waived = fullySettled && hasWaivedAmount;
     }
 
     public void update(final Loan loan) {
@@ -254,6 +265,10 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
     public boolean isSpecifiedDueDate() {
         return ChargeTimeType.fromInt(this.chargeTime).equals(ChargeTimeType.SPECIFIED_DUE_DATE);
+    }
+
+    public boolean isPeriodic() {
+        return ChargeTimeType.fromInt(this.chargeTime).equals(ChargeTimeType.LOAN_PERIODIC);
     }
 
     public boolean isInstalmentFee() {
@@ -276,7 +291,8 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
         if (this.amount == null) {
             return true;
         }
-        return BigDecimal.ZERO.compareTo(calculateOutstanding()) == 0;
+        final MonetaryCurrency currency = resolveCurrency();
+        return currency == null ? BigDecimal.ZERO.compareTo(calculateOutstanding()) == 0 : calculateAmountOutstanding(currency).isZero();
     }
 
     public BigDecimal calculateOutstanding() {
@@ -452,20 +468,12 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
             amountPaidOnThisCharge = amountOutstanding;
             amountPaidToDate = amountPaidToDate.plus(amountOutstanding);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = BigDecimal.ZERO;
-            Money waivedAmount = getAmountWaived(processAmount.getCurrency());
-            if (waivedAmount.isGreaterThanZero()) {
-                this.waived = true;
-            } else {
-                this.paid = true;
-            }
-
         } else {
             amountPaidOnThisCharge = processAmount;
             amountPaidToDate = amountPaidToDate.plus(processAmount);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = calculateAmountOutstanding(incrementBy.getCurrency());
         }
+        syncAmountOutstandingAndPaidState(processAmount.getCurrency());
         return amountPaidOnThisCharge;
     }
 
@@ -656,15 +664,12 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
             amountDeductedOnThisCharge = amountPaidToDate;
             amountPaidToDate = Money.zero(processAmount.getCurrency());
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = this.amount;
-            this.paid = false;
-
         } else {
             amountDeductedOnThisCharge = processAmount;
             amountPaidToDate = amountPaidToDate.minus(processAmount);
             this.amountPaid = amountPaidToDate.getAmount();
-            this.amountOutstanding = calculateAmountOutstanding(incrementBy.getCurrency());
         }
+        syncAmountOutstandingAndPaidState(processAmount.getCurrency());
         return amountDeductedOnThisCharge;
     }
 
@@ -732,15 +737,17 @@ public class LoanCharge extends AbstractAuditableWithUTCDateTimeCustom<Long> {
                 getChargeCalculation().getCode(), String.valueOf(getChargeCalculation().getValue()));
         EnumOptionData chargePaymentModeData = new EnumOptionData((long) getChargePaymentMode().ordinal(), getChargePaymentMode().getCode(),
                 String.valueOf(getChargePaymentMode().getValue()));
+        ChargeData chargeData = getCharge().toData();
         List<LoanInstallmentChargeData> loanInstallmentChargeDataList = installmentCharges().stream().map(LoanInstallmentCharge::toData)
                 .toList();
 
         return LoanChargeData.builder().id(getId()).chargeId(getCharge().getId()).name(getCharge().getName())
-                .currency(getCharge().toData().getCurrency()).amount(amount).amountPaid(amountPaid).amountWaived(amountWaived)
+                .currency(chargeData.getCurrency()).amount(amount).amountPaid(amountPaid).amountWaived(amountWaived)
                 .amountWrittenOff(amountWrittenOff).amountOutstanding(amountOutstanding).chargeTimeType(chargeTimeTypeData)
                 .submittedOnDate(submittedOnDate).dueDate(dueDate).chargeCalculationType(chargeCalculationTypeData).percentage(percentage)
                 .amountPercentageAppliedTo(amountPercentageAppliedTo).amountOrPercentage(amountOrPercentage).penalty(penaltyCharge)
                 .chargePaymentMode(chargePaymentModeData).paid(paid).waived(waived).loanId(loan.getId()).minCap(minCap).maxCap(maxCap)
+                .feeInterval(chargeData.getFeeInterval()).feeFrequency(chargeData.getFeeFrequency())
                 .installmentChargeData(loanInstallmentChargeDataList).externalId(externalId).build();
     }
 

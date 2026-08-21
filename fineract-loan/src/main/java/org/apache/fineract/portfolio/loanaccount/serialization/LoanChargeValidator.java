@@ -58,7 +58,8 @@ public final class LoanChargeValidator {
 
     public void validateChargeHasValidSpecifiedDateIfApplicable(final Loan loan, final LoanCharge loanCharge,
             final LocalDate disbursementDate) {
-        if (loanCharge.isSpecifiedDueDate() && DateUtils.isBefore(loanCharge.getDueLocalDate(), disbursementDate)) {
+        if ((loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic())
+                && DateUtils.isBefore(loanCharge.getDueLocalDate(), disbursementDate)) {
             final String defaultUserMessage = "This charge with specified due date cannot be added as the it is not in schedule range.";
             throw new LoanChargeCannotBeAddedException("loanCharge", "specified.due.date.outside.range", defaultUserMessage,
                     loan.getDisbursementDate(), loanCharge.name());

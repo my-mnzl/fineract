@@ -1125,7 +1125,8 @@ public class LoanChargeWritePlatformServiceImpl implements LoanChargeWritePlatfo
 
             for (Map.Entry<Integer, LocalDate> entry : scheduleDates.entrySet()) {
 
-                final LoanCharge loanCharge = loanChargeAssembler.createNewFromJson(loan, chargeDefinition, command, entry.getValue());
+                final LoanCharge loanCharge = loanChargeAssembler.createNewFromJson(loan, chargeDefinition, command, entry.getValue(),
+                        installment);
 
                 if (BigDecimal.ZERO.compareTo(loanCharge.amount()) == 0) {
                     continue;

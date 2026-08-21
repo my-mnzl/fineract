@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.loanaccount.starter;
 
+import java.util.List;
 import org.apache.fineract.cob.service.LoanAccountLockService;
 import org.apache.fineract.infrastructure.accountnumberformat.domain.AccountNumberFormatRepositoryWrapper;
 import org.apache.fineract.infrastructure.codes.domain.CodeValueRepository;
@@ -109,6 +110,8 @@ import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeePlatformServi
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.service.BuyDownFeeWritePlatformServiceImpl;
+import org.apache.fineract.portfolio.loanaccount.service.ChargeAmountCalculator;
+import org.apache.fineract.portfolio.loanaccount.service.ChargeAmountCalculatorRegistry;
 import org.apache.fineract.portfolio.loanaccount.service.GLIMAccountInfoReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.GLIMAccountInfoReadPlatformServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.service.GLIMAccountInfoWritePlatformService;
@@ -171,6 +174,7 @@ import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanTransact
 import org.apache.fineract.portfolio.loanaccount.service.ReplayedTransactionBusinessEventService;
 import org.apache.fineract.portfolio.loanaccount.service.ReplayedTransactionBusinessEventServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.service.ReprocessLoanTransactionsService;
+import org.apache.fineract.portfolio.loanaccount.service.SimpleChargeAmountCalculatorRegistry;
 import org.apache.fineract.portfolio.loanaccount.service.adjustment.LoanAdjustmentService;
 import org.apache.fineract.portfolio.loanaccount.service.schedule.LoanScheduleComponent;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
@@ -291,12 +295,19 @@ public class LoanAccountConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(ChargeAmountCalculatorRegistry.class)
+    public ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry(List<ChargeAmountCalculator> chargeAmountCalculators) {
+        return new SimpleChargeAmountCalculatorRegistry(chargeAmountCalculators);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(LoanChargeAssembler.class)
     public LoanChargeAssembler loanChargeAssembler(final FromJsonHelper fromApiJsonHelper, final ChargeRepositoryWrapper chargeRepository,
             final LoanChargeRepository loanChargeRepository, final LoanProductRepository loanProductRepository,
-            final ExternalIdFactory externalIdFactory, final LoanChargeService loanChargeService) {
+            final ExternalIdFactory externalIdFactory, final LoanChargeService loanChargeService,
+            final ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry) {
         return new LoanChargeAssembler(fromApiJsonHelper, chargeRepository, loanChargeRepository, loanProductRepository, externalIdFactory,
-                loanChargeService);
+                loanChargeService, chargeAmountCalculatorRegistry);
     }
 
     @Bean
@@ -509,10 +520,10 @@ public class LoanAccountConfiguration {
     public LoanChargeService loanChargeService(final LoanChargeValidator loanChargeValidator,
             final LoanTransactionProcessingService loanTransactionProcessingService,
             final LoanLifecycleStateMachine loanLifecycleStateMachine, final LoanBalanceService loanBalanceService,
-            final LoanScheduleGeneratorService loanScheduleGeneratorService,
-            final ChargeTaxApplicationService chargeTaxApplicationService) {
+            final LoanScheduleGeneratorService loanScheduleGeneratorService, final ChargeTaxApplicationService chargeTaxApplicationService,
+            final ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry) {
         return new LoanChargeService(loanChargeValidator, loanTransactionProcessingService, loanLifecycleStateMachine, loanBalanceService,
-                loanScheduleGeneratorService, chargeTaxApplicationService);
+                loanScheduleGeneratorService, chargeTaxApplicationService, chargeAmountCalculatorRegistry);
     }
 
     @Bean

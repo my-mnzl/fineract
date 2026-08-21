@@ -73,8 +73,8 @@ class LoanChargeServiceTaxTest {
 
     private LoanChargeService buildService(ChargeTaxApplicationService taxService) {
         return new LoanChargeService(mock(LoanChargeValidator.class), mock(LoanTransactionProcessingService.class),
-                mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class), mock(LoanScheduleGeneratorService.class),
-                taxService);
+                mock(LoanLifecycleStateMachine.class), mock(LoanBalanceService.class), mock(LoanScheduleGeneratorService.class), taxService,
+                new SimpleChargeAmountCalculatorRegistry(Collections.emptyList()));
     }
 
     @Test

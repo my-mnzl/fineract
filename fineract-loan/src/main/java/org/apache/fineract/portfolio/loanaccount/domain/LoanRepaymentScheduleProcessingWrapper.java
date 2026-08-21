@@ -104,7 +104,7 @@ public class LoanRepaymentScheduleProcessingWrapper {
                         // multi disburment loan.
                         // Then we need to get as of this loan charge due date
                         // how much amount disbursed.
-                        if (loanCharge.getLoan() != null && loanCharge.isSpecifiedDueDate()
+                        if (loanCharge.getLoan() != null && (loanCharge.isSpecifiedDueDate() || loanCharge.isPeriodic())
                                 && loanCharge.getLoan().isMultiDisburmentLoan()) {
                             for (final LoanDisbursementDetails loanDisbursementDetails : loanCharge.getLoan().getDisbursementDetails()) {
                                 if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), loanCharge.getDueDate())) {
