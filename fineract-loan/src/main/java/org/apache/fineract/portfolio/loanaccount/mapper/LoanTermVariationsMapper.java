@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.portfolio.calendar.data.CalendarHistoryDataWrapper;
 import org.apache.fineract.portfolio.calendar.domain.Calendar;
@@ -49,7 +50,10 @@ import org.apache.fineract.portfolio.loanproduct.service.LoanEnumerations;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class LoanTermVariationsMapper {
+
+    private final List<LoanTermVariationsEnricher> loanTermVariationsEnrichers;
 
     public BigDecimal constructLoanTermVariations(final FloatingRateDTO floatingRateDTO, final BigDecimal annualNominalInterestRate,
             final List<LoanTermVariationsData> loanTermVariations, final Loan loan) {
@@ -59,7 +63,13 @@ public class LoanTermVariationsMapper {
             }
         }
 
-        return constructFloatingInterestRates(annualNominalInterestRate, floatingRateDTO, loanTermVariations, loan);
+        BigDecimal resolvedAnnualNominalInterestRate = constructFloatingInterestRates(annualNominalInterestRate, floatingRateDTO,
+                loanTermVariations, loan);
+        for (LoanTermVariationsEnricher loanTermVariationsEnricher : loanTermVariationsEnrichers) {
+            resolvedAnnualNominalInterestRate = loanTermVariationsEnricher.enrich(floatingRateDTO, resolvedAnnualNominalInterestRate,
+                    loanTermVariations, loan);
+        }
+        return resolvedAnnualNominalInterestRate;
     }
 
     public LoanApplicationTerms constructLoanApplicationTerms(final ScheduleGeneratorDTO scheduleGeneratorDTO, final Loan loan) {

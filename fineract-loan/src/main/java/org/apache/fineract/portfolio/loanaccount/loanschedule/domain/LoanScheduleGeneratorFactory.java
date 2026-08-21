@@ -23,4 +23,8 @@ import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
 public interface LoanScheduleGeneratorFactory {
 
     LoanScheduleGenerator create(LoanScheduleType loanScheduleType, InterestMethod interestMethod);
+
+    default LoanScheduleGenerator create(final LoanScheduleSelectionContext selectionContext) {
+        return create(selectionContext.loanScheduleType(), selectionContext.interestMethod());
+    }
 }

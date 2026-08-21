@@ -85,6 +85,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.reaging.LoanReAgeParamet
 import org.apache.fineract.portfolio.loanaccount.exception.LoanNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestRecalculationCompoundingMethod;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRelatedDetail;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -448,8 +449,9 @@ public class LoanAccrualsProcessingServiceImpl implements LoanAccrualsProcessing
             final boolean isFinal, final boolean chargeOnDueDate) {
         final LoanProductRelatedDetail productDetail = loan.getLoanProductRelatedDetail();
         final MonetaryCurrency currency = productDetail.getCurrency();
-        final LoanScheduleGenerator scheduleGenerator = loanScheduleFactory.create(productDetail.getLoanScheduleType(),
-                productDetail.getInterestMethod());
+        final LoanScheduleGenerator scheduleGenerator = loanScheduleFactory
+                .create(LoanScheduleSelectionContext.builder().loanScheduleType(productDetail.getLoanScheduleType())
+                        .interestMethod(productDetail.getInterestMethod()).loanId(loan.getId()).loanProductId(loan.productId()).build());
         final int firstInstallmentNumber = fetchFirstNormalInstallmentNumber(loan.getRepaymentScheduleInstallments());
         final LocalDate interestCalculationTillDate = loan.isProgressiveSchedule()
                 && loan.getLoanProductRelatedDetail().isInterestRecognitionOnDisbursementDate() ? tillDate.plusDays(1L) : tillDate;

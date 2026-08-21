@@ -1216,7 +1216,9 @@ public final class LoanApplicationTerms {
                                 this.holidayDetailDTO.getWorkingDays(), isSkipRepaymentOnFirstDayOfMonth, numberOfDays);
                     }
                     if (!DateUtils.isEqual(expectedStartDate, startDate)) {
-                        diffDays = DateUtils.getExactDifferenceInDays(startDate, expectedStartDate);
+                        diffDays = this.daysInMonthType.isDaysInMonth_30()
+                                ? DateUtils.getDifferenceInDaysFor30DayMonth(startDate, expectedStartDate)
+                                : DateUtils.getExactDifferenceInDays(startDate, expectedStartDate);
                     }
                     if (numberOfMonths == 0) {
                         startDateAfterConsideringMonths = expectedStartDate;
@@ -1231,9 +1233,16 @@ public final class LoanApplicationTerms {
                             CalendarUtils.getMeetingFrequencyFromPeriodFrequencyType(getLoanTermPeriodFrequencyType()),
                             this.holidayDetailDTO.getWorkingDays(), isSkipRepaymentOnFirstDayOfMonth, numberOfDays);
                 }
-                int daysLeftAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths, endDate) + diffDays;
-                int daysInPeriodAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths,
-                        endDateAfterConsideringMonths);
+                int daysLeftAfterMonths;
+                int daysInPeriodAfterMonths;
+                if (this.daysInMonthType.isDaysInMonth_30()) {
+                    daysLeftAfterMonths = DateUtils.getDifferenceInDaysFor30DayMonth(startDateAfterConsideringMonths, endDate) + diffDays;
+                    daysInPeriodAfterMonths = 30;
+                } else {
+                    daysLeftAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths, endDate) + diffDays;
+                    daysInPeriodAfterMonths = DateUtils.getExactDifferenceInDays(startDateAfterConsideringMonths,
+                            endDateAfterConsideringMonths);
+                }
                 numberOfPeriods = numberOfPeriods.add(BigDecimal.valueOf(numberOfMonths))
                         .add(BigDecimal.valueOf((double) daysLeftAfterMonths / daysInPeriodAfterMonths));
             break;

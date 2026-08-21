@@ -269,6 +269,7 @@ allprojects  {
             "**/keystore.jks",
             "**/legacy-docs/**",
             "**/banner.txt",
+            "**/mnzl/prod-configs/*.json",
             "**/build.gradle.mustache",
             "**/pom.mustache",
             "**/avro/**/*.java",

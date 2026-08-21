@@ -70,6 +70,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanRepayme
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGeneratorFactory;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModelPeriod;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleHistoryWritePlatformService;
 import org.apache.fineract.portfolio.loanaccount.mapper.LoanTermVariationsMapper;
 import org.apache.fineract.portfolio.loanaccount.rescheduleloan.RescheduleLoansApiConstants;
@@ -347,8 +348,9 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
         final MathContext mathContext = MoneyHelper.getMathContext();
         final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = this.loanRepaymentScheduleTransactionProcessorFactory
                 .determineProcessor(loan.transactionProcessingStrategy());
-        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                loanApplicationTerms.getInterestMethod());
+        final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(LoanScheduleSelectionContext.builder()
+                .loanScheduleType(loanApplicationTerms.getLoanScheduleType()).interestMethod(loanApplicationTerms.getInterestMethod())
+                .loanId(loan.getId()).loanProductId(loan.productId()).build());
         final LoanScheduleDTO projectedLoanSchedule = loanScheduleGenerator.rescheduleNextInstallments(mathContext, loanApplicationTerms,
                 loan, loanApplicationTerms.getHolidayDetailDTO(), loanRepaymentScheduleTransactionProcessor, rescheduleFromDate);
 
@@ -507,8 +509,9 @@ public class LoanRescheduleRequestWritePlatformServiceImpl implements LoanResche
             final MathContext mathContext = MoneyHelper.getMathContext();
             final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = this.loanRepaymentScheduleTransactionProcessorFactory
                     .determineProcessor(loan.transactionProcessingStrategy());
-            final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(loanApplicationTerms.getLoanScheduleType(),
-                    loanApplicationTerms.getInterestMethod());
+            final LoanScheduleGenerator loanScheduleGenerator = this.loanScheduleFactory.create(LoanScheduleSelectionContext.builder()
+                    .loanScheduleType(loanApplicationTerms.getLoanScheduleType()).interestMethod(loanApplicationTerms.getInterestMethod())
+                    .loanId(loan.getId()).loanProductId(loan.productId()).build());
             final LoanScheduleDTO loanScheduleDTO = loanScheduleGenerator.rescheduleNextInstallments(mathContext, loanApplicationTerms,
                     loan, loanApplicationTerms.getHolidayDetailDTO(), loanRepaymentScheduleTransactionProcessor, rescheduleFromDate);
 
