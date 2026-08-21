@@ -20,23 +20,54 @@ package co.mnzl.fineract.custom.loan.job;
 
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
+import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
+import org.apache.fineract.portfolio.account.jobs.executestandinginstructions.ExecuteStandingInstructionsTasklet;
+import org.apache.fineract.portfolio.account.service.AccountAssociationsReadPlatformService;
+import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
+import org.apache.fineract.portfolio.account.service.StandingInstructionReadPlatformService;
 import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanChargeRepository;
+import org.apache.fineract.portfolio.loanaccount.jobs.transferfeechargeforloans.TransferFeeChargeForLoansTasklet;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.service.ChargeAmountCalculatorRegistry;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeAssembler;
+import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 public class MnzlLoanJobConfiguration {
+
+    @Bean
+    @Primary
+    public ExecuteStandingInstructionsTasklet mnzlExecuteStandingInstructionsTasklet(
+            final StandingInstructionReadPlatformService standingInstructionReadPlatformService, final JdbcTemplate jdbcTemplate,
+            final DatabaseSpecificSQLGenerator sqlGenerator,
+            final AccountTransfersWritePlatformService accountTransfersWritePlatformService, final TransactionTemplate transactionTemplate,
+            final ScheduledDateGenerator scheduledDateGenerator) {
+        return new MnzlExecuteStandingInstructionsTasklet(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator,
+                accountTransfersWritePlatformService, transactionTemplate, scheduledDateGenerator);
+    }
+
+    @Bean
+    @Primary
+    public TransferFeeChargeForLoansTasklet mnzlTransferFeeChargeForLoansTasklet(
+            final LoanChargeReadPlatformService loanChargeReadPlatformService,
+            final AccountAssociationsReadPlatformService accountAssociationsReadPlatformService,
+            final AccountTransfersWritePlatformService accountTransfersWritePlatformService,
+            final TransactionTemplate transactionTemplate) {
+        return new MnzlTransferFeeChargeForLoansTasklet(loanChargeReadPlatformService, accountAssociationsReadPlatformService,
+                accountTransfersWritePlatformService, transactionTemplate);
+    }
 
     @Bean
     public MnzlPeriodicChargeProjectionService mnzlPeriodicChargeProjectionService(@Lazy final LoanChargeAssembler loanChargeAssembler,

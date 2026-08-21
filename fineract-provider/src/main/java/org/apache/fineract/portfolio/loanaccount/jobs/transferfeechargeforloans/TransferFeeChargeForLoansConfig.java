@@ -29,6 +29,7 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,14 +49,13 @@ public class TransferFeeChargeForLoansConfig {
     private AccountTransfersWritePlatformService accountTransfersWritePlatformService;
 
     @Bean
-    protected Step transferFeeChargeForLoansStep() {
-        return new StepBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository)
-                .tasklet(transferFeeChargeForLoansTasklet(), transactionManager).build();
+    protected Step transferFeeChargeForLoansStep(TransferFeeChargeForLoansTasklet tasklet) {
+        return new StepBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository).tasklet(tasklet, transactionManager).build();
     }
 
     @Bean
-    public Job transferFeeChargeForLoansJob() {
-        return new JobBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository).start(transferFeeChargeForLoansStep())
+    public Job transferFeeChargeForLoansJob(@Qualifier("transferFeeChargeForLoansStep") Step transferFeeChargeForLoansStep) {
+        return new JobBuilder(JobName.TRANSFER_FEE_CHARGE_FOR_LOANS.name(), jobRepository).start(transferFeeChargeForLoansStep)
                 .incrementer(new RunIdIncrementer()).build();
     }
 
