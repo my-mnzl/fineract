@@ -65,7 +65,7 @@ jobs:
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       - name: Build the image
-        run: ./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild -Djib.to.image=$IMAGE_NAME -x test -x cucumber -x buildJavaSdk
+        run: ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild -Djib.to.image="$IMAGE_NAME" -x test -x cucumber -x buildJavaSdk
 
       - name: Verify git.properties in image
         run: |

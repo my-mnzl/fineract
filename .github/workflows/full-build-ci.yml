@@ -6,6 +6,7 @@ on:
       - develop
       - 'release/**'
       - '1.*'
+      - 'mnzl/**'
     paths-ignore:
       - '**/*.md'
   pull_request:
@@ -58,6 +59,16 @@ jobs:
   build-docker-image:
     needs: build-core
     uses: ./.github/workflows/build-docker.yml
+    secrets:
+      DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
+  publish-ghcr:
+    if: github.event_name == 'push' && startsWith(github.ref_name, 'mnzl/')
+    needs: build-docker-image
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-ghcr.yml
     secrets:
       DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
