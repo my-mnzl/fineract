@@ -307,6 +307,8 @@ public class SavingsAccountCharge extends AbstractAuditableWithUTCDateTimeCustom
                 this.amountWaived = null;
                 this.amountWrittenOff = null;
             break;
+            case CUSTOM:
+                throw new IllegalStateException("Custom charge calculation is not supported for savings account charges");
         }
     }
 
@@ -438,6 +440,8 @@ public class SavingsAccountCharge extends AbstractAuditableWithUTCDateTimeCustom
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
                     LOG.error("TODO Implement update ChargeCalculationType for PERCENT_OF_DISBURSEMENT_AMOUNT");
                 break;
+                case CUSTOM:
+                    throw new IllegalStateException("Custom charge calculation is not supported for savings account charges");
             }
         }
     }
@@ -513,6 +517,8 @@ public class SavingsAccountCharge extends AbstractAuditableWithUTCDateTimeCustom
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
                     LOG.error("TODO Implement update ChargeCalculationType for PERCENT_OF_DISBURSEMENT_AMOUNT");
                 break;
+                case CUSTOM:
+                    throw new IllegalStateException("Custom charge calculation is not supported for savings account charges");
             }
         }
 
