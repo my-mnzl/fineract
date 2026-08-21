@@ -61,11 +61,12 @@ jobs:
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
-          branch_tag="$(printf '%s' "$REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//' | cut -c1-128)"
-          if [ -z "$branch_tag" ]; then
-            echo "Unable to derive a valid image tag from the branch name" >&2
-            exit 1
+          branch_slug="$(printf '%s' "$REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//' | cut -c1-63)"
+          if [ -z "$branch_slug" ]; then
+            branch_slug=branch
           fi
+          branch_hash="$(printf '%s' "$REF_NAME" | sha256sum | cut -d ' ' -f1)"
+          branch_tag="${branch_slug}-${branch_hash}"
           echo "branch=$branch_tag" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry

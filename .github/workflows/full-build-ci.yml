@@ -63,8 +63,34 @@ jobs:
       DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
   publish-ghcr:
-    if: github.event_name == 'push' && startsWith(github.ref_name, 'mnzl/')
-    needs: build-docker-image
+    if: >-
+      ${{
+        always() &&
+        github.event_name == 'push' &&
+        startsWith(github.ref_name, 'mnzl/') &&
+        !contains(needs.*.result, 'failure') &&
+        !contains(needs.*.result, 'cancelled')
+      }}
+    needs:
+      - build-core
+      - build-embeddable-progressive-loan-jar
+      - build-docker-image
+      - build-documentation
+      - run-quality-checks
+      - run-cucumber-tests
+      - run-integrations-tests-on-postgresql
+      - run-integrations-tests-on-mysql
+      - run-integrations-tests-on-mariadb
+      - run-e2e-tests
+      - run-liquibase-only-on-postgresql
+      - run-messaging-smoke-tests
+      - run-api-backward-compatibility
+      - run-generated-client-api-method-compatibility
+      - run-liquibase-backward-compatibility
+      - run-liquibase-ddl-safety
+      - run-regression-safety-db-changes
+      - run-sonarqube
+      - run-integration-tests-sequentially-on-postgresql
     permissions:
       contents: read
       packages: write
