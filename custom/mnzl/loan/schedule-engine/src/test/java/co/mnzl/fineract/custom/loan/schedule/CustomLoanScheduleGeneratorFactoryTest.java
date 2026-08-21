@@ -116,6 +116,30 @@ class CustomLoanScheduleGeneratorFactoryTest {
     }
 
     @Test
+    void createBindsLoanIdentityToCustomGenerator() {
+        ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
+        CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator custom = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator loanBound = mock(
+                CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.class);
+        DefaultLoanScheduleGeneratorFactory defaultFactory = mock(DefaultLoanScheduleGeneratorFactory.class);
+        MnzlLoanProductStrategyReadService strategyReadService = mock(MnzlLoanProductStrategyReadService.class);
+        LoanScheduleSelectionContext selectionContext = LoanScheduleSelectionContext.builder().loanScheduleType(LoanScheduleType.CUMULATIVE)
+                .interestMethod(InterestMethod.DECLINING_BALANCE).loanId(13516L)
+                .scheduleStrategyCode(MnzlLoanProductStrategyCodes.SCHEDULE_MNZL_DECLINING_BALANCE).build();
+        when(custom.forLoan(13516L)).thenReturn(loanBound);
+
+        CustomLoanScheduleGeneratorFactory factory = new CustomLoanScheduleGeneratorFactory(progressive, flat, custom, defaultFactory,
+                strategyReadService);
+
+        LoanScheduleGenerator result = factory.create(selectionContext);
+
+        assertThat(result).isSameAs(loanBound);
+        verifyNoInteractions(defaultFactory, strategyReadService);
+    }
+
+    @Test
     void createDelegatesToDefaultFactoryWhenNoStrategyConfigured() {
         ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
         CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);

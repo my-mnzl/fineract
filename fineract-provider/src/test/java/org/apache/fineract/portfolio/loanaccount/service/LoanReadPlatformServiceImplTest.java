@@ -96,7 +96,7 @@ class LoanReadPlatformServiceImplTest {
         dates.put(BusinessDateType.COB_DATE, TODAY.minusDays(1));
         ThreadLocalContextUtil.setBusinessDates(dates);
 
-        service = newService();
+        service = newService(jdbcTemplate);
     }
 
     @Test
@@ -193,7 +193,7 @@ class LoanReadPlatformServiceImplTest {
         assertThat(args[4]).isEqualTo(LoanStatus.ACTIVE.getValue());
     }
 
-    private LoanReadPlatformServiceImpl newService() {
+    static LoanReadPlatformServiceImpl newService(JdbcTemplate jdbcTemplate) {
         return new LoanReadPlatformServiceImpl(jdbcTemplate, mock(PlatformSecurityContext.class), mock(LoanRepositoryWrapper.class),
                 mock(ApplicationCurrencyRepositoryWrapper.class), mock(LoanProductReadPlatformService.class),
                 mock(ClientReadPlatformService.class), mock(GroupReadPlatformService.class), mock(LoanDropdownReadPlatformService.class),

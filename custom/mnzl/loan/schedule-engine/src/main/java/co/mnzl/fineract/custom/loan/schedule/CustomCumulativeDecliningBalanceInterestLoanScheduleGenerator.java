@@ -38,6 +38,7 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDa
 import org.apache.fineract.portfolio.loanproduct.domain.AmortizationMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -70,13 +71,31 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
 
     private final ScheduledDateGenerator scheduledDateGenerator;
     private final PaymentPeriodsInOneYearCalculator paymentPeriodsInOneYearCalculator;
+    private final LoanTransactionRepository loanTransactionRepository;
+    private final CurrencyMapper currencyMapper;
+    private final Long loanId;
 
+    @Autowired
     public CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator(final ScheduledDateGenerator scheduledDateGenerator,
             final PaymentPeriodsInOneYearCalculator paymentPeriodsInOneYearCalculator,
             final LoanTransactionRepository loanTransactionRepository, final CurrencyMapper currencyMapper) {
+        this(scheduledDateGenerator, paymentPeriodsInOneYearCalculator, loanTransactionRepository, currencyMapper, null);
+    }
+
+    private CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator(final ScheduledDateGenerator scheduledDateGenerator,
+            final PaymentPeriodsInOneYearCalculator paymentPeriodsInOneYearCalculator,
+            final LoanTransactionRepository loanTransactionRepository, final CurrencyMapper currencyMapper, final Long loanId) {
         super(loanTransactionRepository, currencyMapper);
         this.scheduledDateGenerator = scheduledDateGenerator;
         this.paymentPeriodsInOneYearCalculator = paymentPeriodsInOneYearCalculator;
+        this.loanTransactionRepository = loanTransactionRepository;
+        this.currencyMapper = currencyMapper;
+        this.loanId = loanId;
+    }
+
+    CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator forLoan(final Long loanId) {
+        return new CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator(scheduledDateGenerator, paymentPeriodsInOneYearCalculator,
+                loanTransactionRepository, currencyMapper, loanId);
     }
 
     @Override
@@ -223,16 +242,16 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
             // 30E/360 which yields 44 days for the same dates, drifting the schedule by
             // 451.39 EGP (one day of interest at 25%/360 on 650k). m_loan_repayment_schedule_history
             // v3 locks the 43-day numbers; recalc must reproduce them on every regeneration so
-            // the loan amortizes identically. We match the loan by its three-part signature
-            // (principal=650k EGP + disbursement=2026-02-17 + first repayment=2026-04-01) and
-            // shift the period end back one day, which restores the legacy day count without
-            // touching 30E/360 globally. Remove this guard once loan 13516 is closed.
+            // the loan amortizes identically. The persisted loan id scopes this exception to
+            // loan 13516; its original financial terms are retained as a defensive check. The
+            // shifted period end restores the legacy day count without touching 30E/360 globally.
+            // Remove this guard once loan 13516 is closed.
             boolean rehabGuard = isRehabLegacyOneOffLoan(loanApplicationTerms);
             LocalDate effectivePeriodEndDate = rehabGuard ? periodEndDate.minusDays(1) : periodEndDate;
             if (rehabGuard) {
                 LOG.warn(
-                        "[REHAB-13516-GUARD] Legacy 30/360 day-count guard fired: principal={}, disbursement={}, firstRepayment={}, originalPeriodEnd={}, adjustedPeriodEnd={}",
-                        REHAB_LEGACY_PRINCIPAL, REHAB_LEGACY_DISBURSEMENT, REHAB_LEGACY_FIRST_REPAYMENT, periodEndDate,
+                        "[REHAB-13516-GUARD] Legacy 30/360 day-count guard fired: loanId={}, principal={}, disbursement={}, firstRepayment={}, originalPeriodEnd={}, adjustedPeriodEnd={}",
+                        loanId, REHAB_LEGACY_PRINCIPAL, REHAB_LEGACY_DISBURSEMENT, REHAB_LEGACY_FIRST_REPAYMENT, periodEndDate,
                         effectivePeriodEndDate);
             }
             int actualPeriodDays = getDifferenceInDays(interestStartForFirstPeriod, effectivePeriodEndDate, loanApplicationTerms);
@@ -341,13 +360,13 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
     }
 
     /**
-     * One-off match for production rehab loan 13516. Identified by the three terms that uniquely pin it: principal
-     * exactly 650,000, expected disbursement 2026-02-17, first repayment 2026-04-01. Used solely to anchor the first
-     * stub period to the pre-d5d8cf882 (legacy 30/360) day count so recalc reproduces m_loan_repayment_schedule_history
-     * v3 every time.
+     * One-off match for production rehab loan 13516. The stable persisted loan id scopes the exception; the original
+     * principal and dates protect against applying it to a different record if data is copied or identifiers are reused
+     * outside production. Used solely to anchor the first stub period to the pre-d5d8cf882 (legacy 30/360) day count so
+     * recalc reproduces m_loan_repayment_schedule_history v3 every time.
      */
-    private static boolean isRehabLegacyOneOffLoan(final LoanApplicationTerms terms) {
-        if (terms == null || terms.getPrincipal() == null) {
+    private boolean isRehabLegacyOneOffLoan(final LoanApplicationTerms terms) {
+        if (!REHAB_LEGACY_LOAN_ID.equals(loanId) || terms == null || terms.getPrincipal() == null) {
             return false;
         }
         BigDecimal principal = terms.getPrincipal().getAmount();
@@ -358,6 +377,7 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
                 && REHAB_LEGACY_FIRST_REPAYMENT.equals(terms.getRepaymentsStartingFromLocalDate());
     }
 
+    private static final Long REHAB_LEGACY_LOAN_ID = 13516L;
     private static final BigDecimal REHAB_LEGACY_PRINCIPAL = new BigDecimal("650000");
     private static final LocalDate REHAB_LEGACY_DISBURSEMENT = LocalDate.of(2026, 2, 17);
     private static final LocalDate REHAB_LEGACY_FIRST_REPAYMENT = LocalDate.of(2026, 4, 1);

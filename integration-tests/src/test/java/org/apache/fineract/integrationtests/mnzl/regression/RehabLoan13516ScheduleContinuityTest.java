@@ -39,19 +39,15 @@ import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanSchedul
 import org.junit.jupiter.api.Test;
 
 /**
- * Regression tests pinning the production rehab loan signature behind
- * {@code MnzlCustomCumulativeDecliningBalanceInterestLoanScheduleGenerator.isRehabLegacyOneOffLoan}.
+ * Regression tests for new loans created with the same financial terms as production rehab loan 13516.
  *
- * The rehab signature is keyed on (principal=650000, expectedDisbursementDate=2026-02-17,
- * repaymentsStartingFromLocalDate=2026-04-01) — NOT on a specific loan id. Whenever a loan matches that triple, the
- * generator must:
+ * The legacy 43-day stub exception is scoped to persisted loan id 13516. A newly originated loan with the same
+ * principal and dates must therefore:
  * <ul>
- * <li>Reproduce the v3 baseline schedule exactly (12 installments, 43-day legacy stub, total interest 97,212.85).</li>
+ * <li>Use the standard 30E/360 schedule (12 installments, 44-day stub, total interest 97,664.24).</li>
  * <li>Stay frozen on lateness — interest recalculation is disabled at the product/loan level, so late repayments must
  * not redistribute principal or interest. Lateness surfaces only as penalty charges, not as schedule drift.</li>
  * </ul>
- *
- * Pins commit 6142206b7 (Rehab loan 13516 stub fix).
  */
 @Slf4j
 public class RehabLoan13516ScheduleContinuityTest extends BaseLoanIntegrationTest {
@@ -63,20 +59,19 @@ public class RehabLoan13516ScheduleContinuityTest extends BaseLoanIntegrationTes
     private static final String DISBURSEMENT_DATE = "17 February 2026";
     private static final String FIRST_REPAYMENT_DATE = "01 April 2026";
 
-    // v3 baseline pins (from production loan 13516 schedule)
+    // Standard 30E/360 baseline for newly originated loans with the same terms as loan 13516.
     private static final double BASELINE_INST1_PRINCIPAL = 48237.06;
-    private static final double BASELINE_INST1_INTEREST = 19409.72;
+    private static final double BASELINE_INST1_INTEREST = 19861.11;
     private static final double BASELINE_INST12_PRINCIPAL = 60517.98;
     private static final double BASELINE_INST12_INTEREST = 1260.79;
-    private static final double BASELINE_TOTAL_INTEREST = 97212.85;
+    private static final double BASELINE_TOTAL_INTEREST = 97664.24;
 
     /**
-     * Baseline pin: the rehab signature must reproduce the v3 origination schedule exactly. Asserts the 43-day legacy
-     * stub period, period-1 / period-12 principal & interest, and the total interest figure of 97,212.85. Does not
-     * exercise late-payment behavior.
+     * Baseline pin: a newly originated loan that reuses the rehab terms must stay on the standard 30E/360 path. This
+     * ensures the one-off production compatibility behavior cannot leak to unrelated loans.
      */
     @Test
-    public void originSchedulesMatchProductionVersion3() {
+    public void newLoanWithRehabTermsUsesStandardThirtyE360Schedule() {
         runAt(SUBMITTED_DATE, () -> {
             Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
             Long productId = createRehabProduct();
@@ -207,15 +202,15 @@ public class RehabLoan13516ScheduleContinuityTest extends BaseLoanIntegrationTes
     private void assertBaselineSchedule(List<GetLoansLoanIdRepaymentPeriod> baseline) {
         assertEquals(12, baseline.size(), "Baseline schedule should have 12 installments");
         assertEquals(BASELINE_INST1_PRINCIPAL, Utils.getDoubleValue(baseline.get(0).getPrincipalDue()), 0.01,
-                "Baseline installment 1 principal must match v3");
+                "Baseline installment 1 principal must match standard 30E/360");
         assertEquals(BASELINE_INST1_INTEREST, Utils.getDoubleValue(baseline.get(0).getInterestDue()), 0.01,
-                "Baseline installment 1 interest must match v3 (43-day rehab stub)");
+                "Baseline installment 1 interest must use the standard 44-day stub");
         assertEquals(BASELINE_INST12_PRINCIPAL, Utils.getDoubleValue(baseline.get(11).getPrincipalDue()), 0.01,
-                "Baseline installment 12 principal must match v3");
+                "Baseline installment 12 principal must match standard 30E/360");
         assertEquals(BASELINE_INST12_INTEREST, Utils.getDoubleValue(baseline.get(11).getInterestDue()), 0.01,
-                "Baseline installment 12 interest must match v3");
+                "Baseline installment 12 interest must match standard 30E/360");
         double totalInterest = baseline.stream().mapToDouble(p -> Utils.getDoubleValue(p.getInterestDue())).sum();
-        assertEquals(BASELINE_TOTAL_INTEREST, totalInterest, 0.01, "Baseline total interest must match v3");
+        assertEquals(BASELINE_TOTAL_INTEREST, totalInterest, 0.01, "Baseline total interest must use standard 30E/360");
     }
 
     private void assertSchedulesMatch(List<GetLoansLoanIdRepaymentPeriod> baseline, List<GetLoansLoanIdRepaymentPeriod> recalculated,

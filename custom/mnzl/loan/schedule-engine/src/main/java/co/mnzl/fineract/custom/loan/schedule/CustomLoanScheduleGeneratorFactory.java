@@ -56,6 +56,12 @@ public class CustomLoanScheduleGeneratorFactory implements LoanScheduleGenerator
         if (!usesCustomStrategy(selectionContext)) {
             return defaultLoanScheduleGeneratorFactory.create(selectionContext);
         }
+        if (selectionContext.loanScheduleType() == LoanScheduleType.CUMULATIVE
+                && selectionContext.interestMethod() == InterestMethod.DECLINING_BALANCE) {
+            Long loanId = selectionContext.loanId();
+            return loanId == null ? customCumulativeDecliningBalanceInterestLoanScheduleGenerator
+                    : customCumulativeDecliningBalanceInterestLoanScheduleGenerator.forLoan(loanId);
+        }
         return create(selectionContext.loanScheduleType(), selectionContext.interestMethod());
     }
 

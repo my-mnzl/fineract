@@ -96,7 +96,7 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
 
     @Test
     void originatingScheduleMatchesProductionV3Baseline() {
-        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator generator = newGenerator();
+        CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator generator = newGenerator(13516L);
 
         LoanScheduleModel schedule = generator.generate(MC, loanApplicationTerms(), Collections.emptySet(), holidayDetailDTO());
 
@@ -124,7 +124,7 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
         // day later. Without this assertion, dropping the firstRepayment field from the signature would silently
         // pull other rehab-shaped loans into the workaround and miscalculate them by 451.39 EGP.
         LocalDate nearMissFirstRepayment = FIRST_REPAYMENT_DATE.plusDays(1);
-        LoanScheduleModel schedule = newGenerator().generate(MC, loanApplicationTerms(PRINCIPAL, nearMissFirstRepayment),
+        LoanScheduleModel schedule = newGenerator(13516L).generate(MC, loanApplicationTerms(PRINCIPAL, nearMissFirstRepayment),
                 Collections.emptySet(), holidayDetailDTO());
 
         assertThat(schedule.getTotalInterestCharged()).as("near-miss first repayment uses unguarded 30E/360 path")
@@ -136,7 +136,7 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
         // Pins the guard's principal check. Same dates but principal off by one cent must take the standard
         // 30E/360 path. Catches a regression that loosens the principal comparator.
         BigDecimal nearMissPrincipal = PRINCIPAL.add(new BigDecimal("0.01"));
-        LoanScheduleModel schedule = newGenerator().generate(MC, loanApplicationTerms(nearMissPrincipal, FIRST_REPAYMENT_DATE),
+        LoanScheduleModel schedule = newGenerator(13516L).generate(MC, loanApplicationTerms(nearMissPrincipal, FIRST_REPAYMENT_DATE),
                 Collections.emptySet(), holidayDetailDTO());
 
         // Standard 30E/360 stub is 44 days; for 650,000.01 EGP the resulting total interest must scale up from
@@ -241,20 +241,17 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
         // the generator subtracts one day from the stub period end (Feb 17 -> Apr 1: 44 -> 43 days under 30E/360),
         // yielding the legacy v3 first-installment interest of 19409.72 EGP. This is the exact rehab path locked by
         // m_loan_repayment_schedule_history v3.
-        LoanScheduleModel schedule = newGenerator().generate(MC, loanApplicationTerms(), Collections.emptySet(), holidayDetailDTO());
+        LoanScheduleModel schedule = newGenerator(13516L).generate(MC, loanApplicationTerms(), Collections.emptySet(), holidayDetailDTO());
         LoanScheduleModelPeriod first = period(schedule, 1);
         assertThat(first.interestDue()).as("rehab guard yields v3 first-period interest").isEqualByComparingTo(new BigDecimal("19409.72"));
     }
 
     @Test
     void contractedFirstPeriod_otherLoanShape_doesNotApplyAdjustment() {
-        // The guard does NOT key on loanId — there is no such field. It keys on the full three-part signature.
-        // Vary just the principal (650_001 vs 650_000); disbursement + first-repayment match. The guard must NOT fire
-        // and the generator must take the standard 30E/360 44-day stub path. The expected first-period interest in
-        // this configuration scales linearly with principal, so it is strictly greater than the rehab 19409.72 value
-        // (which used 43 days on 650k).
+        // The guard also checks the original financial signature defensively. Vary just the principal (650_001 vs
+        // 650_000) for loan 13516; the generator must take the standard 30E/360 44-day stub path.
         BigDecimal nearMissPrincipal = new BigDecimal("650001");
-        LoanScheduleModel schedule = newGenerator().generate(MC, loanApplicationTerms(nearMissPrincipal, FIRST_REPAYMENT_DATE),
+        LoanScheduleModel schedule = newGenerator(13516L).generate(MC, loanApplicationTerms(nearMissPrincipal, FIRST_REPAYMENT_DATE),
                 Collections.emptySet(), holidayDetailDTO());
         LoanScheduleModelPeriod first = period(schedule, 1);
         assertThat(first.interestDue()).as("non-rehab signature must not snap to 19409.72")
@@ -262,6 +259,15 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
         // 44-day stub on 650_001 @ 25%/360 = 19861.14, strictly greater than the guarded 43-day rehab value.
         assertThat(first.interestDue()).as("standard 30E/360 44-day stub interest is strictly above rehab value")
                 .isGreaterThan(new BigDecimal("19409.72"));
+    }
+
+    @Test
+    void contractedFirstPeriod_identicalTermsForDifferentLoan_doesNotApplyAdjustment() {
+        LoanScheduleModel schedule = newGenerator(13517L).generate(MC, loanApplicationTerms(), Collections.emptySet(), holidayDetailDTO());
+
+        assertThat(period(schedule, 1).interestDue()).as("another loan with identical terms uses the standard 44-day stub")
+                .isEqualByComparingTo(new BigDecimal("19861.11"));
+        assertThat(schedule.getTotalInterestCharged()).isEqualByComparingTo(new BigDecimal("97664.24"));
     }
 
     @Test
@@ -340,6 +346,10 @@ class CustomCumulativeDecliningBalanceInterestLoanScheduleGeneratorTest {
     private CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator newGenerator() {
         return new CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator(new DefaultScheduledDateGenerator(),
                 new DefaultPaymentPeriodsInOneYearCalculator(), mock(LoanTransactionRepository.class), mock(CurrencyMapper.class));
+    }
+
+    private CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator newGenerator(Long loanId) {
+        return newGenerator().forLoan(loanId);
     }
 
     private LoanApplicationTerms loanApplicationTerms() {
