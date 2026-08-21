@@ -19,6 +19,7 @@
 package co.mnzl.fineract.custom.loan.instrument;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
@@ -33,16 +34,19 @@ import java.util.Optional;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.apache.fineract.portfolio.loanproduct.exception.LoanProductNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -118,6 +122,21 @@ class MnzlLoanProductStrategyWriteServiceTest {
         assertThat(a3.getAllValues().get(insertIdx)).isEqualTo("MNZL_DECLINING_BALANCE");
         assertThat(a4.getAllValues().get(insertIdx)).isEqualTo("MNZL_INTEREST_AND_PENALTIES");
         assertThat(a5.getAllValues().get(insertIdx)).isEqualTo("MNZL_DUE_INSTALLMENTS");
+
+        InOrder writes = Mockito.inOrder(jdbcTemplate);
+        writes.verify(jdbcTemplate).queryForObject(contains("from m_product_loan"), eq(Long.class), eq(PRODUCT_ID));
+        writes.verify(jdbcTemplate).update(startsWith("update m_mnzl_loan_product_strategy"), any(), any(), any(), any(), any());
+        writes.verify(jdbcTemplate).update(startsWith("insert into m_mnzl_loan_product_strategy"), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void update_missingLoanProduct_throwsBeforeWriting() {
+        when(jdbcTemplate.queryForObject(contains("from m_product_loan"), eq(Long.class), eq(PRODUCT_ID)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+
+        assertThatThrownBy(() -> service.update(PRODUCT_ID, FULL_JSON)).isInstanceOf(LoanProductNotFoundException.class);
+
+        verify(jdbcTemplate, never()).update(any(String.class), any(), any(), any(), any(), any());
     }
 
     // ---- UPDATE path: row exists (UPDATE returns 1) ---------------------------------------------

@@ -55,7 +55,7 @@ public class JdbcMnzlLoanProductStrategyService implements MnzlLoanProductStrate
     @Override
     @Transactional
     public MnzlLoanProductStrategyData update(Long loanProductId, String json) {
-        requireLoanProduct(loanProductId);
+        lockLoanProduct(loanProductId);
         final JsonElement element = fromJsonHelper.parse(json);
         final String instrumentCode = fromJsonHelper.extractStringNamed("instrumentCode", element);
         final String scheduleStrategyCode = fromJsonHelper.extractStringNamed("scheduleStrategyCode", element);
@@ -74,6 +74,14 @@ public class JdbcMnzlLoanProductStrategyService implements MnzlLoanProductStrate
                     loanProductId, instrumentCode, scheduleStrategyCode, chargeStrategyCode, cobStrategyCode);
         }
         return findOne(loanProductId);
+    }
+
+    private void lockLoanProduct(Long loanProductId) {
+        try {
+            jdbcTemplate.queryForObject("select id from m_product_loan where id = ? for update", Long.class, loanProductId);
+        } catch (EmptyResultDataAccessException e) {
+            throw new LoanProductNotFoundException(loanProductId, e);
+        }
     }
 
     private void requireLoanProduct(Long loanProductId) {
