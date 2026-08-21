@@ -75,7 +75,7 @@ jobs:
           validate-wrappers: true
 
       - name: Build the image
-        run: ./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild -Djib.to.image=$IMAGE_NAME -x test -x cucumber -x buildJavaSdk
+        run: ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild -Djib.to.image="$IMAGE_NAME" -x test -x cucumber -x buildJavaSdk
 
       - name: Prepare database driver plugins
         run: ./gradlew --no-daemon --console=plain :fineract-provider:copyDatabaseDriverPlugins

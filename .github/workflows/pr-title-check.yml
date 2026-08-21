@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   verify-title:
+    if: ${{ !startsWith(github.base_ref, 'mnzl/') }}
     name: Validate Jira Ticket ID
     runs-on: ubuntu-latest
     timeout-minutes: 10

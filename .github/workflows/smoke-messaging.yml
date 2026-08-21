@@ -65,13 +65,23 @@ jobs:
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       - name: Build the image
-        run: ./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild -Djib.to.image=$IMAGE_NAME -x test -x cucumber -x buildJavaSdk
+        run: ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild -Djib.to.image="$IMAGE_NAME" -x test -x cucumber -x buildJavaSdk
 
       - name: Verify git.properties in image
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
         run: |
-          docker create --name fineract-inspect $IMAGE_NAME
-          docker export fineract-inspect | tar -tf - | grep 'git.properties'
-          docker rm fineract-inspect
+          container_id="$(docker create "$IMAGE_NAME")"
+          inspect_dir="$(mktemp -d)"
+          trap 'docker rm -f "$container_id" >/dev/null; rm -rf "$inspect_dir"' EXIT
+          docker cp "$container_id:/app/libs/." "$inspect_dir"
+          provider_jar="$(find "$inspect_dir" -maxdepth 1 -name 'fineract-provider-*-plain.jar' -print -quit)"
+          if [ -z "$provider_jar" ]; then
+            echo "Unable to find the Fineract provider JAR in the image" >&2
+            exit 1
+          fi
+          unzip -p "$provider_jar" git.properties > "$inspect_dir/git.properties"
+          grep -Fqx "git.commit.id=$EXPECTED_COMMIT" "$inspect_dir/git.properties"
 
       - name: Start the ${{ matrix.messaging }} Stack
         run: docker compose -f ${{ matrix.compose_file }} up --scale fineract-worker=1 -d

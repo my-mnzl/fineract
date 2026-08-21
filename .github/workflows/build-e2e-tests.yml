@@ -84,7 +84,7 @@ jobs:
           cat feature_shard_${{ matrix.shard_index }}.txt
 
       - name: Build the image
-        run: ./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild -Djib.to.image=$IMAGE_NAME -x test -x cucumber -x buildJavaSdk
+        run: ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild -Djib.to.image="$IMAGE_NAME" -x test -x cucumber -x buildJavaSdk
 
       - name: Start the Fineract stack
         run: docker compose -f "$COMPOSE_FILE" up -d
