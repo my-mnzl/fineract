@@ -227,6 +227,7 @@
     <include file="parts/0206_transaction_summary_with_asset_owner_classification_name_bug_fix.xml" relativeToChangelogFile="true" />
     <include file="parts/0207_add_allow_full_term_for_tranche.xml" relativeToChangelogFile="true" />
     <include file="parts/0208_trial_balance_summary_with_asset_owner_journal_entry_aggregation_fix.xml" relativeToChangelogFile="true" />
+    <include file="parts/0208_widen_job_run_history_error_log.xml" relativeToChangelogFile="true" />
     <include file="parts/0209_transaction_summary_with_asset_owner_and_from_asset_owner_id_for_asset_sales.xml" relativeToChangelogFile="true" />
     <include file="parts/0210_add_configuration_password_reuse_check_history_count.xml" relativeToChangelogFile="true" />
     <include file="parts/0211_trial_balance_summary_fix_external_owners_and_aggregation.xml" relativeToChangelogFile="true" />
