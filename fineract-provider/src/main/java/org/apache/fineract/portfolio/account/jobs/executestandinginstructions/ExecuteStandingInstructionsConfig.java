@@ -29,6 +29,7 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -51,14 +52,13 @@ public class ExecuteStandingInstructionsConfig {
     private AccountTransfersWritePlatformService accountTransfersWritePlatformService;
 
     @Bean
-    protected Step executeStandingInstructionsStep() {
-        return new StepBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository)
-                .tasklet(executeStandingInstructionsTasklet(), transactionManager).build();
+    protected Step executeStandingInstructionsStep(ExecuteStandingInstructionsTasklet tasklet) {
+        return new StepBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository).tasklet(tasklet, transactionManager).build();
     }
 
     @Bean
-    public Job executeStandingInstructionsJob() {
-        return new JobBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository).start(executeStandingInstructionsStep())
+    public Job executeStandingInstructionsJob(@Qualifier("executeStandingInstructionsStep") Step executeStandingInstructionsStep) {
+        return new JobBuilder(JobName.EXECUTE_STANDING_INSTRUCTIONS.name(), jobRepository).start(executeStandingInstructionsStep)
                 .incrementer(new RunIdIncrementer()).build();
     }
 
