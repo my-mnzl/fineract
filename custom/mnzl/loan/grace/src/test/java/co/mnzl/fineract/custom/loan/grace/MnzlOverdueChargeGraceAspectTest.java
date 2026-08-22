@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
@@ -159,25 +160,73 @@ class MnzlOverdueChargeGraceAspectTest {
         verify(calculator, never()).addWorkingDays(any(), anyInt(), any(), any());
     }
 
+    @Test
+    void standaloneJobBroadensNonBackdatedQueryAndReturnsPenaltyOnWorkingDayEligibilityDate() {
+        setBusinessDate(LocalDate.of(2026, 7, 1));
+        Object[] args = { 5L, false };
+        when(joinPoint.getArgs()).thenReturn(args);
+        stubProceedReturns(List.of(overdue(1)));
+
+        Object result = aspect.retrieveWorkingDayCandidates(joinPoint);
+
+        assertThat((Collection<?>) result).hasSize(1);
+        assertThat(capturedProceedArgs()[1]).isEqualTo(true);
+    }
+
+    @Test
+    void standaloneJobPreservesNonBackdatingBySkippingPenaltyAfterWorkingDayEligibilityDate() {
+        setBusinessDate(LocalDate.of(2026, 7, 2));
+        Object[] args = { 5L, false };
+        when(joinPoint.getArgs()).thenReturn(args);
+        stubProceedReturns(List.of(overdue(1)));
+
+        Object result = aspect.retrieveWorkingDayCandidates(joinPoint);
+
+        assertThat((Collection<?>) result).isEmpty();
+        assertThat(capturedProceedArgs()[1]).isEqualTo(true);
+    }
+
+    @Test
+    void standaloneJobLeavesBackdatedQueryUntouched() {
+        Object[] args = { 5L, true };
+        List<OverdueLoanScheduleData> candidates = List.of(overdue(1));
+        when(joinPoint.getArgs()).thenReturn(args);
+        stubProceedReturns(candidates);
+
+        Object result = aspect.retrieveWorkingDayCandidates(joinPoint);
+
+        assertThat(result).isSameAs(candidates);
+        assertThat(capturedProceedArgs()).isSameAs(args);
+        verify(loanRepositoryWrapper, never()).findOneWithNotFoundDetection(any(Long.class));
+    }
+
     // ---- proceed(...) stub/verify helpers: wrapped so test methods need not declare `throws Throwable`. ----
 
     private void stubProceedReturnsNull() {
+        stubProceedReturns(null);
+    }
+
+    private void stubProceedReturns(Object result) {
         try {
-            when(joinPoint.proceed(any(Object[].class))).thenReturn(null);
+            when(joinPoint.proceed(any(Object[].class))).thenReturn(result);
         } catch (Throwable t) {
             throw new AssertionError(t);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private List<OverdueLoanScheduleData> capturedProceedInstallments() {
+    private Object[] capturedProceedArgs() {
         ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
         try {
             verify(joinPoint).proceed(captor.capture());
         } catch (Throwable t) {
             throw new AssertionError(t);
         }
-        return (List<OverdueLoanScheduleData>) captor.getValue()[1];
+        return captor.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<OverdueLoanScheduleData> capturedProceedInstallments() {
+        return (List<OverdueLoanScheduleData>) capturedProceedArgs()[1];
     }
 
     private void verifyNeverProceeded() {

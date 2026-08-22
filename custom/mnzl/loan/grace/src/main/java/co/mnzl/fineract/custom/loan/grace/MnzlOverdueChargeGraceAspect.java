@@ -21,7 +21,9 @@ package co.mnzl.fineract.custom.loan.grace;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -37,8 +39,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 
 /**
- * Enforces working-day grace on overdue-penalty application at the single shared chokepoint
- * {@code LoanChargeWritePlatformService.applyOverdueChargesForLoan(loanId, overdueData)}.
+ * Enforces working-day grace on overdue-penalty candidate selection and application.
  *
  * <p>
  * Both overdue-penalty entry points funnel through that method:
@@ -48,15 +49,11 @@ import org.aspectj.lang.annotation.Aspect;
  * whose {@code retrieveAllLoansWithOverdueInstallments} query selects installments using calendar-day
  * {@code penaltyWaitPeriod}.</li>
  * </ul>
- * The incoming collection has already passed the upstream calendar-day filter; this advice drops any installment whose
- * <em>working-day</em> grace (skipping weekends per {@code m_working_days} and active {@code m_holiday} entries for the
- * loan's office) has not yet elapsed as of the current business/COB date, then proceeds with the survivors.
- *
- * <p>
- * Note: this advice can only narrow the collection it is given. With {@code backdate-penalties-enabled = false} the
- * scheduled job's query surfaces an installment only on its exact calendar-grace day, which is earlier than the
- * working-day grace day, so for that specific configuration the standalone job still cannot reach the later working-day
- * date. The COB-step path handles backdate-disabled correctly via {@link MnzlApplyChargeToOverdueLoansBusinessStep}.
+ * The write advice drops any installment whose <em>working-day</em> grace (skipping weekends per {@code m_working_days}
+ * and active {@code m_holiday} entries for the loan's office) has not yet elapsed. When backdating is disabled, a
+ * second advice broadens the standalone job's calendar-day query and retains candidates only on their exact working-day
+ * eligibility date. This prevents the upstream one-day query window from permanently losing penalties whose working-day
+ * grace ends later than their calendar-day grace.
  */
 @Aspect
 @Slf4j
@@ -66,6 +63,38 @@ public class MnzlOverdueChargeGraceAspect {
     private final MnzlWorkingDayCalculator workingDayCalculator;
     private final ConfigurationDomainService configurationDomainService;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
+
+    @Around("execution(* org.apache.fineract.portfolio.loanaccount.service.LoanReadPlatformService+.retrieveAllLoansWithOverdueInstallments(..))")
+    public Object retrieveWorkingDayCandidates(ProceedingJoinPoint joinPoint) {
+        Object[] args = joinPoint.getArgs();
+        if (args.length < 2 || !Boolean.FALSE.equals(args[1])) {
+            return proceed(joinPoint, args);
+        }
+
+        Object[] broadenedArgs = args.clone();
+        broadenedArgs[1] = true;
+        Object result = proceed(joinPoint, broadenedArgs);
+        if (!(result instanceof Collection<?> rawData) || rawData.isEmpty()) {
+            return result;
+        }
+
+        @SuppressWarnings("unchecked")
+        Collection<OverdueLoanScheduleData> overdueData = (Collection<OverdueLoanScheduleData>) rawData;
+        int penaltyWaitPeriod = args[0] instanceof Long value ? Math.toIntExact(value) : 0;
+        LocalDate currentDate = DateUtils.getBusinessLocalDate();
+        WorkingDays workingDays = workingDayCalculator.getWorkingDays();
+        Map<Long, List<OverdueLoanScheduleData>> byLoan = new LinkedHashMap<>();
+        for (OverdueLoanScheduleData data : overdueData) {
+            byLoan.computeIfAbsent(data.getLoanId(), ignored -> new ArrayList<>()).add(data);
+        }
+
+        List<OverdueLoanScheduleData> eligible = new ArrayList<>();
+        byLoan.forEach((loanId, candidates) -> {
+            Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
+            eligible.addAll(filterCandidates(loan, candidates, penaltyWaitPeriod, currentDate, workingDays, true));
+        });
+        return eligible;
+    }
 
     @Around("execution(* org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService.applyOverdueChargesForLoan(..))")
     public Object enforceWorkingDayGrace(ProceedingJoinPoint joinPoint) {
@@ -79,10 +108,26 @@ public class MnzlOverdueChargeGraceAspect {
         final int penaltyWaitPeriod = penaltyWaitPeriodDays();
         final LocalDate currentDate = DateUtils.getBusinessLocalDate();
         final Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
-        final Long officeId = loan.getOffice() != null ? loan.getOffice().getId() : null;
 
-        // Hoist working-days config + holiday list once; anchor the holiday lookup at the earliest candidate due date.
         final WorkingDays workingDays = workingDayCalculator.getWorkingDays();
+        List<OverdueLoanScheduleData> due = filterCandidates(loan, overdueData, penaltyWaitPeriod, currentDate, workingDays, false);
+        if (due.size() != overdueData.size()) {
+            log.info(
+                    "Working-day grace withheld overdue penalty on loan id [{}] for {} installment(s) still within grace as of [{}] "
+                            + "(penaltyWaitPeriod={} working days); {} installment(s) proceed",
+                    loanId, overdueData.size() - due.size(), currentDate, penaltyWaitPeriod, due.size());
+        }
+        if (due.isEmpty()) {
+            return null; // applyOverdueChargesForLoan is void; nothing is due yet
+        }
+        args[1] = due;
+        return proceed(joinPoint, args);
+    }
+
+    private List<OverdueLoanScheduleData> filterCandidates(Loan loan, Collection<OverdueLoanScheduleData> overdueData,
+            int penaltyWaitPeriod, LocalDate currentDate, WorkingDays workingDays, boolean exactDateOnly) {
+        // Hoist the holiday lookup once per loan, anchored at the earliest candidate due date.
+        Long officeId = loan.getOffice() != null ? loan.getOffice().getId() : null;
         LocalDate earliestDueDate = null;
         for (OverdueLoanScheduleData data : overdueData) {
             LocalDate due = installmentDueDate(loan, data.getPeriodNumber());
@@ -93,34 +138,23 @@ public class MnzlOverdueChargeGraceAspect {
         final List<Holiday> holidays = workingDayCalculator.getActiveHolidaysForOffice(officeId,
                 earliestDueDate != null ? earliestDueDate : currentDate);
 
-        List<OverdueLoanScheduleData> stillInGrace = new ArrayList<>();
-        List<OverdueLoanScheduleData> due = new ArrayList<>();
+        List<OverdueLoanScheduleData> eligible = new ArrayList<>();
         for (OverdueLoanScheduleData data : overdueData) {
             LocalDate installmentDueDate = installmentDueDate(loan, data.getPeriodNumber());
             if (installmentDueDate == null) {
-                // Cannot resolve the installment; leave the upstream decision untouched rather than suppress a charge.
-                due.add(data);
+                // The normal write path preserves upstream's decision. A broadened non-backdating query must not admit
+                // an unresolvable older installment because that would silently change its exact-date semantics.
+                if (!exactDateOnly) {
+                    eligible.add(data);
+                }
                 continue;
             }
             LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, penaltyWaitPeriod, workingDays, holidays);
-            if (currentDate.isBefore(firstPenaltyDate)) {
-                stillInGrace.add(data);
-            } else {
-                due.add(data);
+            if (exactDateOnly ? currentDate.equals(firstPenaltyDate) : !currentDate.isBefore(firstPenaltyDate)) {
+                eligible.add(data);
             }
         }
-
-        if (!stillInGrace.isEmpty()) {
-            log.info(
-                    "Working-day grace withheld overdue penalty on loan id [{}] for {} installment(s) still within grace as of [{}] "
-                            + "(penaltyWaitPeriod={} working days); {} installment(s) proceed",
-                    loanId, stillInGrace.size(), currentDate, penaltyWaitPeriod, due.size());
-        }
-        if (due.isEmpty()) {
-            return null; // applyOverdueChargesForLoan is void; nothing is due yet
-        }
-        args[1] = due;
-        return proceed(joinPoint, args);
+        return eligible;
     }
 
     // Wraps joinPoint.proceed(...) so the advice need not declare `throws Throwable` (checkstyle IllegalThrows).
