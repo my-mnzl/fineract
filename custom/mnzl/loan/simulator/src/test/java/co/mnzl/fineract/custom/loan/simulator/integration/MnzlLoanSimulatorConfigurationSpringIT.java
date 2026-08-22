@@ -25,13 +25,14 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.TaskScheduler;
 
 /**
  * L2 Spring slice for the simulator module.
  *
  * <p>
- * The simulator's {@code MnzlSimulationConfiguration} only defines a {@code TaskExecutor} bean — that piece is easy to
- * verify directly. The bulk of simulator wiring lives in {@code @Component}-annotated classes
+ * The simulator's {@code MnzlSimulationConfiguration} defines its execution and heartbeat scheduling beans, which are
+ * easy to verify directly. The bulk of simulator wiring lives in {@code @Component}-annotated classes
  * ({@code JdbcMnzlSimulationService}, {@code MnzlLoanSimulationRunner}, {@code MnzlSimulationApiResource},
  * {@code MnzlSimulationApiJsonValidator}) which collectively pull in 15+ collaborators (FromJsonHelper,
  * PlatformSecurityContext, PortfolioCommandSourceWritePlatformService, LoanRepositoryWrapper, InlineExecutorService,
@@ -48,7 +49,10 @@ class MnzlLoanSimulatorConfigurationSpringIT {
     void includedSimulatorAlwaysRegistersTaskExecutor() {
         contextRunner.run(ctx -> {
             assertThat(ctx).hasSingleBean(MnzlSimulationConfiguration.class);
-            assertThat(ctx).hasSingleBean(TaskExecutor.class);
+            assertThat(ctx).hasBean("simulationExecutor");
+            assertThat(ctx).hasBean("simulationHeartbeatScheduler");
+            assertThat(ctx.getBean("simulationExecutor")).isInstanceOf(TaskExecutor.class);
+            assertThat(ctx.getBean("simulationHeartbeatScheduler")).isInstanceOf(TaskScheduler.class);
         });
     }
 

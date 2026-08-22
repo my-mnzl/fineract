@@ -22,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.util.List;
 import java.util.Map;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
@@ -64,6 +66,24 @@ class MnzlSimulationApiJsonValidatorTest {
 
         assertThatCode(() -> validator.validateForCreate(json)).doesNotThrowAnyException();
         assertThatCode(() -> validator.validateForPreview(json)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void nonPositiveRepaymentEveryFailsForCreateAndPreview() {
+        for (int invalidValue : List.of(0, -1)) {
+            JsonObject request = JsonParser.parseString(buildValidRequest()).getAsJsonObject();
+            request.addProperty("repaymentEvery", invalidValue);
+            assertInvalidForCreateAndPreview(request.toString());
+        }
+    }
+
+    @Test
+    void repaymentFrequencyOutsideSupportedRangeFailsForCreateAndPreview() {
+        for (int invalidValue : List.of(-1, 4)) {
+            JsonObject request = JsonParser.parseString(buildValidRequest()).getAsJsonObject();
+            request.addProperty("repaymentFrequencyType", invalidValue);
+            assertInvalidForCreateAndPreview(request.toString());
+        }
     }
 
     @Test
@@ -134,5 +154,10 @@ class MnzlSimulationApiJsonValidatorTest {
                         Map.of("type", "ADD_CHARGE", "date", "2026-03-02", "chargeId", 1),
                         Map.of("type", "CHANGE_INTEREST_RATE", "date", "2026-06-01", "rate", 15.0),
                         Map.of("type", "WRITE_OFF", "date", "2026-12-01"))));
+    }
+
+    private void assertInvalidForCreateAndPreview(String json) {
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
+        assertThatThrownBy(() -> validator.validateForPreview(json)).isInstanceOf(PlatformApiDataValidationException.class);
     }
 }

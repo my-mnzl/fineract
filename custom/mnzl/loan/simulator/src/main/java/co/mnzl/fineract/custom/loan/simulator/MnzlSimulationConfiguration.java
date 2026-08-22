@@ -21,7 +21,9 @@ package co.mnzl.fineract.custom.loan.simulator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration
 public class MnzlSimulationConfiguration {
@@ -35,5 +37,13 @@ public class MnzlSimulationConfiguration {
         executor.setThreadNamePrefix("mnzl-sim-");
         executor.initialize();
         return executor;
+    }
+
+    @Bean
+    TaskScheduler simulationHeartbeatScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("mnzl-sim-heartbeat-");
+        return scheduler;
     }
 }

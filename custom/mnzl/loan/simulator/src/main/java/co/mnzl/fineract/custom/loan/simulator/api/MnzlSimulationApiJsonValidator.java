@@ -72,6 +72,7 @@ public class MnzlSimulationApiJsonValidator {
 
         final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
         validator.reset().parameter("numberOfRepayments").value(numberOfRepayments).notNull().integerGreaterThanZero();
+        validateRepaymentCadence(element, validator);
 
         final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", element);
         validator.reset().parameter("disbursementDate").value(disbursementDate).notBlank();
@@ -138,6 +139,7 @@ public class MnzlSimulationApiJsonValidator {
 
         final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
         validator.reset().parameter("numberOfRepayments").value(numberOfRepayments).notNull().integerGreaterThanZero();
+        validateRepaymentCadence(element, validator);
 
         final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", element);
         validator.reset().parameter("disbursementDate").value(disbursementDate).notBlank();
@@ -145,5 +147,13 @@ public class MnzlSimulationApiJsonValidator {
         if (!errors.isEmpty()) {
             throw new PlatformApiDataValidationException(errors);
         }
+    }
+
+    private void validateRepaymentCadence(JsonElement element, DataValidatorBuilder validator) {
+        final Integer repaymentEvery = fromJsonHelper.extractIntegerWithLocaleNamed("repaymentEvery", element);
+        validator.reset().parameter("repaymentEvery").value(repaymentEvery).ignoreIfNull().integerGreaterThanZero();
+
+        final Integer repaymentFrequencyType = fromJsonHelper.extractIntegerWithLocaleNamed("repaymentFrequencyType", element);
+        validator.reset().parameter("repaymentFrequencyType").value(repaymentFrequencyType).ignoreIfNull().inMinMaxRange(0, 3);
     }
 }

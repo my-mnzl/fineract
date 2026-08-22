@@ -21,14 +21,19 @@ package co.mnzl.fineract.custom.loan.simulator.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mockingDetails;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import co.mnzl.fineract.custom.loan.simulator.api.MnzlSimulationApiJsonValidator;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ScheduledFuture;
 import java.util.function.IntConsumer;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
@@ -37,10 +42,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.scheduling.TaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
 class JdbcMnzlSimulationServiceTest {
@@ -55,13 +62,18 @@ class JdbcMnzlSimulationServiceTest {
     private MnzlSimulationApiJsonValidator validator;
     @Mock
     private MnzlLoanSimulationRunner runner;
+    @Mock
+    private TaskScheduler simulationHeartbeatScheduler;
+    @Mock
+    private ScheduledFuture<?> heartbeatFuture;
 
     private JdbcMnzlSimulationService service;
 
     @BeforeEach
     void setUp() {
         ThreadLocalContextUtil.setBusinessDates(new HashMap<>());
-        service = new JdbcMnzlSimulationService(jdbcTemplate, new FromJsonHelper(), securityContext, validator, runner, Runnable::run);
+        service = new JdbcMnzlSimulationService(jdbcTemplate, new FromJsonHelper(), securityContext, validator, runner, Runnable::run,
+                simulationHeartbeatScheduler);
     }
 
     @AfterEach
@@ -79,7 +91,7 @@ class JdbcMnzlSimulationServiceTest {
         assertThat(service.findByUuid(UUID).getStatus()).isEqualTo(SimulationStatus.FAILED);
 
         assertThat(updateStatements()).anySatisfy(sql -> {
-            assertThat(sql).contains("started_at IS NULL OR started_at < ?");
+            assertThat(sql).contains("COALESCE(last_heartbeat_at, started_at)");
             assertThat(sql).contains("execution_token = NULL");
         });
     }
@@ -98,6 +110,7 @@ class JdbcMnzlSimulationServiceTest {
                 }
                 """;
         when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(0, 1, 1, 1);
+        doReturn(heartbeatFuture).when(simulationHeartbeatScheduler).scheduleAtFixedRate(any(Runnable.class), any(Duration.class));
         when(jdbcTemplate.queryForObject(anyString(), org.mockito.ArgumentMatchers.<Class<String>>any(), any(Object[].class)))
                 .thenReturn(scenario);
         when(runner.run(any(), any(IntConsumer.class))).thenAnswer(invocation -> {
@@ -109,12 +122,25 @@ class JdbcMnzlSimulationServiceTest {
         assertThat(service.rerunSimulation(UUID).getStatus()).isEqualTo(SimulationStatus.RUNNING);
 
         assertThat(updateStatements()).anySatisfy(sql -> {
+            assertThat(sql).contains("started_at = CURRENT_TIMESTAMP");
+            assertThat(sql).contains("last_heartbeat_at = CURRENT_TIMESTAMP");
+        }).anySatisfy(sql -> {
             assertThat(sql).contains("SET progress = ?");
+            assertThat(sql).contains("last_heartbeat_at = CURRENT_TIMESTAMP");
             assertThat(sql).contains("execution_token = ? AND status = ?");
         }).anySatisfy(sql -> {
             assertThat(sql).contains("result_json = ?");
             assertThat(sql).contains("execution_token = ? AND status = ?");
         });
+
+        ArgumentCaptor<Runnable> heartbeatCaptor = ArgumentCaptor.forClass(Runnable.class);
+        verify(simulationHeartbeatScheduler).scheduleAtFixedRate(heartbeatCaptor.capture(), eq(Duration.ofMinutes(1)));
+        heartbeatCaptor.getValue().run();
+        assertThat(updateStatements()).anySatisfy(sql -> {
+            assertThat(sql).contains("SET last_heartbeat_at = CURRENT_TIMESTAMP");
+            assertThat(sql).contains("execution_token = ? AND status = ?");
+        });
+        verify(heartbeatFuture).cancel(false);
     }
 
     private List<String> updateStatements() {

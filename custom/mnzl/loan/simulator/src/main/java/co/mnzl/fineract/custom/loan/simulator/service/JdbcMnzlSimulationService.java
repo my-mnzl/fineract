@@ -41,6 +41,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -50,6 +51,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
@@ -58,10 +60,12 @@ import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -80,6 +84,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
             .create();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final long EXECUTION_TIMEOUT_MINUTES = 30;
+    private static final Duration HEARTBEAT_INTERVAL = Duration.ofMinutes(1);
     private static final String EXECUTION_TIMEOUT_MESSAGE = "Simulation execution timed out before completion";
 
     private final JdbcTemplate jdbcTemplate;
@@ -87,7 +92,10 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
     private final PlatformSecurityContext securityContext;
     private final MnzlSimulationApiJsonValidator validator;
     private final MnzlLoanSimulationRunner runner;
+    @Qualifier("simulationExecutor")
     private final TaskExecutor simulationExecutor;
+    @Qualifier("simulationHeartbeatScheduler")
+    private final TaskScheduler simulationHeartbeatScheduler;
 
     @Override
     public SimulationResult findByUuid(String uuid) {
@@ -120,8 +128,8 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         jdbcTemplate.update("""
                 INSERT INTO m_mnzl_simulation (uuid, name, status, progress, total_actions,
                     loan_product_id, principal, interest_rate, number_of_repayments,
-                    scenario_json, created_by, created_date, started_at, execution_token)
-                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+                    scenario_json, created_by, created_date, started_at, last_heartbeat_at, execution_token)
+                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
                 """, uuid, request.getName(), SimulationStatus.RUNNING.name(), request.getActions().size(), request.getLoanProductId(),
                 request.getPrincipal(),
                 request.getInterestRateDifferential() != null ? request.getInterestRateDifferential()
@@ -152,7 +160,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         int updated = jdbcTemplate.update("""
                 UPDATE m_mnzl_simulation
                 SET status = ?, progress = 0, error_message = NULL, completed_at = NULL,
-                    started_at = CURRENT_TIMESTAMP, execution_token = ?
+                    started_at = CURRENT_TIMESTAMP, last_heartbeat_at = CURRENT_TIMESTAMP, execution_token = ?
                 WHERE uuid = ? AND status != ?
                 """, SimulationStatus.RUNNING.name(), executionToken, uuid, SimulationStatus.RUNNING.name());
         if (updated == 0) {
@@ -207,9 +215,12 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         ThreadLocalContextUtil.setBusinessDates(businessDates);
         SecurityContextHolder.setContext(secCtx);
         MDC.put("simulationUuid", uuid);
+        ScheduledFuture<?> heartbeat = null;
         try {
+            heartbeat = simulationHeartbeatScheduler.scheduleAtFixedRate(() -> refreshHeartbeat(uuid, executionToken, tenant),
+                    HEARTBEAT_INTERVAL);
             SimulationResult result = runner.run(request, progress -> jdbcTemplate.update("""
-                    UPDATE m_mnzl_simulation SET progress = ?
+                    UPDATE m_mnzl_simulation SET progress = ?, last_heartbeat_at = CURRENT_TIMESTAMP
                     WHERE uuid = ? AND execution_token = ? AND status = ?
                     """, progress, uuid, executionToken, SimulationStatus.RUNNING.name()));
             jdbcTemplate.update("""
@@ -222,8 +233,25 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
             log.error("Simulation {} failed unexpectedly", uuid, e);
             failExecution(uuid, executionToken, e.getMessage());
         } finally {
+            if (heartbeat != null) {
+                heartbeat.cancel(false);
+            }
             MDC.remove("simulationUuid");
             SecurityContextHolder.clearContext();
+            ThreadLocalContextUtil.reset();
+        }
+    }
+
+    private void refreshHeartbeat(String uuid, String executionToken, FineractPlatformTenant tenant) {
+        ThreadLocalContextUtil.setTenant(tenant);
+        try {
+            jdbcTemplate.update("""
+                    UPDATE m_mnzl_simulation SET last_heartbeat_at = CURRENT_TIMESTAMP
+                    WHERE uuid = ? AND execution_token = ? AND status = ?
+                    """, uuid, executionToken, SimulationStatus.RUNNING.name());
+        } catch (RuntimeException e) {
+            log.warn("Failed to refresh heartbeat for simulation {}", uuid, e);
+        } finally {
             ThreadLocalContextUtil.reset();
         }
     }
@@ -241,7 +269,8 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         int recovered = jdbcTemplate.update("""
                 UPDATE m_mnzl_simulation
                 SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP, execution_token = NULL
-                WHERE status = ? AND (started_at IS NULL OR started_at < ?)
+                WHERE status = ? AND (COALESCE(last_heartbeat_at, started_at) IS NULL
+                    OR COALESCE(last_heartbeat_at, started_at) < ?)
                 """, SimulationStatus.FAILED.name(), EXECUTION_TIMEOUT_MESSAGE, SimulationStatus.RUNNING.name(), staleThreshold);
         if (recovered > 0) {
             log.warn("Marked {} timed-out simulation execution(s) as failed", recovered);
