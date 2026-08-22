@@ -157,4 +157,16 @@ public class DateUtilsTest {
         assertEquals(MonthDay.of(2, 1), DateUtils.safeMonthDay(2, 1));
         assertEquals(MonthDay.of(7, 1), DateUtils.safeMonthDay(7, 1));
     }
+
+    @Test
+    public void getDifferenceInDaysFor30DayMonth() {
+        assertEquals(23, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 8), LocalDate.of(2026, 2, 1)));
+        assertEquals(1, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 2, 1)));
+        assertEquals(14, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 3, 17), LocalDate.of(2026, 4, 1)));
+        assertEquals(10, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 1, 25)));
+        assertEquals(-14, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 4, 1), LocalDate.of(2026, 3, 17)));
+        assertEquals(30, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1)));
+        assertEquals(360, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1)));
+        assertEquals(25, DateUtils.getDifferenceInDaysFor30DayMonth(LocalDate.of(2026, 4, 20), LocalDate.of(2026, 5, 15)));
+    }
 }

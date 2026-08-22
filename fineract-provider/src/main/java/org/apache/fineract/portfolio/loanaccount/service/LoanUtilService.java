@@ -203,7 +203,7 @@ public class LoanUtilService implements ILoanUtilService {
         return new HolidayDetailDTO(isHolidayEnabled, holidays, workingDays, allowTransactionsOnHoliday, allowTransactionsOnNonWorkingDay);
     }
 
-    private FloatingRateDTO constructFloatingRateDTO(final Loan loan) {
+    protected FloatingRateDTO constructFloatingRateDTO(final Loan loan) {
         FloatingRateDTO floatingRateDTO = null;
         if (loan.loanProduct().isLinkedToFloatingInterestRate()) {
             boolean isFloatingInterestRate = loan.getIsFloatingInterestRate();

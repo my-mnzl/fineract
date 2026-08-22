@@ -324,6 +324,23 @@ public final class DateUtils {
         return getExactDifference(first, second, DAYS);
     }
 
+    public static int getDifferenceInDaysFor30DayMonth(LocalDate first, LocalDate second) {
+        if (first == null || second == null) {
+            throw new IllegalArgumentException("Dates must not be null to get difference");
+        }
+        if (isEqual(first, second)) {
+            return 0;
+        }
+        if (isAfter(first, second)) {
+            return -getDifferenceInDaysFor30DayMonth(second, first);
+        }
+
+        final int adjustedStartDay = Math.min(30, first.getDayOfMonth());
+        final int adjustedEndDay = Math.min(30, second.getDayOfMonth());
+        return ((second.getYear() - first.getYear()) * 360) + ((second.getMonthValue() - first.getMonthValue()) * 30)
+                + (adjustedEndDay - adjustedStartDay);
+    }
+
     public static LocalDate minusDays(LocalDate first, int days) {
         return first == null ? null : first.minusDays(days);
     }

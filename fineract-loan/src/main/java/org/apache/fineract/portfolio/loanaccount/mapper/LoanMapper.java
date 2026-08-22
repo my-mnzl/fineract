@@ -36,6 +36,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanDisbursementDetails;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleSelectionContext;
 import org.apache.fineract.portfolio.loanproduct.domain.InterestMethod;
 import org.springframework.stereotype.Component;
 
@@ -54,7 +55,7 @@ public class LoanMapper {
         if (loanApplicationTerms.isEqualAmortization()) {
             if (loanApplicationTerms.getInterestMethod().isDecliningBalance()) {
                 final LoanScheduleGenerator decliningLoanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory()
-                        .create(loanApplicationTerms.getLoanScheduleType(), InterestMethod.DECLINING_BALANCE);
+                        .create(loanSelectionContext(loanApplicationTerms, loan, InterestMethod.DECLINING_BALANCE));
                 Set<LoanCharge> loanCharges = loan.getActiveCharges();
                 LoanScheduleModel loanSchedule = decliningLoanScheduleGenerator.generate(mc, loanApplicationTerms, loanCharges,
                         scheduleGeneratorDTO.getHolidayDetailDTO());
@@ -63,15 +64,24 @@ public class LoanMapper {
                         .updateTotalInterestDue(Money.of(loanApplicationTerms.getCurrency(), loanSchedule.getTotalInterestCharged()));
 
             }
-            loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory().create(loanApplicationTerms.getLoanScheduleType(),
-                    InterestMethod.FLAT);
+            loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory()
+                    .create(loanSelectionContext(loanApplicationTerms, loan, InterestMethod.FLAT));
         } else {
-            loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory().create(loanApplicationTerms.getLoanScheduleType(),
-                    loanApplicationTerms.getInterestMethod());
+            loanScheduleGenerator = scheduleGeneratorDTO.getLoanScheduleFactory().create(loanSelectionContext(loanApplicationTerms, loan));
         }
 
         return loanScheduleGenerator.generate(mc, loanApplicationTerms, loan.getActiveCharges(),
                 scheduleGeneratorDTO.getHolidayDetailDTO());
+    }
+
+    private LoanScheduleSelectionContext loanSelectionContext(final LoanApplicationTerms loanApplicationTerms, final Loan loan) {
+        return loanSelectionContext(loanApplicationTerms, loan, loanApplicationTerms.getInterestMethod());
+    }
+
+    private LoanScheduleSelectionContext loanSelectionContext(final LoanApplicationTerms loanApplicationTerms, final Loan loan,
+            final InterestMethod interestMethod) {
+        return LoanScheduleSelectionContext.builder().loanScheduleType(loanApplicationTerms.getLoanScheduleType())
+                .interestMethod(interestMethod).loanId(loan.getId()).loanProductId(loan.productId()).build();
     }
 
     public List<DisbursementData> getDisbursementData(final Loan loan) {
