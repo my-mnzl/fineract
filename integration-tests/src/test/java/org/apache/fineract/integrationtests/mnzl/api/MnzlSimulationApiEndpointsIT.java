@@ -20,7 +20,10 @@ package org.apache.fineract.integrationtests.mnzl.api;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
+import io.restassured.http.ContentType;
+import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -28,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.PostLoanProductsResponse;
+import org.apache.fineract.client.models.PostUsersRequest;
+import org.apache.fineract.client.models.PostUsersResponse;
 import org.apache.fineract.integrationtests.BaseLoanIntegrationTest;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
@@ -35,6 +40,7 @@ import org.apache.fineract.integrationtests.mnzl.helpers.MnzlChargesHelper;
 import org.apache.fineract.integrationtests.mnzl.helpers.MnzlProductBuilder;
 import org.apache.fineract.integrationtests.mnzl.helpers.MnzlProductStrategyHelper;
 import org.apache.fineract.integrationtests.mnzl.helpers.MnzlSimulationDriver;
+import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -49,8 +55,7 @@ import org.junit.jupiter.api.Test;
  * <li>DELETE /v1/mnzl/simulations/{uuid}</li>
  * </ul>
  *
- * Covers happy paths, validation failures (400), missing-resource (404), action variants, and permission negatives (the
- * latter {@link Disabled} pending a user-permission-setup helper).
+ * Covers happy paths, validation failures (400), missing-resource (404), action variants, and permission negatives.
  */
 @Slf4j
 public class MnzlSimulationApiEndpointsIT extends BaseLoanIntegrationTest {
@@ -92,6 +97,19 @@ public class MnzlSimulationApiEndpointsIT extends BaseLoanIntegrationTest {
         String body = Utils.performServerGet(requestSpec, responseSpec, url, null);
         Map<String, Object> page = gson.fromJson(body, new TypeToken<Map<String, Object>>() {}.getType());
         return ((Number) page.get("totalFilteredRecords")).intValue();
+    }
+
+    @SuppressWarnings("removal")
+    private RequestSpecification createRestrictedUserRequestSpec() {
+        String password = "MnzlSimulator!234";
+        PostUsersRequest userRequest = UserHelper.buildUserRequest(responseSpec, requestSpec, password);
+        PostUsersResponse user = UserHelper.createUser(requestSpec, responseSpec, userRequest);
+        assertThat(user.getResourceId()).as("restricted user created").isNotNull();
+
+        RequestSpecification restrictedRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+        restrictedRequestSpec.header("Authorization",
+                "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(userRequest.getUsername(), password));
+        return restrictedRequestSpec;
     }
 
     // ---------- run endpoint ----------
@@ -364,21 +382,36 @@ public class MnzlSimulationApiEndpointsIT extends BaseLoanIntegrationTest {
     // ---------- permission negatives ----------
 
     @Test
-    @Disabled("requires user-permission-setup helper")
     public void runEndpoint_missingCreatePermission_returns403() {
-        // Needs a non-admin user with CREATE_MNZL_SIMULATION revoked. No helper currently provisions such a user,
-        // and the project superuser bypass makes a meaningful 403 hard to assert.
+        runAt(DISBURSEMENT_DATE, () -> {
+            Long productId = createMnzlProduct();
+            Map<String, Object> body = validScenario(new MnzlSimulationDriver(requestSpec, responseSpec), productId, "g1_forbidden_create")
+                    .body();
+            Utils.performServerPost(createRestrictedUserRequestSpec(), new ResponseSpecBuilder().expectStatusCode(403).build(),
+                    SIMULATIONS_BASE, gson.toJson(body));
+        });
     }
 
     @Test
-    @Disabled("requires user-permission-setup helper")
     public void getEndpoint_missingReadPermission_returns403() {
-        // Same as above for READ_MNZL_SIMULATION.
+        runAt(DISBURSEMENT_DATE, () -> {
+            Long productId = createMnzlProduct();
+            MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
+            String uuid = (String) validScenario(driver, productId, "g1_forbidden_read").run().get("uuid");
+            String url = String.format("/fineract-provider/api/v1/mnzl/simulations/%s?%s", uuid, Utils.TENANT_IDENTIFIER);
+            Utils.performServerGet(createRestrictedUserRequestSpec(), new ResponseSpecBuilder().expectStatusCode(403).build(), url, null);
+        });
     }
 
     @Test
-    @Disabled("requires user-permission-setup helper")
     public void deleteEndpoint_missingDeletePermission_returns403() {
-        // Same as above for DELETE_MNZL_SIMULATION.
+        runAt(DISBURSEMENT_DATE, () -> {
+            Long productId = createMnzlProduct();
+            MnzlSimulationDriver driver = new MnzlSimulationDriver(requestSpec, responseSpec);
+            String uuid = (String) validScenario(driver, productId, "g1_forbidden_delete").run().get("uuid");
+            String url = String.format("/fineract-provider/api/v1/mnzl/simulations/%s?%s", uuid, Utils.TENANT_IDENTIFIER);
+            Utils.performServerDelete(createRestrictedUserRequestSpec(), new ResponseSpecBuilder().expectStatusCode(403).build(), url,
+                    null);
+        });
     }
 }

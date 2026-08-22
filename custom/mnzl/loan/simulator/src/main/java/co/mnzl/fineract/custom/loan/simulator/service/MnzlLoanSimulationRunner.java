@@ -334,7 +334,7 @@ public class MnzlLoanSimulationRunner {
 
         JsonObject json = buildLoanApplicationJson(request, clientId, savingsId);
 
-        log.info("Simulation: loan application JSON = {}", json);
+        log.info("Simulation: creating loan application for product {}", request.getLoanProductId());
         CommandWrapper command = new CommandWrapperBuilder().createLoanApplication().withJson(json.toString()).build();
         CommandProcessingResult result = commandService.logCommandSource(command);
         Long loanId = result.getLoanId();

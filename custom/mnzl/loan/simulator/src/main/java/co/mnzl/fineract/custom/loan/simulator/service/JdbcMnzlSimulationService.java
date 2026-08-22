@@ -79,6 +79,8 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
                     (JsonDeserializer<LocalDate>) (json, t, ctx) -> LocalDate.parse(json.getAsString(), DateTimeFormatter.ISO_LOCAL_DATE))
             .create();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final long EXECUTION_TIMEOUT_MINUTES = 30;
+    private static final String EXECUTION_TIMEOUT_MESSAGE = "Simulation execution timed out before completion";
 
     private final JdbcTemplate jdbcTemplate;
     private final FromJsonHelper fromJsonHelper;
@@ -89,6 +91,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     @Override
     public SimulationResult findByUuid(String uuid) {
+        recoverTimedOutSimulations();
         List<SimulationResult> results = jdbcTemplate.query("SELECT * FROM m_mnzl_simulation WHERE uuid = ?", new SimulationRowMapper(),
                 uuid);
         if (results.isEmpty()) {
@@ -99,6 +102,7 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     @Override
     public List<SimulationResult> findAll(int offset, int limit) {
+        recoverTimedOutSimulations();
         return jdbcTemplate.query("SELECT * FROM m_mnzl_simulation ORDER BY created_date DESC LIMIT ? OFFSET ?", new SimulationRowMapper(),
                 limit, offset);
     }
@@ -109,19 +113,20 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
         SimulationRequest request = parseRequest(json);
         String uuid = UUID.randomUUID().toString();
+        String executionToken = UUID.randomUUID().toString();
         Long userId = securityContext.authenticatedUser().getId();
 
         // Insert initial record
         jdbcTemplate.update("""
                 INSERT INTO m_mnzl_simulation (uuid, name, status, progress, total_actions,
                     loan_product_id, principal, interest_rate, number_of_repayments,
-                    scenario_json, created_by, created_date, started_at)
-                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    scenario_json, created_by, created_date, started_at, execution_token)
+                VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
                 """, uuid, request.getName(), SimulationStatus.RUNNING.name(), request.getActions().size(), request.getLoanProductId(),
                 request.getPrincipal(),
                 request.getInterestRateDifferential() != null ? request.getInterestRateDifferential()
                         : request.getInterestRatePerPeriod() != null ? request.getInterestRatePerPeriod() : BigDecimal.ZERO,
-                request.getNumberOfRepayments(), json, userId);
+                request.getNumberOfRepayments(), json, userId, executionToken);
 
         // Capture context for async execution
         FineractPlatformTenant tenant = ThreadLocalContextUtil.getTenant();
@@ -129,11 +134,10 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         SecurityContext secCtx = SecurityContextHolder.getContext();
 
         try {
-            simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
+            simulationExecutor.execute(() -> executeSimulation(uuid, executionToken, request, tenant, businessDates, secCtx));
         } catch (TaskRejectedException e) {
             log.error("Simulation {} rejected — executor queue full", uuid, e);
-            jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, error_message = ? WHERE uuid = ?", SimulationStatus.FAILED.name(),
-                    "Executor queue full, try again later", uuid);
+            failExecution(uuid, executionToken, "Executor queue full, try again later");
             return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.FAILED)
                     .errorMessage("Executor queue full, try again later").build();
         }
@@ -143,12 +147,14 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
 
     @Override
     public SimulationResult rerunSimulation(String uuid) {
-        // Atomic check-and-set: allow transition if not RUNNING, or if RUNNING but stale (>30 min)
-        Timestamp staleThreshold = Timestamp.valueOf(LocalDateTime.now(ZoneId.of("UTC")).minusMinutes(30));
+        recoverTimedOutSimulations();
+        String executionToken = UUID.randomUUID().toString();
         int updated = jdbcTemplate.update("""
-                UPDATE m_mnzl_simulation SET status = ?, progress = 0, started_at = CURRENT_TIMESTAMP
-                WHERE uuid = ? AND (status != ? OR started_at < ?)
-                """, SimulationStatus.RUNNING.name(), uuid, SimulationStatus.RUNNING.name(), staleThreshold);
+                UPDATE m_mnzl_simulation
+                SET status = ?, progress = 0, error_message = NULL, completed_at = NULL,
+                    started_at = CURRENT_TIMESTAMP, execution_token = ?
+                WHERE uuid = ? AND status != ?
+                """, SimulationStatus.RUNNING.name(), executionToken, uuid, SimulationStatus.RUNNING.name());
         if (updated == 0) {
             findByUuid(uuid); // throws SimulationNotFoundException if uuid is invalid
             throw new IllegalStateException("Simulation " + uuid + " is already running");
@@ -163,11 +169,10 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         SecurityContext secCtx = SecurityContextHolder.getContext();
 
         try {
-            simulationExecutor.execute(() -> executeSimulation(uuid, request, tenant, businessDates, secCtx));
+            simulationExecutor.execute(() -> executeSimulation(uuid, executionToken, request, tenant, businessDates, secCtx));
         } catch (TaskRejectedException e) {
             log.error("Simulation {} rerun rejected — executor queue full", uuid, e);
-            jdbcTemplate.update("UPDATE m_mnzl_simulation SET status = ?, error_message = ? WHERE uuid = ?", SimulationStatus.FAILED.name(),
-                    "Executor queue full, try again later", uuid);
+            failExecution(uuid, executionToken, "Executor queue full, try again later");
             return SimulationResult.builder().uuid(uuid).name(request.getName()).status(SimulationStatus.FAILED)
                     .errorMessage("Executor queue full, try again later").build();
         }
@@ -196,31 +201,50 @@ public class JdbcMnzlSimulationService implements MnzlSimulationReadService, Mnz
         }
     }
 
-    private void executeSimulation(String uuid, SimulationRequest request, FineractPlatformTenant tenant,
+    private void executeSimulation(String uuid, String executionToken, SimulationRequest request, FineractPlatformTenant tenant,
             HashMap<BusinessDateType, LocalDate> businessDates, SecurityContext secCtx) {
         ThreadLocalContextUtil.setTenant(tenant);
         ThreadLocalContextUtil.setBusinessDates(businessDates);
         SecurityContextHolder.setContext(secCtx);
         MDC.put("simulationUuid", uuid);
         try {
-            SimulationResult result = runner.run(request,
-                    progress -> jdbcTemplate.update("UPDATE m_mnzl_simulation SET progress = ? WHERE uuid = ?", progress, uuid));
+            SimulationResult result = runner.run(request, progress -> jdbcTemplate.update("""
+                    UPDATE m_mnzl_simulation SET progress = ?
+                    WHERE uuid = ? AND execution_token = ? AND status = ?
+                    """, progress, uuid, executionToken, SimulationStatus.RUNNING.name()));
             jdbcTemplate.update("""
                     UPDATE m_mnzl_simulation
-                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE uuid = ?
-                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid);
+                    SET status = ?, result_json = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP, execution_token = NULL
+                    WHERE uuid = ? AND execution_token = ? AND status = ?
+                    """, result.getStatus().name(), GSON.toJson(result.getSnapshots()), result.getErrorMessage(), uuid, executionToken,
+                    SimulationStatus.RUNNING.name());
         } catch (Exception e) {
             log.error("Simulation {} failed unexpectedly", uuid, e);
-            jdbcTemplate.update("""
-                    UPDATE m_mnzl_simulation
-                    SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE uuid = ?
-                    """, SimulationStatus.FAILED.name(), e.getMessage(), uuid);
+            failExecution(uuid, executionToken, e.getMessage());
         } finally {
             MDC.remove("simulationUuid");
             SecurityContextHolder.clearContext();
             ThreadLocalContextUtil.reset();
+        }
+    }
+
+    private void failExecution(String uuid, String executionToken, String errorMessage) {
+        jdbcTemplate.update("""
+                UPDATE m_mnzl_simulation
+                SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP, execution_token = NULL
+                WHERE uuid = ? AND execution_token = ? AND status = ?
+                """, SimulationStatus.FAILED.name(), errorMessage, uuid, executionToken, SimulationStatus.RUNNING.name());
+    }
+
+    private void recoverTimedOutSimulations() {
+        Timestamp staleThreshold = Timestamp.valueOf(LocalDateTime.now(ZoneId.of("UTC")).minusMinutes(EXECUTION_TIMEOUT_MINUTES));
+        int recovered = jdbcTemplate.update("""
+                UPDATE m_mnzl_simulation
+                SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP, execution_token = NULL
+                WHERE status = ? AND (started_at IS NULL OR started_at < ?)
+                """, SimulationStatus.FAILED.name(), EXECUTION_TIMEOUT_MESSAGE, SimulationStatus.RUNNING.name(), staleThreshold);
+        if (recovered > 0) {
+            log.warn("Marked {} timed-out simulation execution(s) as failed", recovered);
         }
     }
 

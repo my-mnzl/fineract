@@ -47,6 +47,26 @@ class MnzlSimulationApiJsonValidatorTest {
     }
 
     @Test
+    void repaymentCadenceFieldsPassForCreateAndPreview() {
+        String json = """
+                {
+                  "loanProductId": 1,
+                  "principal": "100000",
+                  "interestRatePerPeriod": "12",
+                  "numberOfRepayments": 12,
+                  "repaymentEvery": 2,
+                  "repaymentFrequencyType": 2,
+                  "disbursementDate": "2026-01-01",
+                  "locale": "en",
+                  "actions": [{"type": "DISBURSE", "date": "2026-01-01"}]
+                }
+                """;
+
+        assertThatCode(() -> validator.validateForCreate(json)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateForPreview(json)).doesNotThrowAnyException();
+    }
+
+    @Test
     void blankJsonThrowsInvalidJson() {
         assertThatThrownBy(() -> validator.validateForCreate("")).isInstanceOf(InvalidJsonException.class);
         assertThatThrownBy(() -> validator.validateForCreate(null)).isInstanceOf(InvalidJsonException.class);
