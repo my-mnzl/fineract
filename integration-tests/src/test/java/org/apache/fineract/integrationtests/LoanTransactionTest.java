@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -50,6 +51,33 @@ public class LoanTransactionTest extends BaseLoanIntegrationTest {
     private final String capitalizedIncomeAdjustmentCommand = "capitalizedIncomeAdjustment";
     private final String buyDownFeeCommand = "buyDownFee";
     private final String buyDownFeeAdjustmentCommand = "buyDownFeeAdjustment";
+
+    @Test
+    public void testRepaymentTemplateDateFallsBackToDueDateAndAdvancesAfterRepayment() {
+        final PostClientsResponse client = ClientHelper.createClient(ClientHelper.defaultClientCreationRequest());
+        final PostLoanProductsResponse loanProductsResponse = loanProductHelper.createLoanProduct(create4IProgressive());
+        final AtomicReference<Long> loanIdRef = new AtomicReference<>();
+
+        runAt("20 December 2024", () -> {
+            Long loanId = applyAndApproveProgressiveLoan(client.getClientId(), loanProductsResponse.getResourceId(), "20 December 2024",
+                    430.0, 7.0, 4, null);
+            loanIdRef.set(loanId);
+            disburseLoan(loanId, BigDecimal.valueOf(430), "20 December 2024");
+
+            GetLoansLoanIdTransactionsTemplateResponse template = loanTransactionHelper.retrieveTransactionTemplate(loanId, "repayment",
+                    null, null, null);
+            assertEquals(LocalDate.of(2025, 1, 20), template.getDate());
+        });
+
+        runAt("25 January 2025", () -> {
+            Long loanId = loanIdRef.get();
+            loanTransactionHelper.makeLoanRepayment(loanId, "Repayment", "25 January 2025", 1.0);
+
+            GetLoansLoanIdTransactionsTemplateResponse template = loanTransactionHelper.retrieveTransactionTemplate(loanId, "repayment",
+                    null, null, null);
+            assertEquals(LocalDate.of(2025, 1, 25), template.getDate());
+        });
+    }
 
     @Test
     public void testGetLoanTransactionsFiltering() {
