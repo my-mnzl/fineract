@@ -71,6 +71,7 @@ public class LoanChargeService {
     private final LoanBalanceService loanBalanceService;
     private final LoanScheduleGeneratorService loanScheduleGeneratorService;
     private final ChargeTaxApplicationService chargeTaxApplicationService;
+    private final ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry;
 
     public void recalculateAllCharges(final Loan loan) {
         Set<LoanCharge> charges = loan.getActiveCharges();
@@ -281,6 +282,7 @@ public class LoanChargeService {
                     yield loan.getPrincipal().getAmount();
                 }
             }
+            case CUSTOM -> customCalculator(loanCharge.getChargeCalculation()).calculateAmountPercentageAppliedTo(loan, loanCharge);
             case INVALID, FLAT -> BigDecimal.ZERO;
         };
     }
@@ -384,6 +386,7 @@ public class LoanChargeService {
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
                 case PERCENT_OF_INTEREST:
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
+                case CUSTOM:
                     loanCharge.setPercentage(newValue);
                     loanCharge.setAmountPercentageAppliedTo(amount);
                     loanChargeAmount = BigDecimal.ZERO;
@@ -439,6 +442,7 @@ public class LoanChargeService {
             case PERCENT_OF_AMOUNT_AND_INTEREST:
             case PERCENT_OF_INTEREST:
             case PERCENT_OF_DISBURSEMENT_AMOUNT:
+            case CUSTOM:
                 loanCharge.setPercentage(chargeAmount);
                 loanCharge.setAmountPercentageAppliedTo(amountPercentageAppliedTo);
                 if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
@@ -497,6 +501,10 @@ public class LoanChargeService {
                     amountPercentageAppliedTo = loanCharge.getLoan().getPrincipal().getAmount()
                             .add(loanCharge.getLoan().getTotalInterest());
                 break;
+                case CUSTOM:
+                    amountPercentageAppliedTo = customCalculator(loanCharge.getChargeCalculation())
+                            .calculateAmountPercentageAppliedTo(loanCharge.getLoan(), loanCharge);
+                break;
                 case PERCENT_OF_INTEREST:
                     amountPercentageAppliedTo = loanCharge.getLoan().getTotalInterest();
                 break;
@@ -525,6 +533,7 @@ public class LoanChargeService {
         loanCharge.setChargeTime(chargeTime == null ? chargeDefinition.getChargeTimeType() : chargeTime.getValue());
 
         if (loanCharge.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE)
+                || loanCharge.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC)
                 || loanCharge.getChargeTimeType().equals(ChargeTimeType.OVERDUE_INSTALLMENT)) {
 
             if (dueDate == null) {
@@ -802,6 +811,7 @@ public class LoanChargeService {
             case PERCENT_OF_AMOUNT -> installment.getPrincipalOutstanding(loan.getCurrency());
             case PERCENT_OF_AMOUNT_AND_INTEREST ->
                 installment.getPrincipalOutstanding(loan.getCurrency()).plus(installment.getInterestOutstanding(loan.getCurrency()));
+            case CUSTOM -> customCalculator(calculationType).calculateOverdueAmountPercentageAppliedTo(loan, installment);
             case PERCENT_OF_INTEREST -> installment.getInterestOutstanding(loan.getCurrency());
             default -> Money.zero(loan.getCurrency());
         };
@@ -831,6 +841,7 @@ public class LoanChargeService {
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
                 case PERCENT_OF_INTEREST:
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
+                case CUSTOM:
                     loanCharge.setPercentage(amount);
                     loanCharge.setAmountPercentageAppliedTo(loanPrincipal);
                     if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
@@ -872,6 +883,7 @@ public class LoanChargeService {
                 case PERCENT_OF_AMOUNT_AND_INTEREST:
                 case PERCENT_OF_INTEREST:
                 case PERCENT_OF_DISBURSEMENT_AMOUNT:
+                case CUSTOM:
                     loanCharge.setPercentage(amount);
                     loanCharge.setAmountPercentageAppliedTo(loanPrincipal);
                     if (loanChargeAmount.compareTo(BigDecimal.ZERO) == 0) {
@@ -922,12 +934,18 @@ public class LoanChargeService {
             case PERCENT_OF_AMOUNT -> installment.getPrincipal(loan.getCurrency());
             case PERCENT_OF_AMOUNT_AND_INTEREST ->
                 installment.getPrincipal(loan.getCurrency()).plus(installment.getInterestCharged(loan.getCurrency()));
+            case CUSTOM -> customCalculator(calculationType).calculateInstallmentChargeAmount(loan, percentage, installment);
             case PERCENT_OF_INTEREST -> installment.getInterestCharged(loan.getCurrency());
             case PERCENT_OF_DISBURSEMENT_AMOUNT, INVALID, FLAT -> Money.zero(loan.getCurrency());
 
         };
         return Money.zero(loan.getCurrency()) //
                 .plus(LoanCharge.percentageOf(percentOf.getAmount(), percentage));
+    }
+
+    private ChargeAmountCalculator customCalculator(final ChargeCalculationType calculationType) {
+        return chargeAmountCalculatorRegistry.find(calculationType.getValue())
+                .orElseThrow(() -> new IllegalStateException("No charge amount calculator registered for type " + calculationType));
     }
 
     private BigDecimal getDerivedAmountForCharge(final Loan loan, final LoanCharge loanCharge) {

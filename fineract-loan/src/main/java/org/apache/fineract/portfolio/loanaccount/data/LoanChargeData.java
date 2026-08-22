@@ -84,6 +84,10 @@ public class LoanChargeData {
 
     private final BigDecimal maxCap;
 
+    private final Integer feeInterval;
+
+    private final EnumOptionData feeFrequency;
+
     private final List<LoanInstallmentChargeData> installmentChargeData;
 
     private BigDecimal amountAccrued;
@@ -96,7 +100,7 @@ public class LoanChargeData {
 
     public static LoanChargeData template(final List<ChargeData> chargeOptions) {
         return new LoanChargeData(null, null, null, null, null, null, null, null, chargeOptions, false, null, false, false, null,
-                ExternalId.empty(), null, null, null, null, ExternalId.empty());
+                ExternalId.empty(), null, null, null, null, null, null, ExternalId.empty());
     }
 
     /**
@@ -105,9 +109,11 @@ public class LoanChargeData {
     public static LoanChargeData newLoanChargeDetails(final Long chargeId, final String name, final CurrencyData currency,
             final BigDecimal amount, final BigDecimal percentage, final EnumOptionData chargeTimeType,
             final EnumOptionData chargeCalculationType, final boolean penalty, final EnumOptionData chargePaymentMode,
-            final BigDecimal minCap, final BigDecimal maxCap, final ExternalId externalId) {
+            final BigDecimal minCap, final BigDecimal maxCap, final Integer feeInterval, final EnumOptionData feeFrequency,
+            final ExternalId externalId) {
         return new LoanChargeData(null, chargeId, name, currency, amount, percentage, chargeTimeType, chargeCalculationType, null, penalty,
-                chargePaymentMode, false, false, null, ExternalId.empty(), minCap, maxCap, null, null, externalId);
+                chargePaymentMode, false, false, null, ExternalId.empty(), minCap, maxCap, feeInterval, feeFrequency, null, null,
+                externalId);
     }
 
     public LoanChargeData(final Long id, final Long chargeId, final String name, final CurrencyData currency, final BigDecimal amount,
@@ -116,7 +122,8 @@ public class LoanChargeData {
             final LocalDate dueDate, final EnumOptionData chargeCalculationType, final BigDecimal percentage,
             final BigDecimal amountPercentageAppliedTo, final boolean penalty, final EnumOptionData chargePaymentMode, final boolean paid,
             final boolean waived, final Long loanId, final ExternalId externalLoanId, final BigDecimal minCap, final BigDecimal maxCap,
-            final BigDecimal amountOrPercentage, List<LoanInstallmentChargeData> installmentChargeData, final ExternalId externalId) {
+            final Integer feeInterval, final EnumOptionData feeFrequency, final BigDecimal amountOrPercentage,
+            List<LoanInstallmentChargeData> installmentChargeData, final ExternalId externalId) {
         this.id = id;
         this.chargeId = chargeId;
         this.name = name;
@@ -138,6 +145,8 @@ public class LoanChargeData {
         this.waived = waived;
         this.minCap = minCap;
         this.maxCap = maxCap;
+        this.feeInterval = feeInterval;
+        this.feeFrequency = feeFrequency;
         if (amountOrPercentage == null) {
             if (chargeCalculationType != null && chargeCalculationType.getId().intValue() > 1) {
                 this.amountOrPercentage = this.percentage;
@@ -162,7 +171,8 @@ public class LoanChargeData {
             final BigDecimal percentage, final EnumOptionData chargeTimeType, final EnumOptionData chargeCalculationType,
             final List<ChargeData> chargeOptions, final boolean penalty, final EnumOptionData chargePaymentMode, final boolean paid,
             final boolean waived, final Long loanId, final ExternalId externalLoanId, final BigDecimal minCap, final BigDecimal maxCap,
-            final BigDecimal amountOrPercentage, List<LoanInstallmentChargeData> installmentChargeData, final ExternalId externalId) {
+            final Integer feeInterval, final EnumOptionData feeFrequency, final BigDecimal amountOrPercentage,
+            List<LoanInstallmentChargeData> installmentChargeData, final ExternalId externalId) {
         this.id = id;
         this.chargeId = chargeId;
         this.name = name;
@@ -199,6 +209,8 @@ public class LoanChargeData {
         this.externalLoanId = externalLoanId;
         this.minCap = minCap;
         this.maxCap = maxCap;
+        this.feeInterval = feeInterval;
+        this.feeFrequency = feeFrequency;
         this.installmentChargeData = installmentChargeData;
         this.amountAccrued = null;
         this.amountUnrecognized = null;
@@ -233,6 +245,8 @@ public class LoanChargeData {
         this.loanId = loanId;
         this.minCap = null;
         this.maxCap = null;
+        this.feeInterval = null;
+        this.feeFrequency = null;
         this.installmentChargeData = installmentChargeData;
         this.amountAccrued = null;
         this.amountUnrecognized = null;
@@ -269,6 +283,8 @@ public class LoanChargeData {
         this.externalLoanId = ExternalId.empty();
         this.minCap = null;
         this.maxCap = null;
+        this.feeInterval = null;
+        this.feeFrequency = null;
         this.installmentChargeData = null;
         this.amountAccrued = amountAccrued;
         this.amountUnrecognized = null;
@@ -302,6 +318,8 @@ public class LoanChargeData {
         this.externalLoanId = ExternalId.empty();
         this.minCap = null;
         this.maxCap = null;
+        this.feeInterval = chargeData.feeInterval;
+        this.feeFrequency = chargeData.feeFrequency;
         this.installmentChargeData = null;
         this.amountAccrued = chargeData.amountAccrued;
         this.amountUnrecognized = amountUnrecognized;
@@ -335,6 +353,8 @@ public class LoanChargeData {
         this.chargePayable = chargeData.chargePayable;
         this.loanId = chargeData.loanId;
         this.externalLoanId = chargeData.externalLoanId;
+        this.feeInterval = chargeData.feeInterval;
+        this.feeFrequency = chargeData.feeFrequency;
         this.installmentChargeData = installmentChargeData;
         this.amountAccrued = chargeData.amountAccrued;
         this.amountUnrecognized = chargeData.amountUnrecognized;
@@ -369,6 +389,8 @@ public class LoanChargeData {
         this.externalLoanId = ExternalId.empty();
         this.minCap = null;
         this.maxCap = null;
+        this.feeInterval = null;
+        this.feeFrequency = null;
         this.installmentChargeData = null;
         this.amountAccrued = null;
         this.amountUnrecognized = null;
@@ -402,6 +424,8 @@ public class LoanChargeData {
         this.externalLoanId = ExternalId.empty();
         this.minCap = null;
         this.maxCap = null;
+        this.feeInterval = null;
+        this.feeFrequency = null;
         this.installmentChargeData = null;
         this.amountAccrued = null;
         this.amountUnrecognized = null;

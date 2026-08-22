@@ -48,6 +48,7 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanCharge;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanChargeRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanDisbursementDetails;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTrancheDisbursementCharge;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
@@ -62,6 +63,7 @@ public class LoanChargeAssembler {
     private final LoanProductRepository loanProductRepository;
     private final ExternalIdFactory externalIdFactory;
     private final LoanChargeService loanChargeService;
+    private final ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry;
 
     public Set<LoanCharge> fromParsedJson(final JsonElement element, List<LoanDisbursementDetails> disbursementDetails) {
         JsonArray jsonDisbursement = this.fromApiJsonHelper.extractJsonArrayNamed("disbursementData", element);
@@ -247,7 +249,8 @@ public class LoanChargeAssembler {
 
     public LoanCharge createNewFromJson(final Loan loan, final Charge chargeDefinition, final JsonCommand command) {
         final LocalDate dueDate = command.localDateValueOfParameterNamed("dueDate");
-        if (chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue()) && dueDate == null) {
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && dueDate == null) {
             final String defaultUserMessage = "Loan charge is missing due date.";
             throw new LoanChargeWithoutMandatoryFieldException("loanCharge", "dueDate", defaultUserMessage, chargeDefinition.getId(),
                     chargeDefinition.getName());
@@ -257,39 +260,18 @@ public class LoanChargeAssembler {
 
     public LoanCharge createNewFromJson(final Loan loan, final Charge chargeDefinition, final JsonCommand command,
             final LocalDate dueDate) {
+        return createNewFromJson(loan, chargeDefinition, command, dueDate, null);
+    }
+
+    public LoanCharge createNewFromJson(final Loan loan, final Charge chargeDefinition, final JsonCommand command, final LocalDate dueDate,
+            final LoanRepaymentScheduleInstallment installment) {
         final Locale locale = command.extractLocale();
         final BigDecimal amount = command.bigDecimalValueOfParameterNamed("amount", locale);
 
         final ChargeTimeType chargeTime = null;
         final ChargeCalculationType chargeCalculation = null;
         final ChargePaymentMode chargePaymentMode = null;
-        BigDecimal amountPercentageAppliedTo = BigDecimal.ZERO;
-        switch (ChargeCalculationType.fromInt(chargeDefinition.getChargeCalculation())) {
-            case PERCENT_OF_AMOUNT:
-                if (command.hasParameter("principal")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("principal");
-                } else {
-                    amountPercentageAppliedTo = loan.getPrincipal().getAmount();
-                }
-            break;
-            case PERCENT_OF_AMOUNT_AND_INTEREST:
-                if (command.hasParameter("principal") && command.hasParameter("interest")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("principal")
-                            .add(command.bigDecimalValueOfParameterNamed("interest"));
-                } else {
-                    amountPercentageAppliedTo = loan.getPrincipal().getAmount().add(loan.getTotalInterest());
-                }
-            break;
-            case PERCENT_OF_INTEREST:
-                if (command.hasParameter("interest")) {
-                    amountPercentageAppliedTo = command.bigDecimalValueOfParameterNamed("interest");
-                } else {
-                    amountPercentageAppliedTo = loan.getTotalInterest();
-                }
-            break;
-            default:
-            break;
-        }
+        BigDecimal amountPercentageAppliedTo = calculateCreationAmountPercentageAppliedTo(loan, chargeDefinition, command, installment);
 
         BigDecimal loanCharge = BigDecimal.ZERO;
         if (ChargeTimeType.fromInt(chargeDefinition.getChargeTimeType()).equals(ChargeTimeType.INSTALMENT_FEE)) {
@@ -327,5 +309,47 @@ public class LoanChargeAssembler {
             final ChargePaymentMode chargePaymentMode, final Integer numberOfRepayments, final ExternalId externalId) {
         return loanChargeService.create(null, chargeDefinition, loanPrincipal, amount, chargeTime, chargeCalculation, dueDate,
                 chargePaymentMode, numberOfRepayments, BigDecimal.ZERO, externalId);
+    }
+
+    public LoanCharge createNewFromChargeDefinition(final Loan loan, final Charge chargeDefinition, final LocalDate dueDate) {
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && dueDate == null) {
+            final String defaultUserMessage = "Loan charge is missing due date.";
+            throw new LoanChargeWithoutMandatoryFieldException("loanCharge", "dueDate", defaultUserMessage, chargeDefinition.getId(),
+                    chargeDefinition.getName());
+        }
+
+        final JsonCommand emptyCommand = JsonCommand.fromJsonElement(null, new JsonObject(), fromApiJsonHelper);
+        BigDecimal amountPercentageAppliedTo = calculateCreationAmountPercentageAppliedTo(loan, chargeDefinition, emptyCommand, null);
+        if ((chargeDefinition.getChargeTimeType().equals(ChargeTimeType.SPECIFIED_DUE_DATE.getValue())
+                || chargeDefinition.getChargeTimeType().equals(ChargeTimeType.LOAN_PERIODIC.getValue())) && loan.isMultiDisburmentLoan()) {
+            amountPercentageAppliedTo = BigDecimal.ZERO;
+            for (final LoanDisbursementDetails loanDisbursementDetails : loan.getDisbursementDetails()) {
+                if (!DateUtils.isAfter(loanDisbursementDetails.expectedDisbursementDate(), dueDate)) {
+                    amountPercentageAppliedTo = amountPercentageAppliedTo.add(loanDisbursementDetails.getPrincipal());
+                }
+            }
+        }
+        return loanChargeService.create(loan, chargeDefinition, amountPercentageAppliedTo, null, null, null, dueDate, null, null,
+                BigDecimal.ZERO, externalIdFactory.create());
+    }
+
+    private BigDecimal calculateCreationAmountPercentageAppliedTo(final Loan loan, final Charge chargeDefinition, final JsonCommand command,
+            final LoanRepaymentScheduleInstallment installment) {
+        return switch (ChargeCalculationType.fromInt(chargeDefinition.getChargeCalculation())) {
+            case PERCENT_OF_AMOUNT ->
+                command.hasParameter("principal") ? command.bigDecimalValueOfParameterNamed("principal") : loan.getPrincipal().getAmount();
+            case PERCENT_OF_AMOUNT_AND_INTEREST -> command.hasParameter("principal") && command.hasParameter("interest")
+                    ? command.bigDecimalValueOfParameterNamed("principal").add(command.bigDecimalValueOfParameterNamed("interest"))
+                    : loan.getPrincipal().getAmount().add(loan.getTotalInterest());
+            case PERCENT_OF_INTEREST ->
+                command.hasParameter("interest") ? command.bigDecimalValueOfParameterNamed("interest") : loan.getTotalInterest();
+            case PERCENT_OF_DISBURSEMENT_AMOUNT -> loan.getPrincipal().getAmount();
+            case CUSTOM -> chargeAmountCalculatorRegistry.find(chargeDefinition.getChargeCalculation())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "No charge amount calculator registered for type " + chargeDefinition.getChargeCalculation()))
+                    .calculateCreationAmountPercentageAppliedTo(loan, command, installment);
+            case INVALID, FLAT -> BigDecimal.ZERO;
+        };
     }
 }

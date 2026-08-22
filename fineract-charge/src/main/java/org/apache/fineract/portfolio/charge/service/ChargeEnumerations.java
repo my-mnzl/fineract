@@ -103,6 +103,10 @@ public final class ChargeEnumerations {
                 optionData = new EnumOptionData(ChargeTimeType.SAVINGS_NOACTIVITY_FEE.getValue().longValue(),
                         ChargeTimeType.SAVINGS_NOACTIVITY_FEE.getCode(), "Saving No Activity Fee");
             break;
+            case LOAN_PERIODIC:
+                optionData = new EnumOptionData(ChargeTimeType.LOAN_PERIODIC.getValue().longValue(), ChargeTimeType.LOAN_PERIODIC.getCode(),
+                        "Periodic");
+            break;
             default:
                 optionData = new EnumOptionData(ChargeTimeType.INVALID.getValue().longValue(), ChargeTimeType.INVALID.getCode(), "Invalid");
             break;
@@ -168,6 +172,10 @@ public final class ChargeEnumerations {
             case PERCENT_OF_DISBURSEMENT_AMOUNT:
                 optionData = new EnumOptionData(ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getValue().longValue(),
                         ChargeCalculationType.PERCENT_OF_DISBURSEMENT_AMOUNT.getCode(), "% Disbursement Amount");
+            break;
+            case CUSTOM:
+                optionData = new EnumOptionData(ChargeCalculationType.CUSTOM.getValue().longValue(), ChargeCalculationType.CUSTOM.getCode(),
+                        "% Amount + Interest + Penalties");
             break;
             default:
                 optionData = new EnumOptionData(ChargeCalculationType.INVALID.getValue().longValue(),

@@ -63,6 +63,7 @@ public final class LoanChargeApiJsonValidator {
     private final FromJsonHelper fromApiJsonHelper;
     private final ChargeRepositoryWrapper chargeRepository;
     private final LoanChargeRepository loanChargeRepository;
+    private final List<ChargeCalculationValidator> chargeCalculationValidators;
 
     private void throwExceptionIfValidationWarningsExist(final List<ApiParameterError> dataValidationErrors) {
         if (!dataValidationErrors.isEmpty()) {
@@ -263,32 +264,32 @@ public final class LoanChargeApiJsonValidator {
         }
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("loan");
         for (LoanCharge loanCharge : charges) {
-            String errorcode = null;
-            switch (loanCharge.getChargeCalculation()) {
-                case PERCENT_OF_AMOUNT:
+            String errorcode = switch (loanCharge.getChargeCalculation()) {
+                case PERCENT_OF_AMOUNT -> {
                     if (loanCharge.isInstalmentFee()) {
-                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
-
+                        yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
                     }
-                break;
-                case PERCENT_OF_AMOUNT_AND_INTEREST:
+                    yield null;
+                }
+                case PERCENT_OF_AMOUNT_AND_INTEREST -> {
                     if (loanCharge.isInstalmentFee()) {
-                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
+                        yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
                     } else if (loanCharge.isSpecifiedDueDate()) {
-                        errorcode = "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                        yield "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     }
-                break;
-                case PERCENT_OF_INTEREST:
+                    yield null;
+                }
+                case PERCENT_OF_INTEREST -> {
                     if (loanCharge.isSpecifiedDueDate()) {
-                        errorcode = "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                        yield "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     } else if (loanCharge.isInstalmentFee() && loanCharge.getLoan().isProgressiveSchedule()) {
-                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                        yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     }
-                break;
-
-                default:
-                break;
-            }
+                    yield null;
+                }
+                case CUSTOM -> validateCustomLoanCharge(loanCharge);
+                default -> null;
+            };
             if (errorcode != null) {
                 baseDataValidator.reset().parameter("charges").failWithCode(errorcode);
             }
@@ -392,7 +393,7 @@ public final class LoanChargeApiJsonValidator {
                     baseDataValidator.reset().parameter(LoanApiConstants.chargesParameterName)
                             .parameterAtIndexArray(LoanApiConstants.amountParameterName, i).value(amount).notNull().positiveAmount();
 
-                    if (chargeTime.isSpecifiedDueDate()) {
+                    if (chargeTime.isSpecifiedDueDate() || chargeTime.isLoanPeriodic()) {
                         LocalDate dueDate = this.fromApiJsonHelper.extractLocalDateNamed(LoanApiConstants.dueDateParamName,
                                 loanChargeElement, dateFormat, locale);
                         LocalDate expectedDisbursementDate = this.fromApiJsonHelper
@@ -423,36 +424,50 @@ public final class LoanChargeApiJsonValidator {
     private void validateInterestBearingLoanProductRestriction(ChargeCalculationType chargeCalculationType, ChargeTimeType chargeTime,
             LoanProduct loanProduct, DataValidatorBuilder baseDataValidator) {
         if (loanProduct.isInterestRecalculationEnabled()) {
-            String errorcode = null;
-            switch (chargeCalculationType) {
-                case PERCENT_OF_AMOUNT:
+            String errorcode = switch (chargeCalculationType) {
+                case PERCENT_OF_AMOUNT -> {
                     if (chargeTime.isInstalmentFee()) {
-                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
-
+                        yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
                     }
-                break;
-                case PERCENT_OF_AMOUNT_AND_INTEREST:
+                    yield null;
+                }
+                case PERCENT_OF_AMOUNT_AND_INTEREST -> {
                     if (chargeTime.isInstalmentFee()) {
-                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
+                        yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
                     } else if (chargeTime.isSpecifiedDueDate()) {
-                        errorcode = "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                        yield "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     }
-                break;
-                case PERCENT_OF_INTEREST:
+                    yield null;
+                }
+                case PERCENT_OF_INTEREST -> {
                     if (chargeTime.isSpecifiedDueDate()) {
-                        errorcode = "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                        yield "specific." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     } else if (chargeTime.isInstalmentFee()
                             && loanProduct.getLoanProductRelatedDetail().getLoanScheduleType().equals(LoanScheduleType.PROGRESSIVE)) {
-                        errorcode = "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
+                        yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_INTEREST_CALCULATION_TYPE;
                     }
-                break;
-
-                default:
-                break;
-            }
+                    yield null;
+                }
+                case CUSTOM -> validateCustomLoanProductCharge(chargeCalculationType, chargeTime, loanProduct);
+                default -> null;
+            };
             if (errorcode != null) {
                 baseDataValidator.reset().parameter("charges").failWithCode(errorcode);
             }
         }
+    }
+
+    private String validateCustomLoanCharge(final LoanCharge loanCharge) {
+        return chargeCalculationValidators.stream()
+                .filter(validator -> validator.calculationType().equals(loanCharge.getChargeCalculation().getValue()))
+                .map(validator -> validator.validateLoanCharge(loanCharge)).filter(errorCode -> errorCode != null).findFirst().orElse(null);
+    }
+
+    private String validateCustomLoanProductCharge(final ChargeCalculationType chargeCalculationType, final ChargeTimeType chargeTime,
+            final LoanProduct loanProduct) {
+        return chargeCalculationValidators.stream()
+                .filter(validator -> validator.calculationType().equals(chargeCalculationType.getValue()))
+                .map(validator -> validator.validateLoanProductRestriction(chargeTime, loanProduct)).filter(errorCode -> errorCode != null)
+                .findFirst().orElse(null);
     }
 }
