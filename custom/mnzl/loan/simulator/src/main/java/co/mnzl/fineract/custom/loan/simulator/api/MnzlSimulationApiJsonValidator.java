@@ -95,15 +95,9 @@ public class MnzlSimulationApiJsonValidator {
                 String date = extractString(action, "date");
                 validateActionDate(date, "actions[" + i + "].date", validator);
 
-                if ("CHANGE_INTEREST_RATE".equalsIgnoreCase(actionType)) {
-                    validateDecimal(action, "rate", "actions[" + i + "].rate", validator);
-                }
-                if ("ADD_CHARGE".equalsIgnoreCase(actionType)) {
-                    validateLong(action, "chargeId", "actions[" + i + "].chargeId", validator);
-                }
-                if ("PAY".equalsIgnoreCase(actionType)) {
-                    validateDecimal(action, "amount", "actions[" + i + "].amount", validator);
-                }
+                validateDecimal(action, "rate", "actions[" + i + "].rate", "CHANGE_INTEREST_RATE".equalsIgnoreCase(actionType), validator);
+                validateLong(action, "chargeId", "actions[" + i + "].chargeId", "ADD_CHARGE".equalsIgnoreCase(actionType), validator);
+                validateDecimal(action, "amount", "actions[" + i + "].amount", "PAY".equalsIgnoreCase(actionType), validator);
             }
         }
 
@@ -167,27 +161,42 @@ public class MnzlSimulationApiJsonValidator {
         }
     }
 
-    private void validateDecimal(JsonObject object, String fieldName, String parameterName, DataValidatorBuilder validator) {
-        JsonElement value = extractPrimitive(object, fieldName);
-        validator.reset().parameter(parameterName).value(value).notNull();
-        if (value != null) {
-            try {
-                value.getAsBigDecimal();
-            } catch (NumberFormatException exception) {
-                validator.reset().parameter(parameterName).value(value).failWithCode("must.be.a.number");
+    private void validateDecimal(JsonObject object, String fieldName, String parameterName, boolean required,
+            DataValidatorBuilder validator) {
+        JsonElement value = object.get(fieldName);
+        if (value == null || value.isJsonNull()) {
+            if (required) {
+                validator.reset().parameter(parameterName).value(null).notNull();
             }
+            return;
+        }
+        if (!value.isJsonPrimitive()) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.a.number");
+            return;
+        }
+        try {
+            value.getAsBigDecimal();
+        } catch (NumberFormatException exception) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.a.number");
         }
     }
 
-    private void validateLong(JsonObject object, String fieldName, String parameterName, DataValidatorBuilder validator) {
-        JsonElement value = extractPrimitive(object, fieldName);
-        validator.reset().parameter(parameterName).value(value).notNull();
-        if (value != null) {
-            try {
-                value.getAsBigDecimal().longValueExact();
-            } catch (ArithmeticException | NumberFormatException exception) {
-                validator.reset().parameter(parameterName).value(value).failWithCode("must.be.an.integer");
+    private void validateLong(JsonObject object, String fieldName, String parameterName, boolean required, DataValidatorBuilder validator) {
+        JsonElement value = object.get(fieldName);
+        if (value == null || value.isJsonNull()) {
+            if (required) {
+                validator.reset().parameter(parameterName).value(null).notNull();
             }
+            return;
+        }
+        if (!value.isJsonPrimitive()) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.an.integer");
+            return;
+        }
+        try {
+            value.getAsBigDecimal().longValueExact();
+        } catch (ArithmeticException | NumberFormatException exception) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.an.integer");
         }
     }
 

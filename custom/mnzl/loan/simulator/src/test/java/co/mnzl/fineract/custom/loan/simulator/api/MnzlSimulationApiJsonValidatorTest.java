@@ -145,7 +145,10 @@ class MnzlSimulationApiJsonValidatorTest {
             "{\"type\":\"CHANGE_INTEREST_RATE\",\"date\":\"2026-01-01\",\"rate\":\"abc\"}",
             "{\"type\":\"ADD_CHARGE\",\"date\":\"2026-01-01\",\"chargeId\":1.5}",
             "{\"type\":\"ADD_CHARGE\",\"date\":\"2026-01-01\",\"chargeId\":true}",
-            "{\"type\":\"ADD_CHARGE\",\"date\":\"2026-01-01\",\"chargeId\":\"abc\"}" })
+            "{\"type\":\"ADD_CHARGE\",\"date\":\"2026-01-01\",\"chargeId\":\"abc\"}",
+            "{\"type\":\"DISBURSE\",\"date\":\"2026-01-01\",\"amount\":\"abc\"}",
+            "{\"type\":\"DISBURSE\",\"date\":\"2026-01-01\",\"rate\":[]}",
+            "{\"type\":\"DISBURSE\",\"date\":\"2026-01-01\",\"chargeId\":1.5}" })
     void unparseableActionFieldsFailValidation(String action) {
         assertThatThrownBy(() -> validator.validateForCreate(requestWithAction(action)))
                 .isInstanceOf(PlatformApiDataValidationException.class);
