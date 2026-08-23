@@ -32,6 +32,8 @@ import org.apache.fineract.infrastructure.core.exception.UnsupportedParameterExc
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class MnzlSimulationApiJsonValidatorTest {
 
@@ -92,6 +94,13 @@ class MnzlSimulationApiJsonValidatorTest {
         assertThatThrownBy(() -> validator.validateForCreate(null)).isInstanceOf(InvalidJsonException.class);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = { "null", "[]", "\"request\"", "42", "{" })
+    void nonObjectOrMalformedJsonThrowsInvalidJson(String json) {
+        assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(InvalidJsonException.class);
+        assertThatThrownBy(() -> validator.validateForPreview(json)).isInstanceOf(InvalidJsonException.class);
+    }
+
     @Test
     void missingLoanProductIdFails() {
         String json = new Gson().toJson(Map.of("principal", "100000", "interestRatePerPeriod", "12", "numberOfRepayments", 12,
@@ -112,6 +121,21 @@ class MnzlSimulationApiJsonValidatorTest {
                 "numberOfRepayments", 12, "disbursementDate", "2026-01-01", "locale", "en", "actions",
                 List.of(Map.of("type", "INVALID_TYPE", "date", "2026-01-01"))));
         assertThatThrownBy(() -> validator.validateForCreate(json)).isInstanceOf(PlatformApiDataValidationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "null", "\"PAY\"", "42", "[]" })
+    void nonObjectActionFailsValidation(String action) {
+        assertThatThrownBy(() -> validator.validateForCreate(requestWithAction(action)))
+                .isInstanceOf(PlatformApiDataValidationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "{\"type\":null,\"date\":\"2026-01-01\"}", "{\"type\":[],\"date\":\"2026-01-01\"}",
+            "{\"type\":\"PAY\",\"date\":null,\"amount\":1}", "{\"type\":\"PAY\",\"date\":{},\"amount\":1}" })
+    void nonStringOrNullActionFieldsFailValidation(String action) {
+        assertThatThrownBy(() -> validator.validateForCreate(requestWithAction(action)))
+                .isInstanceOf(PlatformApiDataValidationException.class);
     }
 
     @Test
@@ -154,6 +178,19 @@ class MnzlSimulationApiJsonValidatorTest {
                         Map.of("type", "ADD_CHARGE", "date", "2026-03-02", "chargeId", 1),
                         Map.of("type", "CHANGE_INTEREST_RATE", "date", "2026-06-01", "rate", 15.0),
                         Map.of("type", "WRITE_OFF", "date", "2026-12-01"))));
+    }
+
+    private String requestWithAction(String action) {
+        return """
+                {
+                  "loanProductId": 1,
+                  "principal": "100000",
+                  "numberOfRepayments": 12,
+                  "disbursementDate": "2026-01-01",
+                  "locale": "en",
+                  "actions": [%s]
+                }
+                """.formatted(action);
     }
 
     private void assertInvalidForCreateAndPreview(String json) {
