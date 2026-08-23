@@ -22,6 +22,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -91,16 +93,16 @@ public class MnzlSimulationApiJsonValidator {
                 }
 
                 String date = extractString(action, "date");
-                validator.reset().parameter("actions[" + i + "].date").value(date).notBlank();
+                validateActionDate(date, "actions[" + i + "].date", validator);
 
                 if ("CHANGE_INTEREST_RATE".equalsIgnoreCase(actionType)) {
-                    validator.reset().parameter("actions[" + i + "].rate").value(extractPrimitive(action, "rate")).notNull();
+                    validateDecimal(action, "rate", "actions[" + i + "].rate", validator);
                 }
                 if ("ADD_CHARGE".equalsIgnoreCase(actionType)) {
-                    validator.reset().parameter("actions[" + i + "].chargeId").value(extractPrimitive(action, "chargeId")).notNull();
+                    validateLong(action, "chargeId", "actions[" + i + "].chargeId", validator);
                 }
                 if ("PAY".equalsIgnoreCase(actionType)) {
-                    validator.reset().parameter("actions[" + i + "].amount").value(extractPrimitive(action, "amount")).notNull();
+                    validateDecimal(action, "amount", "actions[" + i + "].amount", validator);
                 }
             }
         }
@@ -152,6 +154,41 @@ public class MnzlSimulationApiJsonValidator {
     private JsonElement extractPrimitive(JsonObject object, String parameterName) {
         JsonElement value = object.get(parameterName);
         return value != null && value.isJsonPrimitive() ? value : null;
+    }
+
+    private void validateActionDate(String value, String parameterName, DataValidatorBuilder validator) {
+        validator.reset().parameter(parameterName).value(value).notBlank();
+        if (StringUtils.isNotBlank(value)) {
+            try {
+                LocalDate.parse(value);
+            } catch (DateTimeParseException exception) {
+                validator.reset().parameter(parameterName).value(value).failWithCode("invalid.date.format");
+            }
+        }
+    }
+
+    private void validateDecimal(JsonObject object, String fieldName, String parameterName, DataValidatorBuilder validator) {
+        JsonElement value = extractPrimitive(object, fieldName);
+        validator.reset().parameter(parameterName).value(value).notNull();
+        if (value != null) {
+            try {
+                value.getAsBigDecimal();
+            } catch (NumberFormatException exception) {
+                validator.reset().parameter(parameterName).value(value).failWithCode("must.be.a.number");
+            }
+        }
+    }
+
+    private void validateLong(JsonObject object, String fieldName, String parameterName, DataValidatorBuilder validator) {
+        JsonElement value = extractPrimitive(object, fieldName);
+        validator.reset().parameter(parameterName).value(value).notNull();
+        if (value != null) {
+            try {
+                value.getAsBigDecimal().longValueExact();
+            } catch (ArithmeticException | NumberFormatException exception) {
+                validator.reset().parameter(parameterName).value(value).failWithCode("must.be.an.integer");
+            }
+        }
     }
 
     private JsonObject parseRequest(String json) {
