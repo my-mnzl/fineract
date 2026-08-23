@@ -225,6 +225,24 @@ class BusinessEventNotifierServiceImplTest {
     }
 
     @Test
+    public void testOutboundEventSuppressionKeepsInternalPostListeners() {
+        configureExternalEventsProperties(true);
+        MockBusinessEvent event = new MockBusinessEvent();
+        BusinessEventListener<MockBusinessEvent> postListener = mockListener();
+        underTest.addPostBusinessEventListener(MockBusinessEvent.class, postListener);
+        ThreadLocalContextUtil.setOutboundEventsSuppressed(true);
+
+        try {
+            underTest.notifyPostBusinessEvent(event);
+        } finally {
+            ThreadLocalContextUtil.setOutboundEventsSuppressed(false);
+        }
+
+        verify(postListener).onBusinessEvent(event);
+        verifyNoInteractions(externalEventService);
+    }
+
+    @Test
     public void testNotifyPostBusinessEventShouldNotPostAnythingWhenNoEventWasRaisedExternalEventWhenRecordingEnabled() {
         // given
         configureExternalEventsProperties(true);

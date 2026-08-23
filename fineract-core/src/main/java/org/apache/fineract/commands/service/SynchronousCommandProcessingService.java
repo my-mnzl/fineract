@@ -386,6 +386,9 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
     }
 
     protected void publishHookEvent(final String entityName, final String actionName, JsonCommand command, final Object result) {
+        if (ThreadLocalContextUtil.areOutboundEventsSuppressed()) {
+            return;
+        }
         try {
             final AppUser appUser = context.authenticatedUser(CommandWrapper.wrap(actionName, entityName, null, null));
 

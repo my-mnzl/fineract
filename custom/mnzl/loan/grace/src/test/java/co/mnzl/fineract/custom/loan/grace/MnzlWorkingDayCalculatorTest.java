@@ -108,6 +108,12 @@ class MnzlWorkingDayCalculatorTest {
     }
 
     @Test
+    void zeroDayPenaltyWaitUsesTheNextWorkingDay() {
+        assertThat(MnzlWorkingDayCalculator.effectivePenaltyWaitPeriod(0)).isEqualTo(1);
+        assertThat(MnzlWorkingDayCalculator.effectivePenaltyWaitPeriod(5)).isEqualTo(5);
+    }
+
+    @Test
     void throwsInsteadOfLoopingForeverWhenNoWorkingDayCanBeFoundInTheCap() {
         // Pathological case: every day in the iteration window is a holiday. Without the safety cap this hangs the
         // COB thread; with it, we throw a diagnosable error.

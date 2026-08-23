@@ -132,6 +132,29 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
     }
 
     @Test
+    void zeroDayWaitAppliesOnNextWorkingDay() {
+        when(configurationDomainService.retrievePenaltyWaitPeriod()).thenReturn(0L);
+        LocalDate firstOverdueWorkingDay = DUE_DATE.plusDays(1);
+        setBusinessDate(firstOverdueWorkingDay);
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(1), eq(WORKING_DAYS), any())).thenReturn(firstOverdueWorkingDay);
+
+        step.execute(loan);
+
+        verify(loanChargeWritePlatformService).applyOverdueChargesForLoan(eq(LOAN_ID), argThat(list -> list.size() == 1));
+    }
+
+    @Test
+    void zeroDayWaitDoesNotApplyOnDueDate() {
+        when(configurationDomainService.retrievePenaltyWaitPeriod()).thenReturn(0L);
+        setBusinessDate(DUE_DATE);
+        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(1), eq(WORKING_DAYS), any())).thenReturn(DUE_DATE.plusDays(1));
+
+        step.execute(loan);
+
+        verify(loanChargeWritePlatformService, never()).applyOverdueChargesForLoan(anyLong(), any());
+    }
+
+    @Test
     void doesNotApplyPenaltyWhileStillInWorkingDayGrace() {
         // Calendar grace would have expired (5 calendar days from due) but only 3 working days have passed.
         LocalDate stillInGrace = LocalDate.of(2025, 1, 10);

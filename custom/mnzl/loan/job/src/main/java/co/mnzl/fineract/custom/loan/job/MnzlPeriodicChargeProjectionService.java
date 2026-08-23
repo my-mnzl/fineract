@@ -22,9 +22,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -60,13 +60,11 @@ public class MnzlPeriodicChargeProjectionService {
         int added = 0;
         final Collection<LoanCharge> existingCharges = loan.getCharges() == null ? List.of() : loan.getCharges();
         for (final Charge chargeDefinition : periodicCharges) {
-            final Set<LocalDate> existingDueDates = existingCharges.stream()
+            final List<LocalDate> existingDueDates = existingCharges.stream()
                     .filter(existing -> existing.getCharge() != null && chargeDefinition.getId().equals(existing.getCharge().getId()))
-                    .map(LoanCharge::getDueLocalDate).filter(date -> date != null).collect(HashSet::new, HashSet::add, HashSet::addAll);
-            for (final LocalDate occurrenceDate : occurrencesBetween(chargeDefinition, anchor, maturity)) {
-                if (existingDueDates.contains(occurrenceDate)) {
-                    continue;
-                }
+                    .map(LoanCharge::getDueLocalDate).filter(date -> date != null).toList();
+            final List<LocalDate> desiredOccurrences = occurrencesBetween(chargeDefinition, anchor, maturity);
+            for (final LocalDate occurrenceDate : missingOccurrences(desiredOccurrences, existingDueDates)) {
                 final LoanCharge loanCharge = loanChargeAssembler.createNewFromChargeDefinition(loan, chargeDefinition, occurrenceDate);
                 if (BigDecimal.ZERO.compareTo(loanCharge.amount()) == 0) {
                     log.debug("Skipping zero-amount periodic charge {} for loan {} on {}", chargeDefinition.getId(), loan.getId(),
@@ -74,7 +72,6 @@ public class MnzlPeriodicChargeProjectionService {
                     continue;
                 }
                 loanChargeService.addLoanCharge(loan, loanCharge);
-                existingDueDates.add(occurrenceDate);
                 added++;
             }
         }
@@ -96,6 +93,29 @@ public class MnzlPeriodicChargeProjectionService {
             occurrenceDate = scheduledDateGenerator.getRepaymentPeriodDate(frequencyType, chargeDefinition.feeInterval(), occurrenceDate);
         }
         return dates;
+    }
+
+    static List<LocalDate> missingOccurrences(final List<LocalDate> desiredOccurrences, final Collection<LocalDate> existingDueDates) {
+        final Map<LocalDate, Integer> remainingExactDates = new HashMap<>();
+        existingDueDates.forEach(date -> remainingExactDates.merge(date, 1, Integer::sum));
+
+        final List<LocalDate> unmatchedOccurrences = new ArrayList<>();
+        for (LocalDate desiredDate : desiredOccurrences) {
+            Integer count = remainingExactDates.get(desiredDate);
+            if (count == null || count == 0) {
+                unmatchedOccurrences.add(desiredDate);
+            } else if (count == 1) {
+                remainingExactDates.remove(desiredDate);
+            } else {
+                remainingExactDates.put(desiredDate, count - 1);
+            }
+        }
+
+        int shiftedExistingOccurrences = remainingExactDates.values().stream().mapToInt(Integer::intValue).sum();
+        if (shiftedExistingOccurrences >= unmatchedOccurrences.size()) {
+            return List.of();
+        }
+        return unmatchedOccurrences.subList(shiftedExistingOccurrences, unmatchedOccurrences.size());
     }
 
     private LocalDate determineAnchorDate(final Loan loan) {

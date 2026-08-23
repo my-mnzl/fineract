@@ -398,7 +398,9 @@ public final class LoanChargeApiJsonValidator {
                                 loanChargeElement, dateFormat, locale);
                         LocalDate expectedDisbursementDate = this.fromApiJsonHelper
                                 .extractLocalDateNamed(LoanApiConstants.expectedDisbursementDateParameterName, element);
-                        if (DateUtils.isBefore(dueDate, expectedDisbursementDate)) {
+                        // MNZL's charge assembler expands an undated LOAN_PERIODIC entry after request validation. A
+                        // specified-due-date charge still follows the upstream mandatory-date path.
+                        if ((!chargeTime.isLoanPeriodic() || dueDate != null) && DateUtils.isBefore(dueDate, expectedDisbursementDate)) {
                             final String defaultUserMessage = "This charge with specified due date cannot be added as the it is not in schedule range.";
                             throw new LoanChargeCannotBeAddedException("loanCharge", "specified.due.date.outside.range", defaultUserMessage,
                                     expectedDisbursementDate, chargeDefinition.getName());

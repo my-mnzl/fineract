@@ -153,7 +153,9 @@ public class MnzlOverdueChargeGraceAspect {
                 }
                 continue;
             }
-            LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, penaltyWaitPeriod, workingDays, holidays);
+            int effectiveWaitPeriod = MnzlWorkingDayCalculator.effectivePenaltyWaitPeriod(penaltyWaitPeriod);
+            LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, effectiveWaitPeriod, workingDays,
+                    holidays);
             if (exactDateOnly ? currentDate.equals(firstPenaltyDate) : !currentDate.isBefore(firstPenaltyDate)) {
                 eligible.add(data);
             }

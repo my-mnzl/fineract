@@ -175,6 +175,22 @@ class MnzlOverdueChargeGraceAspectTest {
     }
 
     @Test
+    void standaloneJobWithZeroWaitAppliesOnNextWorkingDayRatherThanDueDate() {
+        LocalDate firstOverdueWorkingDay = DUE_DATE.plusDays(1);
+        setBusinessDate(firstOverdueWorkingDay);
+        Object[] args = { 0L, false };
+        when(joinPoint.getArgs()).thenReturn(args);
+        when(calculator.addWorkingDays(eq(DUE_DATE), eq(1), eq(WORKING_DAYS), any())).thenReturn(firstOverdueWorkingDay);
+        stubProceedReturns(List.of(overdue(1)));
+
+        Object result = aspect.retrieveWorkingDayCandidates(joinPoint);
+
+        assertThat((Collection<?>) result).hasSize(1);
+        assertThat(capturedProceedArgs()[0]).isEqualTo(0L);
+        assertThat(capturedProceedArgs()[1]).isEqualTo(true);
+    }
+
+    @Test
     void standaloneJobPreservesNonBackdatingBySkippingPenaltyAfterWorkingDayEligibilityDate() {
         setBusinessDate(LocalDate.of(2026, 7, 2));
         Object[] args = { 5L, false };

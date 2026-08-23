@@ -482,6 +482,17 @@ public class SynchronousCommandProcessingServiceTest {
     }
 
     @Test
+    public void publishHookEventIsSkippedWhenOutboundEventsAreSuppressed() {
+        JsonCommand command = Mockito.mock(JsonCommand.class);
+        ThreadLocalContextUtil.setOutboundEventsSuppressed(true);
+
+        underTest.publishHookEvent("LOAN", "CREATE", command, Object.class);
+
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(context, never()).authenticatedUser(any(CommandWrapper.class));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void publishHookEventIncludesCommandResourceReferences() {
         JsonCommand command = Mockito.mock(JsonCommand.class);

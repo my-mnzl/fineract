@@ -483,6 +483,8 @@ public class LoanScheduleAssembler {
         } else if (groupId != null) {
             group = this.groupRepository.findOneWithNotFoundDetection(groupId);
             officeId = group.getOffice().getId();
+        } else {
+            officeId = this.fromApiJsonHelper.extractLongNamed("officeId", element);
         }
         final boolean isHolidayEnabled = this.configurationDomainService.isRescheduleRepaymentsOnHolidaysEnabled();
         final List<Holiday> holidays = officeId != null
@@ -725,6 +727,8 @@ public class LoanScheduleAssembler {
         } else if (groupId != null) {
             group = this.groupRepository.findOneWithNotFoundDetection(groupId);
             officeId = group.getOffice().getId();
+        } else {
+            officeId = this.fromApiJsonHelper.extractLongNamed("officeId", element);
         }
 
         final LocalDate expectedDisbursementDate = this.fromApiJsonHelper.extractLocalDateNamed("expectedDisbursementDate", element);
