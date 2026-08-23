@@ -121,6 +121,9 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
         if (loanCharge.isOverdueInstallmentCharge() && calculationType.isPercentageBased()) {
             return Money.of(currency, loanCharge.chargeAmount());
         }
+        if (calculationType.isCustom()) {
+            return Money.of(currency, loanCharge.chargeAmount());
+        }
         if (calculationType.isFlat()) {
             return loanCharge.getAmount(currency);
         }
@@ -179,8 +182,17 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
         if (loanCharge.getChargeCalculation().isFlat()) {
             return loanCharge.amountOrPercentage();
         }
-        return MathUtil.percentageOf(getBaseAmount(currency, period, loanCharge, null), loanCharge.getPercentage(),
-                MoneyHelper.getMathContext());
+        if (loanCharge.getChargeCalculation().isCustom()) {
+            LoanInstallmentCharge installmentCharge = loanCharge.getInstallmentLoanCharge(period.getDueDate());
+            if (installmentCharge != null) {
+                return installmentCharge.getAmount(currency).getAmount();
+            }
+        }
+        BigDecimal baseAmount = getBaseAmount(currency, period, loanCharge, null);
+        if (loanCharge.getChargeCalculation().isCustom()) {
+            baseAmount = baseAmount.add(period.getPenaltyChargesOutstanding(currency).getAmount());
+        }
+        return MathUtil.percentageOf(baseAmount, loanCharge.getPercentage(), MoneyHelper.getMathContext());
     }
 
     @NotNull
@@ -194,6 +206,9 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapper {
     @NotNull
     private BigDecimal getBaseAmount(LoanCharge loanCharge, BigDecimal principal, BigDecimal interest) {
         ChargeCalculationType calcType = loanCharge.getChargeCalculation();
+        if (calcType.isCustom()) {
+            return MathUtil.add(principal, interest);
+        }
         if (calcType.isPercentageOfAmountAndInterest()) {
             return MathUtil.add(principal, interest);
         }

@@ -40,5 +40,6 @@ public class FineractContext implements Serializable {
     private final String authTokenContext;
     private final HashMap<BusinessDateType, LocalDate> businessDateContext;
     private final ActionContext actionContext;
+    private final boolean outboundEventsSuppressed;
 
 }

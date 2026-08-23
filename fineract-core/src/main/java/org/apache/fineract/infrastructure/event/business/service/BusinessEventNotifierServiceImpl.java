@@ -95,7 +95,7 @@ public class BusinessEventNotifierServiceImpl implements BusinessEventNotifierSe
         for (BusinessEventListener eventListener : businessEventListeners) {
             eventListener.onBusinessEvent(businessEvent);
         }
-        if (isExternalEvent && isExternalEventPostingEnabled()) {
+        if (isExternalEvent && isExternalEventPostingEnabled() && !ThreadLocalContextUtil.areOutboundEventsSuppressed()) {
             // we only want to create external events for operations that were successful, hence the post listener
             if (externalBusinessEventConfigurationService.isExternalEventConfiguredForPosting(businessEvent)) {
                 if (isExternalEventRecordingEnabled()) {
@@ -156,7 +156,7 @@ public class BusinessEventNotifierServiceImpl implements BusinessEventNotifierSe
         eventRecordingEnabled.set(false);
         try {
             List<BusinessEvent<?>> recordedBusinessEvents = recordedEvents.get();
-            if (isExternalEventPostingEnabled()) {
+            if (isExternalEventPostingEnabled() && !ThreadLocalContextUtil.areOutboundEventsSuppressed()) {
                 if (recordedBusinessEvents.isEmpty()) {
                     log.debug("Not posting a BulkBusinessEvent since there were no events recorded");
                 } else {

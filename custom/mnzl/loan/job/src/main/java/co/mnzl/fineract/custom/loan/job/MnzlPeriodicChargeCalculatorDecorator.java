@@ -22,10 +22,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.portfolio.charge.domain.Charge;
@@ -69,28 +69,17 @@ public class MnzlPeriodicChargeCalculatorDecorator implements LoanScheduleCalcul
 
         final JsonArray charges = root.has("charges") && root.get("charges").isJsonArray() ? root.getAsJsonArray("charges")
                 : new JsonArray();
-        final String dateFormat = root.has("dateFormat") ? root.get("dateFormat").getAsString() : DEFAULT_DATE_FORMAT;
-        final String localeTag = root.has("locale") ? root.get("locale").getAsString() : DEFAULT_LOCALE;
+        final String dateFormat = root.has("dateFormat") && !root.get("dateFormat").isJsonNull() ? root.get("dateFormat").getAsString()
+                : DEFAULT_DATE_FORMAT;
+        final String localeTag = root.has("locale") && !root.get("locale").isJsonNull() ? root.get("locale").getAsString() : DEFAULT_LOCALE;
         final DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFormat, Locale.forLanguageTag(localeTag));
-
-        final Set<String> existingEntries = new HashSet<>();
-        charges.forEach(element -> {
-            if (element.isJsonObject()) {
-                final JsonObject entry = element.getAsJsonObject();
-                if (entry.has("chargeId") && entry.has("dueDate")) {
-                    existingEntries.add(entry.get("chargeId").getAsString() + "|" + entry.get("dueDate").getAsString());
-                }
-            }
-        });
 
         boolean added = false;
         for (final Charge charge : periodicCharges) {
-            for (final LocalDate date : projectionService.occurrencesBetween(charge, anchor, maturity)) {
+            final List<LocalDate> desiredOccurrences = projectionService.occurrencesBetween(charge, anchor, maturity);
+            final List<LocalDate> existingDueDates = existingDueDates(charges, charge.getId(), formatter);
+            for (final LocalDate date : MnzlPeriodicChargeProjectionService.missingOccurrences(desiredOccurrences, existingDueDates)) {
                 final String formattedDate = date.format(formatter);
-                final String key = charge.getId() + "|" + formattedDate;
-                if (!existingEntries.add(key)) {
-                    continue;
-                }
                 final JsonObject entry = new JsonObject();
                 entry.addProperty("chargeId", charge.getId());
                 entry.addProperty("amount", charge.getAmount());
@@ -108,6 +97,26 @@ public class MnzlPeriodicChargeCalculatorDecorator implements LoanScheduleCalcul
             root.add("charges", charges);
         }
         return delegate.calculateLoanSchedule(query, false);
+    }
+
+    private List<LocalDate> existingDueDates(final JsonArray charges, final Long chargeId, final DateTimeFormatter formatter) {
+        final List<LocalDate> dates = new ArrayList<>();
+        charges.forEach(element -> {
+            if (!element.isJsonObject()) {
+                return;
+            }
+            final JsonObject entry = element.getAsJsonObject();
+            if (!entry.has("chargeId") || entry.get("chargeId").isJsonNull() || !entry.has("dueDate") || entry.get("dueDate").isJsonNull()
+                    || !chargeId.equals(entry.get("chargeId").getAsLong())) {
+                return;
+            }
+            try {
+                dates.add(LocalDate.parse(entry.get("dueDate").getAsString(), formatter));
+            } catch (DateTimeParseException ignored) {
+                // The delegate already validated the entry. Leave differently formatted dates unmatched here.
+            }
+        });
+        return dates;
     }
 
     @Override

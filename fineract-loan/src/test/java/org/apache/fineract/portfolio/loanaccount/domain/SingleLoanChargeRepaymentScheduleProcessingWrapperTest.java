@@ -19,6 +19,7 @@
 package org.apache.fineract.portfolio.loanaccount.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -33,6 +34,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -123,6 +125,33 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapperTest {
         customVerify(period2, "0.0", "0.0", "0.0", "0.0", "0.0", "0.0");
     }
 
+    @Test
+    public void customChargeUsesPersistedCalculatedAmount() {
+        LocalDate disbursementDate = LocalDate.of(2023, 1, 1);
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(new EnumMap<>(Map.of(BusinessDateType.BUSINESS_DATE, disbursementDate))));
+        LoanRepaymentScheduleInstallment period = createPeriod(1, disbursementDate, LocalDate.of(2023, 1, 30));
+        LoanCharge charge = createCustomCharge(new BigDecimal("175.00"));
+
+        underTest.reprocess(currency, disbursementDate, List.of(period), charge);
+
+        customVerify(period, "175.0", "0.0", "0.0", "0.0", "0.0", "0.0");
+    }
+
+    @Test
+    public void bulkReprocessingUsesPersistedCustomChargeAmount() {
+        LocalDate disbursementDate = LocalDate.of(2023, 1, 1);
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>(new EnumMap<>(Map.of(BusinessDateType.BUSINESS_DATE, disbursementDate))));
+        LoanRepaymentScheduleInstallment period = createPeriod(1, disbursementDate, LocalDate.of(2023, 1, 30));
+        LoanCharge charge = createCustomCharge(new BigDecimal("175.00"));
+        ArgumentCaptor<Money> due = ArgumentCaptor.forClass(Money.class);
+
+        new LoanRepaymentScheduleProcessingWrapper().reprocess(currency, disbursementDate, List.of(period), Set.of(charge));
+
+        verify(period).updateChargePortion(due.capture(), any(Money.class), any(Money.class), any(Money.class), any(Money.class),
+                any(Money.class));
+        assertEquals(new BigDecimal("175.0"), due.getValue().getAmount().setScale(1, RoundingMode.UNNECESSARY));
+    }
+
     private void customVerify(LoanRepaymentScheduleInstallment period, String expectedFeeChargesDue, String expectedFeeChargesWaived,
             String expectedFeeChargesWrittenOff, String expectedPenaltyChargesDue, String expectedPenaltyChargesWaived,
             String expectedPenaltyChargesWrittenOff) {
@@ -156,6 +185,20 @@ public class SingleLoanChargeRepaymentScheduleProcessingWrapperTest {
 
         return loanChargeService.create(loan, charge, new BigDecimal(1000), new BigDecimal(10), ChargeTimeType.SPECIFIED_DUE_DATE,
                 ChargeCalculationType.FLAT, LocalDate.of(2023, 1, 15), ChargePaymentMode.REGULAR, 1, null, null);
+    }
+
+    @NonNull
+    private LoanCharge createCustomCharge(BigDecimal calculatedAmount) {
+        Charge charge = mock(Charge.class);
+        when(charge.getId()).thenReturn(2L);
+        when(charge.getName()).thenReturn("custom charge");
+        when(charge.getCurrencyCode()).thenReturn("USD");
+        Loan loan = mock(Loan.class);
+        when(loan.isInterestBearing()).thenReturn(true);
+        when(loan.getCurrency()).thenReturn(currency);
+
+        return loanChargeService.create(loan, charge, new BigDecimal("1500"), BigDecimal.TEN, ChargeTimeType.SPECIFIED_DUE_DATE,
+                ChargeCalculationType.CUSTOM, LocalDate.of(2023, 1, 15), ChargePaymentMode.REGULAR, 1, calculatedAmount, null);
     }
 
     @NonNull

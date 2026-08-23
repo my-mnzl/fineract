@@ -20,7 +20,12 @@ package co.mnzl.fineract.custom.loan.simulator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationActionRequest;
@@ -28,15 +33,19 @@ import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationActionType;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
@@ -47,6 +56,7 @@ import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
@@ -55,6 +65,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -94,6 +105,8 @@ class MnzlLoanSimulationRunnerTest {
     @Mock
     private LoanProduct loanProduct;
     @Mock
+    private LoanScheduleModel loanScheduleModel;
+    @Mock
     private CommandProcessingResult commandResult;
 
     private MnzlLoanSimulationRunner runner;
@@ -124,6 +137,36 @@ class MnzlLoanSimulationRunnerTest {
 
         assertThat(result.getStatus()).isEqualTo(SimulationStatus.COMPLETED);
         assertThat(result.getSnapshots()).hasSize(1);
+        assertThat(ThreadLocalContextUtil.areOutboundEventsSuppressed()).isFalse();
+
+        ArgumentCaptor<CommandWrapper> commands = ArgumentCaptor.forClass(CommandWrapper.class);
+        verify(commandService, org.mockito.Mockito.atLeastOnce()).logCommandSource(commands.capture());
+        List<String> commandKeys = commands.getAllValues().stream().map(CommandWrapper::getIdempotencyKey).toList();
+        assertThat(commandKeys).allMatch(key -> key.startsWith("mnzlsim-")).doesNotHaveDuplicates();
+        String keyPrefix = commandKeys.get(0).substring(0, commandKeys.get(0).lastIndexOf('-'));
+        verify(cleanupService).cleanup(eq(LOAN_ID), eq(null), eq(CLIENT_ID), eq(keyPrefix), eq(List.of()));
+    }
+
+    @Test
+    void simulationCleansUpTrackedCobJobExecutions() {
+        setupCommandService();
+        setupLoanMock(false, true);
+        doAnswer(invocation -> {
+            Consumer<Long> jobExecutionIdConsumer = invocation.getArgument(2);
+            jobExecutionIdConsumer.accept(501L);
+            return null;
+        }).when(inlineLoanCOBExecutorService).execute(eq(List.of(LOAN_ID)), eq("INLINE_LOAN_COB"), any());
+        SimulationRequest request = SimulationRequest.builder().name("COB test").loanProductId(1L).principal(BigDecimal.valueOf(100000))
+                .interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12).disbursementDate("2026-01-01")
+                .actions(List.of(
+                        SimulationActionRequest.builder().type(SimulationActionType.DISBURSE).date(LocalDate.of(2026, 1, 1)).build(),
+                        SimulationActionRequest.builder().type(SimulationActionType.RUN_COB).date(LocalDate.of(2026, 1, 2)).build()))
+                .build();
+
+        SimulationResult result = runner.run(request);
+
+        assertThat(result.getStatus()).isEqualTo(SimulationStatus.COMPLETED);
+        verify(cleanupService).cleanup(eq(LOAN_ID), eq(null), eq(CLIENT_ID), anyString(), eq(List.of(501L)));
     }
 
     @Test
@@ -169,6 +212,47 @@ class MnzlLoanSimulationRunnerTest {
         assertThat(currentDates.get(BusinessDateType.BUSINESS_DATE)).isEqualTo(originalDates.get(BusinessDateType.BUSINESS_DATE));
     }
 
+    @Test
+    void previewCalculatesScheduleOnSubmittedDateAndRestoresOriginalDates() {
+        LocalDate submittedOnDate = LocalDate.of(2026, 2, 10);
+        setupSecurityContext();
+        when(fromJsonHelper.parse(anyString())).thenAnswer(invocation -> JsonParser.parseString(invocation.getArgument(0)));
+        when(loanScheduleModel.getPeriods()).thenReturn(List.of());
+        when(scheduleCalculationService.calculateLoanSchedule(any(JsonQuery.class), eq(false))).thenAnswer(invocation -> {
+            assertThat(ThreadLocalContextUtil.getBusinessDateByType(BusinessDateType.BUSINESS_DATE)).isEqualTo(submittedOnDate);
+            JsonQuery query = invocation.getArgument(0);
+            assertThat(query.parsedJson().getAsJsonObject().get("officeId").getAsLong()).isEqualTo(1L);
+            return loanScheduleModel;
+        });
+        SimulationRequest request = SimulationRequest.builder().name("Preview date test").loanProductId(1L)
+                .principal(BigDecimal.valueOf(100000)).interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12)
+                .submittedOnDate(submittedOnDate.toString()).disbursementDate("2026-03-01").actions(List.of()).build();
+
+        assertThat(runner.previewSchedule(request)).isEmpty();
+        assertThat(ThreadLocalContextUtil.getBusinessDates()).isEqualTo(originalDates);
+        verifyNoInteractions(commandService, cleanupService);
+    }
+
+    @Test
+    void simulationUsesSubmittedDateForTemporaryClient() {
+        LocalDate submittedOnDate = LocalDate.of(2023, 3, 14);
+        setupCommandService();
+        setupLoanMock(false, true);
+        SimulationRequest request = SimulationRequest.builder().name("Historical simulation").loanProductId(1L)
+                .principal(BigDecimal.valueOf(100000)).interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12)
+                .submittedOnDate(submittedOnDate.toString()).disbursementDate("2023-04-01")
+                .actions(List
+                        .of(SimulationActionRequest.builder().type(SimulationActionType.DISBURSE).date(LocalDate.of(2023, 4, 1)).build()))
+                .build();
+
+        runner.run(request);
+
+        ArgumentCaptor<CommandWrapper> commands = ArgumentCaptor.forClass(CommandWrapper.class);
+        verify(commandService, org.mockito.Mockito.atLeastOnce()).logCommandSource(commands.capture());
+        JsonObject clientRequest = JsonParser.parseString(commands.getAllValues().get(0).getJson()).getAsJsonObject();
+        assertThat(clientRequest.get("activationDate").getAsString()).isEqualTo(submittedOnDate.toString());
+    }
+
     private SimulationRequest buildSimpleRequest() {
         return SimulationRequest.builder().name("Test simulation").loanProductId(1L).principal(BigDecimal.valueOf(100000))
                 .interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12).disbursementDate("2026-01-01")
@@ -189,7 +273,10 @@ class MnzlLoanSimulationRunnerTest {
         setupSecurityContext();
         lenient().when(commandResult.getClientId()).thenReturn(CLIENT_ID);
         lenient().when(commandResult.getLoanId()).thenReturn(LOAN_ID);
-        lenient().when(commandService.logCommandSource(any(CommandWrapper.class))).thenReturn(commandResult);
+        lenient().when(commandService.logCommandSource(any(CommandWrapper.class))).thenAnswer(invocation -> {
+            assertThat(ThreadLocalContextUtil.areOutboundEventsSuppressed()).isTrue();
+            return commandResult;
+        });
     }
 
     private void setupLoanMock(boolean closedWrittenOff, boolean open) {

@@ -1093,8 +1093,14 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, lastBusinessDateBeforeFastForward);
             this.schedulerJobHelper.executeAndAwaitJob(jobName);
             repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID);
+            Assertions.assertEquals(0, repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),
+                    "Verifying no penalty charge is due on the repayment due date");
+
+            BusinessDateHelper.updateBusinessDate(BusinessDateType.COB_DATE, LocalDate.of(2019, 4, 3));
+            this.schedulerJobHelper.executeAndAwaitJob(jobName);
+            repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID);
             Assertions.assertEquals(39.39f, (Float) repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),
-                    "Verifying From Penalty Charges due fot first Repayment after Successful completion of Scheduler Job");
+                    "Verifying penalty charge is due on the first working day after the repayment due date");
 
         } finally {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.ENABLE_BUSINESS_DATE,

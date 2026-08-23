@@ -72,6 +72,10 @@ public class MnzlOverdueChargeGraceAspect {
         }
 
         Object[] broadenedArgs = args.clone();
+        // Let the working-day filter below own the entire grace calculation. Keeping the calendar-day wait period in
+        // the upstream query excludes an installment on its exact eligibility date whenever no weekend or holiday
+        // extends the interval because that query uses a strict due-date comparison.
+        broadenedArgs[0] = 0L;
         broadenedArgs[1] = true;
         Object result = proceed(joinPoint, broadenedArgs);
         if (!(result instanceof Collection<?> rawData) || rawData.isEmpty()) {
@@ -149,7 +153,9 @@ public class MnzlOverdueChargeGraceAspect {
                 }
                 continue;
             }
-            LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, penaltyWaitPeriod, workingDays, holidays);
+            int effectiveWaitPeriod = MnzlWorkingDayCalculator.effectivePenaltyWaitPeriod(penaltyWaitPeriod);
+            LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, effectiveWaitPeriod, workingDays,
+                    holidays);
             if (exactDateOnly ? currentDate.equals(firstPenaltyDate) : !currentDate.isBefore(firstPenaltyDate)) {
                 eligible.add(data);
             }

@@ -21,11 +21,12 @@ package co.mnzl.fineract.custom.loan.simulator.api;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
+import com.google.gson.JsonParseException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
@@ -50,35 +51,27 @@ public class MnzlSimulationApiJsonValidator {
     private final FromJsonHelper fromJsonHelper;
 
     public void validateForCreate(String json) {
-        if (StringUtils.isBlank(json)) {
-            throw new InvalidJsonException();
-        }
-
-        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-        fromJsonHelper.checkForUnsupportedParameters(typeOfMap, json, SUPPORTED_PARAMETERS);
-
         final List<ApiParameterError> errors = new ArrayList<>();
         final DataValidatorBuilder validator = new DataValidatorBuilder(errors).resource("mnzlSimulation");
-        final JsonElement element = fromJsonHelper.parse(json);
+        final JsonObject root = parseRequest(json);
 
-        final Long loanProductId = fromJsonHelper.extractLongNamed("loanProductId", element);
+        final Long loanProductId = fromJsonHelper.extractLongNamed("loanProductId", root);
         validator.reset().parameter("loanProductId").value(loanProductId).notNull().longGreaterThanZero();
 
-        final String principal = fromJsonHelper.extractStringNamed("principal", element);
+        final String principal = fromJsonHelper.extractStringNamed("principal", root);
         validator.reset().parameter("principal").value(principal).notBlank();
 
         // interestRatePerPeriod and interestRateDifferential are both optional —
         // when omitted, the runner uses defaults from the loan product.
 
-        final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
+        final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", root);
         validator.reset().parameter("numberOfRepayments").value(numberOfRepayments).notNull().integerGreaterThanZero();
-        validateRepaymentCadence(element, validator);
+        validateRepaymentCadence(root, validator);
 
-        final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", element);
+        final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", root);
         validator.reset().parameter("disbursementDate").value(disbursementDate).notBlank();
 
         // Validate actions array
-        JsonObject root = element.getAsJsonObject();
         if (!root.has("actions") || !root.get("actions").isJsonArray()) {
             validator.reset().parameter("actions").failWithCode("must.be.a.non.empty.array");
         } else {
@@ -87,27 +80,24 @@ public class MnzlSimulationApiJsonValidator {
                 validator.reset().parameter("actions").failWithCode("must.be.a.non.empty.array");
             }
             for (int i = 0; i < actions.size(); i++) {
-                JsonObject action = actions.get(i).getAsJsonObject();
-                String actionType = action.has("type") ? action.get("type").getAsString() : null;
+                JsonElement actionElement = actions.get(i);
+                if (!actionElement.isJsonObject()) {
+                    validator.reset().parameter("actions[" + i + "]").failWithCode("must.be.an.object");
+                    continue;
+                }
+                JsonObject action = actionElement.getAsJsonObject();
+                String actionType = extractString(action, "type");
                 validator.reset().parameter("actions[" + i + "].type").value(actionType).notBlank();
-                if (actionType != null && !VALID_ACTION_TYPES.contains(actionType.toUpperCase())) {
+                if (actionType != null && !VALID_ACTION_TYPES.contains(actionType.toUpperCase(Locale.ROOT))) {
                     validator.reset().parameter("actions[" + i + "].type").failWithCode("invalid.action.type");
                 }
 
-                String date = action.has("date") ? action.get("date").getAsString() : null;
-                validator.reset().parameter("actions[" + i + "].date").value(date).notBlank();
+                String date = extractString(action, "date");
+                validateActionDate(date, "actions[" + i + "].date", validator);
 
-                if ("CHANGE_INTEREST_RATE".equalsIgnoreCase(actionType)) {
-                    validator.reset().parameter("actions[" + i + "].rate").value(action.has("rate") ? action.get("rate") : null).notNull();
-                }
-                if ("ADD_CHARGE".equalsIgnoreCase(actionType)) {
-                    validator.reset().parameter("actions[" + i + "].chargeId").value(action.has("chargeId") ? action.get("chargeId") : null)
-                            .notNull();
-                }
-                if ("PAY".equalsIgnoreCase(actionType)) {
-                    validator.reset().parameter("actions[" + i + "].amount").value(action.has("amount") ? action.get("amount") : null)
-                            .notNull();
-                }
+                validateDecimal(action, "rate", "actions[" + i + "].rate", "CHANGE_INTEREST_RATE".equalsIgnoreCase(actionType), validator);
+                validateLong(action, "chargeId", "actions[" + i + "].chargeId", "ADD_CHARGE".equalsIgnoreCase(actionType), validator);
+                validateDecimal(action, "amount", "actions[" + i + "].amount", "PAY".equalsIgnoreCase(actionType), validator);
             }
         }
 
@@ -120,28 +110,21 @@ public class MnzlSimulationApiJsonValidator {
      * Validate the subset of fields needed for a schedule preview (no actions required).
      */
     public void validateForPreview(String json) {
-        if (StringUtils.isBlank(json)) {
-            throw new InvalidJsonException();
-        }
-
-        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-        fromJsonHelper.checkForUnsupportedParameters(typeOfMap, json, SUPPORTED_PARAMETERS);
-
         final List<ApiParameterError> errors = new ArrayList<>();
         final DataValidatorBuilder validator = new DataValidatorBuilder(errors).resource("mnzlSimulation");
-        final JsonElement element = fromJsonHelper.parse(json);
+        final JsonObject root = parseRequest(json);
 
-        final Long loanProductId = fromJsonHelper.extractLongNamed("loanProductId", element);
+        final Long loanProductId = fromJsonHelper.extractLongNamed("loanProductId", root);
         validator.reset().parameter("loanProductId").value(loanProductId).notNull().longGreaterThanZero();
 
-        final String principal = fromJsonHelper.extractStringNamed("principal", element);
+        final String principal = fromJsonHelper.extractStringNamed("principal", root);
         validator.reset().parameter("principal").value(principal).notBlank();
 
-        final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
+        final Integer numberOfRepayments = fromJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", root);
         validator.reset().parameter("numberOfRepayments").value(numberOfRepayments).notNull().integerGreaterThanZero();
-        validateRepaymentCadence(element, validator);
+        validateRepaymentCadence(root, validator);
 
-        final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", element);
+        final String disbursementDate = fromJsonHelper.extractStringNamed("disbursementDate", root);
         validator.reset().parameter("disbursementDate").value(disbursementDate).notBlank();
 
         if (!errors.isEmpty()) {
@@ -155,5 +138,83 @@ public class MnzlSimulationApiJsonValidator {
 
         final Integer repaymentFrequencyType = fromJsonHelper.extractIntegerWithLocaleNamed("repaymentFrequencyType", element);
         validator.reset().parameter("repaymentFrequencyType").value(repaymentFrequencyType).ignoreIfNull().inMinMaxRange(0, 3);
+    }
+
+    private String extractString(JsonObject object, String parameterName) {
+        JsonElement value = extractPrimitive(object, parameterName);
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() ? value.getAsString() : null;
+    }
+
+    private JsonElement extractPrimitive(JsonObject object, String parameterName) {
+        JsonElement value = object.get(parameterName);
+        return value != null && value.isJsonPrimitive() ? value : null;
+    }
+
+    private void validateActionDate(String value, String parameterName, DataValidatorBuilder validator) {
+        validator.reset().parameter(parameterName).value(value).notBlank();
+        if (StringUtils.isNotBlank(value)) {
+            try {
+                LocalDate.parse(value);
+            } catch (DateTimeParseException exception) {
+                validator.reset().parameter(parameterName).value(value).failWithCode("invalid.date.format");
+            }
+        }
+    }
+
+    private void validateDecimal(JsonObject object, String fieldName, String parameterName, boolean required,
+            DataValidatorBuilder validator) {
+        JsonElement value = object.get(fieldName);
+        if (value == null || value.isJsonNull()) {
+            if (required) {
+                validator.reset().parameter(parameterName).value(null).notNull();
+            }
+            return;
+        }
+        if (!value.isJsonPrimitive()) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.a.number");
+            return;
+        }
+        try {
+            value.getAsBigDecimal();
+        } catch (NumberFormatException exception) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.a.number");
+        }
+    }
+
+    private void validateLong(JsonObject object, String fieldName, String parameterName, boolean required, DataValidatorBuilder validator) {
+        JsonElement value = object.get(fieldName);
+        if (value == null || value.isJsonNull()) {
+            if (required) {
+                validator.reset().parameter(parameterName).value(null).notNull();
+            }
+            return;
+        }
+        if (!value.isJsonPrimitive()) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.an.integer");
+            return;
+        }
+        try {
+            value.getAsBigDecimal().longValueExact();
+        } catch (ArithmeticException | NumberFormatException exception) {
+            validator.reset().parameter(parameterName).value(value).failWithCode("must.be.an.integer");
+        }
+    }
+
+    @SuppressWarnings("AvoidHidingCauseException")
+    private JsonObject parseRequest(String json) {
+        if (StringUtils.isBlank(json)) {
+            throw new InvalidJsonException();
+        }
+        try {
+            JsonElement element = fromJsonHelper.parse(json);
+            if (element == null || !element.isJsonObject()) {
+                throw new InvalidJsonException();
+            }
+            JsonObject root = element.getAsJsonObject();
+            fromJsonHelper.checkForUnsupportedParameters(root, SUPPORTED_PARAMETERS);
+            return root;
+        } catch (JsonParseException ignored) {
+            throw new InvalidJsonException();
+        }
     }
 }

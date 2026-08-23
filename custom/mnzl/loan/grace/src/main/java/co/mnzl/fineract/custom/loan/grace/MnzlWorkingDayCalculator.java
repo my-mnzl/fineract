@@ -46,6 +46,12 @@ public class MnzlWorkingDayCalculator {
     private final WorkingDaysRepositoryWrapper workingDaysRepository;
     private final HolidayRepositoryWrapper holidayRepository;
 
+    static int effectivePenaltyWaitPeriod(int configuredDays) {
+        // Upstream only considers an installment overdue after its due date. Preserve that boundary for a zero-day
+        // configuration by making the next working day the first eligible penalty date.
+        return Math.max(1, configuredDays);
+    }
+
     /**
      * Returns the calendar date that is {@code workingDays} working days after {@code start}. The {@code start} date
      * itself is never counted, regardless of whether it is a working day. Fetches working-days config and the office's

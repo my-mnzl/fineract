@@ -132,6 +132,31 @@ class MnzlPeriodicChargeProjectionServiceTest {
     }
 
     @Test
+    void shiftedExistingDatesSatisfyOccurrencesByCountWithoutCreatingDuplicates() {
+        final LocalDate anchor = LocalDate.of(2026, 6, 1);
+        final LocalDate second = LocalDate.of(2026, 7, 1);
+        final LocalDate maturity = LocalDate.of(2026, 8, 1);
+        final LoanRepaymentScheduleInstallment firstInstallment = installment(1, anchor, false);
+        final LoanRepaymentScheduleInstallment lastInstallment = installment(3, maturity, false);
+        final LoanCharge firstCharge = existingCharge(anchor.minusDays(1));
+        final LoanCharge secondCharge = existingCharge(second.minusDays(1));
+        final LoanCharge thirdCharge = existingCharge(maturity.minusDays(1));
+        when(loan.getExpectedFirstRepaymentOnDate()).thenReturn(anchor);
+        when(loan.getRepaymentScheduleInstallments()).thenReturn(List.of(firstInstallment, lastInstallment));
+        when(loan.getCharges()).thenReturn(List.of(firstCharge, secondCharge, thirdCharge));
+        when(loanProduct.getCharges()).thenReturn(List.of(chargeDefinition));
+        whenChargeIsActivePeriodicMonthly(1L, 1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, anchor)).thenReturn(second);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, second)).thenReturn(maturity);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.MONTHS, 1, maturity)).thenReturn(maturity.plusMonths(1));
+
+        int added = projectionService.projectFullTermPeriodicCharges(loan);
+
+        assertThat(added).isZero();
+        verifyNoInteractions(loanChargeAssembler, loanChargeService);
+    }
+
+    @Test
     void noOpWhenProductHasNoPeriodicCharges() {
         when(loanProduct.getCharges()).thenReturn(List.of());
 

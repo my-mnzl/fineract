@@ -128,6 +128,34 @@ class MnzlLoanChargeAssemblerTest {
     }
 
     @Test
+    void expandsPeriodicEntryWithNullDueDate() {
+        when(projectionService.occurrencesBetween(eq(periodicCharge), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(LocalDate.of(2026, 5, 20)));
+
+        final JsonObject root = parse("""
+                {
+                  "expectedDisbursementDate": "20 April 2026",
+                  "loanTermFrequency": 12,
+                  "loanTermFrequencyType": 2,
+                  "repaymentEvery": 1,
+                  "repaymentFrequencyType": 2,
+                  "dateFormat": "dd MMMM yyyy",
+                  "locale": "en",
+                  "charges": [
+                    {"chargeId": 9, "amount": 0.01, "dueDate": null}
+                  ]
+                }
+                """);
+
+        assembler.expandPeriodicChargesWithoutDueDate(root);
+
+        assertThat(chargeEntries(root)).singleElement().satisfies(entry -> {
+            assertThat(entry.get("chargeId").getAsLong()).isEqualTo(PERIODIC_CHARGE_ID);
+            assertThat(entry.get("dueDate").getAsString()).isEqualTo("20 May 2026");
+        });
+    }
+
+    @Test
     void anchorFallsBackToDisbursementPlusFirstRepaymentPeriod() {
         when(projectionService.occurrencesBetween(eq(periodicCharge), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of(LocalDate.of(2026, 5, 20)));

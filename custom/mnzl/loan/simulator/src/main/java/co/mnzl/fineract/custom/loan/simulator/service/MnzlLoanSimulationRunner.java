@@ -33,6 +33,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.IntConsumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,7 +78,7 @@ public class MnzlLoanSimulationRunner {
     private static final String DATETIME_PATTERN = "yyyy-MM-dd";
     private static final String LOCALE = "en";
     private static final IntConsumer NOOP_PROGRESS = progress -> { /* no-op */ };
-    private static final String SIMULATED_CLIENT_ACTIVATION_DATE = "2024-08-01";
+    private static final String COMMAND_KEY_PREFIX = "mnzlsim-";
     private static final BigDecimal INSURANCE_ANNUAL_RATE = new BigDecimal("0.00015");
     private static final BigDecimal INSURANCE_ANNUAL_MINIMUM = new BigDecimal("250");
     private static final BigDecimal TWELVE = new BigDecimal("12");
@@ -92,6 +93,7 @@ public class MnzlLoanSimulationRunner {
     private final LoanScheduleCalculationPlatformService scheduleCalculationService;
     private final FromJsonHelper fromJsonHelper;
     private final MnzlSimulationCleanupService cleanupService;
+    private final ThreadLocal<SimulationCommandContext> commandContext = new ThreadLocal<>();
 
     // Fineract charge id for the monthly insurance premium. When 0 (default),
     // the simulator falls back to looking up a charge by name (see below) so
@@ -122,15 +124,21 @@ public class MnzlLoanSimulationRunner {
         Long clientId = null;
         Long savingsId = null;
         Long loanId = null;
+        boolean outboundEventsWereSuppressed = ThreadLocalContextUtil.areOutboundEventsSuppressed();
+        SimulationCommandContext simulationContext = new SimulationCommandContext(
+                COMMAND_KEY_PREFIX + UUID.randomUUID().toString().replace("-", ""));
+        commandContext.set(simulationContext);
+        ThreadLocalContextUtil.setOutboundEventsSuppressed(true);
 
         try {
             // 1. Create a test client
-            clientId = createSimulatedClient();
+            LocalDate activationDate = LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT);
+            clientId = createSimulatedClient(activationDate);
             log.info("Simulation: created test client {}", clientId);
 
             // 2. Open a linked savings account (needed for ACCOUNT_TRANSFER charges
             // like the insurance fee — mirrors the production origination flow).
-            savingsId = createSimulatedSavingsAccount(clientId);
+            savingsId = createSimulatedSavingsAccount(clientId, activationDate);
             if (savingsId != null) {
                 log.info("Simulation: created linked savings account {}", savingsId);
             }
@@ -148,7 +156,7 @@ public class MnzlLoanSimulationRunner {
                     case DISBURSE -> disburseLoan(loanId, action);
                     case PAY -> makeRepayment(loanId, action);
                     case SKIP -> log.info("Simulation: skipping to {}", action.getDate());
-                    case RUN_COB -> runCob(loanId);
+                    case RUN_COB -> runCob(loanId, simulationContext);
                     case ADD_CHARGE -> addCharge(loanId, action);
                     case WRITE_OFF -> writeOff(loanId, action);
                     case CHANGE_INTEREST_RATE -> changeInterestRate(loanId, action);
@@ -172,15 +180,19 @@ public class MnzlLoanSimulationRunner {
                     .errorMessage(e.getMessage()).snapshots(snapshots).build();
         } finally {
             try {
-                cleanupService.cleanup(loanId, savingsId, clientId);
+                cleanupService.cleanup(loanId, savingsId, clientId, simulationContext.keyPrefix(),
+                        simulationContext.batchJobExecutionIds());
             } finally {
                 ThreadLocalContextUtil.setBusinessDates(originalDates);
+                ThreadLocalContextUtil.setOutboundEventsSuppressed(outboundEventsWereSuppressed);
+                commandContext.remove();
             }
         }
     }
 
-    private Long createSimulatedClient() {
-        setBusinessDate(LocalDate.parse(SIMULATED_CLIENT_ACTIVATION_DATE, DATE_FORMAT));
+    private Long createSimulatedClient(LocalDate activationDate) {
+        setBusinessDate(activationDate);
+        String formattedActivationDate = activationDate.format(DATE_FORMAT);
 
         Long officeId = securityContext.authenticatedUser().getOffice().getId();
 
@@ -189,11 +201,11 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("fullname", "Simulation Test Client");
         json.addProperty("legalFormId", 1);
         json.addProperty("active", true);
-        json.addProperty("activationDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        json.addProperty("activationDate", formattedActivationDate);
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
 
-        CommandWrapper command = new CommandWrapperBuilder().createClient().withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().createClient().withJson(json.toString()).build(nextCommandKey());
         CommandProcessingResult result = commandService.logCommandSource(command);
         return result.getClientId();
     }
@@ -205,39 +217,41 @@ public class MnzlLoanSimulationRunner {
      * Returns null (and logs) when no savings product exists — the simulation continues, but ACCOUNT_TRANSFER-mode
      * charges won't attach.
      */
-    private Long createSimulatedSavingsAccount(Long clientId) {
+    private Long createSimulatedSavingsAccount(Long clientId, LocalDate activationDate) {
         Long productId = resolveSavingsProductId();
         if (productId == null) {
             log.warn("Simulation: no savings product configured or discoverable — skipping linked savings account");
             return null;
         }
 
-        setBusinessDate(LocalDate.parse(SIMULATED_CLIENT_ACTIVATION_DATE, DATE_FORMAT));
+        setBusinessDate(activationDate);
+        String formattedActivationDate = activationDate.format(DATE_FORMAT);
 
         JsonObject createJson = new JsonObject();
         createJson.addProperty("clientId", clientId);
         createJson.addProperty("productId", productId);
-        createJson.addProperty("submittedOnDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        createJson.addProperty("submittedOnDate", formattedActivationDate);
         createJson.addProperty("dateFormat", DATETIME_PATTERN);
         createJson.addProperty("locale", LOCALE);
 
-        CommandWrapper create = new CommandWrapperBuilder().createSavingsAccount().withJson(createJson.toString()).build();
+        CommandWrapper create = new CommandWrapperBuilder().createSavingsAccount().withJson(createJson.toString()).build(nextCommandKey());
         CommandProcessingResult createResult = commandService.logCommandSource(create);
         Long savingsId = createResult.getSavingsId();
 
         JsonObject approveJson = new JsonObject();
-        approveJson.addProperty("approvedOnDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        approveJson.addProperty("approvedOnDate", formattedActivationDate);
         approveJson.addProperty("dateFormat", DATETIME_PATTERN);
         approveJson.addProperty("locale", LOCALE);
         CommandWrapper approve = new CommandWrapperBuilder().approveSavingsAccountApplication(savingsId).withJson(approveJson.toString())
-                .build();
+                .build(nextCommandKey());
         commandService.logCommandSource(approve);
 
         JsonObject activateJson = new JsonObject();
-        activateJson.addProperty("activatedOnDate", SIMULATED_CLIENT_ACTIVATION_DATE);
+        activateJson.addProperty("activatedOnDate", formattedActivationDate);
         activateJson.addProperty("dateFormat", DATETIME_PATTERN);
         activateJson.addProperty("locale", LOCALE);
-        CommandWrapper activate = new CommandWrapperBuilder().savingsAccountActivation(savingsId).withJson(activateJson.toString()).build();
+        CommandWrapper activate = new CommandWrapperBuilder().savingsAccountActivation(savingsId).withJson(activateJson.toString())
+                .build(nextCommandKey());
         commandService.logCommandSource(activate);
 
         return savingsId;
@@ -270,6 +284,8 @@ public class MnzlLoanSimulationRunner {
         JsonObject json = new JsonObject();
         if (clientId != null) {
             json.addProperty("clientId", clientId);
+        } else {
+            json.addProperty("officeId", securityContext.authenticatedUser().getOffice().getId());
         }
         json.addProperty("productId", request.getLoanProductId());
         json.addProperty("principal", request.getPrincipal());
@@ -335,7 +351,7 @@ public class MnzlLoanSimulationRunner {
         JsonObject json = buildLoanApplicationJson(request, clientId, savingsId);
 
         log.info("Simulation: creating loan application for product {}", request.getLoanProductId());
-        CommandWrapper command = new CommandWrapperBuilder().createLoanApplication().withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().createLoanApplication().withJson(json.toString()).build(nextCommandKey());
         CommandProcessingResult result = commandService.logCommandSource(command);
         Long loanId = result.getLoanId();
 
@@ -348,7 +364,8 @@ public class MnzlLoanSimulationRunner {
         approveJson.addProperty("dateFormat", DATETIME_PATTERN);
         approveJson.addProperty("locale", LOCALE);
 
-        CommandWrapper approveCommand = new CommandWrapperBuilder().approveLoanApplication(loanId).withJson(approveJson.toString()).build();
+        CommandWrapper approveCommand = new CommandWrapperBuilder().approveLoanApplication(loanId).withJson(approveJson.toString())
+                .build(nextCommandKey());
         commandService.logCommandSource(approveCommand);
 
         // Insurance charge is now included in the initial loan creation JSON via
@@ -362,7 +379,7 @@ public class MnzlLoanSimulationRunner {
             return insuranceChargeId;
         }
         try {
-            return jdbcTemplate.queryForObject("SELECT id FROM m_charge WHERE name = ? AND is_active = 1 LIMIT 1", Long.class,
+            return jdbcTemplate.queryForObject("SELECT id FROM m_charge WHERE name = ? AND is_active = true LIMIT 1", Long.class,
                     insuranceChargeName);
         } catch (Exception ignored) {
             return null;
@@ -384,7 +401,7 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
 
-        CommandWrapper command = new CommandWrapperBuilder().createLoanCharge(loanId).withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().createLoanCharge(loanId).withJson(json.toString()).build(nextCommandKey());
         commandService.logCommandSource(command);
     }
 
@@ -394,7 +411,8 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
 
-        CommandWrapper command = new CommandWrapperBuilder().disburseLoanApplication(loanId).withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().disburseLoanApplication(loanId).withJson(json.toString())
+                .build(nextCommandKey());
         commandService.logCommandSource(command);
     }
 
@@ -406,12 +424,13 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("locale", LOCALE);
         json.addProperty("paymentTypeId", 1);
 
-        CommandWrapper command = new CommandWrapperBuilder().loanRepaymentTransaction(loanId).withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().loanRepaymentTransaction(loanId).withJson(json.toString())
+                .build(nextCommandKey());
         commandService.logCommandSource(command);
     }
 
-    private void runCob(Long loanId) {
-        inlineLoanCOBExecutorService.execute(List.of(loanId), "INLINE_LOAN_COB");
+    private void runCob(Long loanId, SimulationCommandContext simulationContext) {
+        inlineLoanCOBExecutorService.execute(List.of(loanId), "INLINE_LOAN_COB", simulationContext::addBatchJobExecutionId);
     }
 
     private void addCharge(Long loanId, SimulationActionRequest action) {
@@ -424,7 +443,8 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
 
-        CommandWrapper command = new CommandWrapperBuilder().writeOffLoanTransaction(loanId).withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().writeOffLoanTransaction(loanId).withJson(json.toString())
+                .build(nextCommandKey());
         commandService.logCommandSource(command);
     }
 
@@ -443,7 +463,8 @@ public class MnzlLoanSimulationRunner {
         json.addProperty("dateFormat", DATETIME_PATTERN);
         json.addProperty("locale", LOCALE);
 
-        CommandWrapper command = new CommandWrapperBuilder().createScheduleExceptions(loanId).withJson(json.toString()).build();
+        CommandWrapper command = new CommandWrapperBuilder().createScheduleExceptions(loanId).withJson(json.toString())
+                .build(nextCommandKey());
         commandService.logCommandSource(command);
         log.info("Simulation: changed interest rate to {} on {}", action.getRate(), action.getDate());
     }
@@ -518,6 +539,14 @@ public class MnzlLoanSimulationRunner {
         ThreadLocalContextUtil.setBusinessDates(dates);
     }
 
+    private String nextCommandKey() {
+        SimulationCommandContext context = commandContext.get();
+        if (context == null) {
+            throw new IllegalStateException("Simulator command invoked outside a simulation run");
+        }
+        return context.nextCommandKey();
+    }
+
     /**
      * Calculate the expected repayment schedule for a request without creating a loan. Reuses
      * {@link #buildLoanApplicationJson} so the preview exactly matches what {@link #run} would produce at disbursement
@@ -527,16 +556,10 @@ public class MnzlLoanSimulationRunner {
      * actually bill.
      */
     public List<SchedulePreviewPeriod> previewSchedule(SimulationRequest request) {
-        // We have to pass a real clientId here even though preview doesn't persist a loan: upstream
-        // LoanScheduleAssembler resolves the loan's office through the client (or group) — when both are
-        // absent, officeId stays null and the holiday lookup binds null as a typeless parameter, which
-        // MariaDB silently coerces but PostgreSQL rejects with "operator does not exist: bigint = character
-        // varying". Creating + cleaning up a short-lived simulated client is the cheapest cross-DB fix.
         HashMap<BusinessDateType, LocalDate> originalDates = ThreadLocalContextUtil.getBusinessDates();
-        Long previewClientId = null;
         try {
-            previewClientId = createSimulatedClient();
-            JsonObject json = buildLoanApplicationJson(request, previewClientId, null);
+            setBusinessDate(LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT));
+            JsonObject json = buildLoanApplicationJson(request, null, null);
             String jsonString = json.toString();
             JsonQuery query = JsonQuery.from(jsonString, fromJsonHelper.parse(jsonString), fromJsonHelper);
             LoanScheduleModel model = scheduleCalculationService.calculateLoanSchedule(query, false);
@@ -555,11 +578,34 @@ public class MnzlLoanSimulationRunner {
             }
             return periods;
         } finally {
-            try {
-                cleanupService.cleanup(null, null, previewClientId);
-            } finally {
-                ThreadLocalContextUtil.setBusinessDates(originalDates);
-            }
+            ThreadLocalContextUtil.setBusinessDates(originalDates);
+        }
+    }
+
+    private static final class SimulationCommandContext {
+
+        private final String keyPrefix;
+        private final List<Long> batchJobExecutionIds = new ArrayList<>();
+        private int commandSequence;
+
+        private SimulationCommandContext(String keyPrefix) {
+            this.keyPrefix = keyPrefix;
+        }
+
+        private String keyPrefix() {
+            return keyPrefix;
+        }
+
+        private String nextCommandKey() {
+            return keyPrefix + "-" + ++commandSequence;
+        }
+
+        private void addBatchJobExecutionId(Long jobExecutionId) {
+            batchJobExecutionIds.add(jobExecutionId);
+        }
+
+        private List<Long> batchJobExecutionIds() {
+            return List.copyOf(batchJobExecutionIds);
         }
     }
 }

@@ -38,6 +38,7 @@ public final class ThreadLocalContextUtil {
     private static final ThreadLocal<String> authTokenContext = new ThreadLocal<>();
     private static final ThreadLocal<HashMap<BusinessDateType, LocalDate>> businessDateContext = new ThreadLocal<>();
     private static final ThreadLocal<ActionContext> actionContext = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> outboundEventSuppressionContext = ThreadLocal.withInitial(() -> false);
 
     private ThreadLocalContextUtil() {}
 
@@ -105,8 +106,17 @@ public final class ThreadLocalContextUtil {
         actionContext.set(context);
     }
 
+    public static boolean areOutboundEventsSuppressed() {
+        return outboundEventSuppressionContext.get();
+    }
+
+    public static void setOutboundEventsSuppressed(boolean suppressed) {
+        outboundEventSuppressionContext.set(suppressed);
+    }
+
     public static FineractContext getContext() {
-        return new FineractContext(getDataSourceContext(), getTenant(), getAuthToken(), getBusinessDates(), getActionContext());
+        return new FineractContext(getDataSourceContext(), getTenant(), getAuthToken(), getBusinessDates(), getActionContext(),
+                areOutboundEventsSuppressed());
     }
 
     public static void init(final FineractContext fineractContext) {
@@ -116,6 +126,7 @@ public final class ThreadLocalContextUtil {
         setAuthToken(fineractContext.getAuthTokenContext());
         setBusinessDates(fineractContext.getBusinessDateContext());
         setActionContext(fineractContext.getActionContext());
+        setOutboundEventsSuppressed(fineractContext.isOutboundEventsSuppressed());
     }
 
     public static void reset() {
@@ -124,6 +135,7 @@ public final class ThreadLocalContextUtil {
         authTokenContext.remove();
         businessDateContext.remove();
         actionContext.remove();
+        outboundEventSuppressionContext.remove();
     }
 
 }

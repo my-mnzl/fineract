@@ -37,6 +37,7 @@ import org.apache.fineract.portfolio.loanaccount.service.LoanChargeAssembler;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -52,10 +53,11 @@ public class MnzlLoanJobConfiguration {
     public ExecuteStandingInstructionsTasklet mnzlExecuteStandingInstructionsTasklet(
             final StandingInstructionReadPlatformService standingInstructionReadPlatformService, final JdbcTemplate jdbcTemplate,
             final DatabaseSpecificSQLGenerator sqlGenerator,
-            final AccountTransfersWritePlatformService accountTransfersWritePlatformService, final TransactionTemplate transactionTemplate,
+            final AccountTransfersWritePlatformService accountTransfersWritePlatformService,
+            @Qualifier("requiresNewTransactionTemplate") final TransactionTemplate requiresNewTransactionTemplate,
             final ScheduledDateGenerator scheduledDateGenerator) {
         return new MnzlExecuteStandingInstructionsTasklet(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator,
-                accountTransfersWritePlatformService, transactionTemplate, scheduledDateGenerator);
+                accountTransfersWritePlatformService, requiresNewTransactionTemplate, scheduledDateGenerator);
     }
 
     @Bean
@@ -64,9 +66,9 @@ public class MnzlLoanJobConfiguration {
             final LoanChargeReadPlatformService loanChargeReadPlatformService,
             final AccountAssociationsReadPlatformService accountAssociationsReadPlatformService,
             final AccountTransfersWritePlatformService accountTransfersWritePlatformService,
-            final TransactionTemplate transactionTemplate) {
+            @Qualifier("requiresNewTransactionTemplate") final TransactionTemplate requiresNewTransactionTemplate) {
         return new MnzlTransferFeeChargeForLoansTasklet(loanChargeReadPlatformService, accountAssociationsReadPlatformService,
-                accountTransfersWritePlatformService, transactionTemplate);
+                accountTransfersWritePlatformService, requiresNewTransactionTemplate);
     }
 
     @Bean

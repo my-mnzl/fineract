@@ -44,7 +44,6 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.lang.NonNull;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -56,16 +55,16 @@ public class MnzlTransferFeeChargeForLoansTasklet extends TransferFeeChargeForLo
     private final LoanChargeReadPlatformService loanChargeReadPlatformService;
     private final AccountAssociationsReadPlatformService accountAssociationsReadPlatformService;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-    private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate requiresNewTransactionTemplate;
 
     public MnzlTransferFeeChargeForLoansTasklet(LoanChargeReadPlatformService loanChargeReadPlatformService,
             AccountAssociationsReadPlatformService accountAssociationsReadPlatformService,
-            AccountTransfersWritePlatformService accountTransfersWritePlatformService, TransactionTemplate transactionTemplate) {
+            AccountTransfersWritePlatformService accountTransfersWritePlatformService, TransactionTemplate requiresNewTransactionTemplate) {
         super(loanChargeReadPlatformService, accountAssociationsReadPlatformService, accountTransfersWritePlatformService);
         this.loanChargeReadPlatformService = loanChargeReadPlatformService;
         this.accountAssociationsReadPlatformService = accountAssociationsReadPlatformService;
         this.accountTransfersWritePlatformService = accountTransfersWritePlatformService;
-        this.transactionTemplate = transactionTemplate;
+        this.requiresNewTransactionTemplate = requiresNewTransactionTemplate;
     }
 
     @Override
@@ -133,10 +132,8 @@ public class MnzlTransferFeeChargeForLoansTasklet extends TransferFeeChargeForLo
     }
 
     private void transferFeeCharge(final AccountTransferDTO accountTransferDTO, List<Throwable> errors) {
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
         try {
-            transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+            requiresNewTransactionTemplate.execute(new TransactionCallbackWithoutResult() {
 
                 @Override
                 protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {

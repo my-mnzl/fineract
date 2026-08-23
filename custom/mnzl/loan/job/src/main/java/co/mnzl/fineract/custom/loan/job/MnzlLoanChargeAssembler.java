@@ -126,7 +126,7 @@ public class MnzlLoanChargeAssembler extends LoanChargeAssembler {
     }
 
     private boolean isPeriodicWithoutDueDate(final JsonObject entry, final Map<Long, Charge> chargeCache) {
-        if (!entry.has("chargeId") || entry.has("dueDate")) {
+        if (!entry.has("chargeId") || entry.get("chargeId").isJsonNull() || (entry.has("dueDate") && !entry.get("dueDate").isJsonNull())) {
             return false;
         }
         final Long chargeId = entry.get("chargeId").getAsLong();

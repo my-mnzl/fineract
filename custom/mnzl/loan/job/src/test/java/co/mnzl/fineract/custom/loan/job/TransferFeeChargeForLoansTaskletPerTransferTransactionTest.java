@@ -21,7 +21,8 @@ package co.mnzl.fineract.custom.loan.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,7 +51,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.repeat.RepeatStatus;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -163,7 +163,7 @@ class TransferFeeChargeForLoansTaskletPerTransferTransactionTest {
         }
 
         verify(transactionTemplate, times(3)).execute(any());
-        verify(transactionTemplate, atLeastOnce()).setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        verify(transactionTemplate, never()).setPropagationBehavior(anyInt());
         verify(accountTransfersWritePlatformService, times(3)).transferFunds(any(AccountTransferDTO.class));
 
         // Confirm the production class wires a TransactionTemplate as a field — per-transfer boundary precondition.

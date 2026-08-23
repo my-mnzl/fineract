@@ -331,7 +331,8 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
                     int daysInSegment = getDifferenceInDays(segmentStart, rateChangeDate, loanApplicationTerms);
                     if (daysInSegment > 0) {
                         loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
-                        Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, segmentStart, daysInSegment);
+                        Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, outstandingBalance, mc, segmentStart,
+                                daysInSegment);
                         extraInterest = extraInterest.plus(segmentInterest);
                     }
                 }
@@ -344,7 +345,8 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
                 int daysInSegment = getDifferenceInDays(segmentStart, periodEnd, loanApplicationTerms);
                 if (daysInSegment > 0) {
                     loanApplicationTerms.updateAnnualNominalInterestRate(segmentRate);
-                    Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, mc, segmentStart, daysInSegment);
+                    Money segmentInterest = calculateInterestForSegment(loanApplicationTerms, outstandingBalance, mc, segmentStart,
+                            daysInSegment);
                     extraInterest = extraInterest.plus(segmentInterest);
                 }
             }
@@ -382,11 +384,11 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
     private static final LocalDate REHAB_LEGACY_DISBURSEMENT = LocalDate.of(2026, 2, 17);
     private static final LocalDate REHAB_LEGACY_FIRST_REPAYMENT = LocalDate.of(2026, 4, 1);
 
-    private Money calculateInterestForSegment(final LoanApplicationTerms loanApplicationTerms, final MathContext mc,
-            final LocalDate referenceDate, final int daysInSegment) {
+    private Money calculateInterestForSegment(final LoanApplicationTerms loanApplicationTerms, final Money outstandingBalance,
+            final MathContext mc, final LocalDate referenceDate, final int daysInSegment) {
         BigDecimal dailyInterestRatePercentage = MnzlLoanScheduleMath.getDailyNominalInterestRate(loanApplicationTerms, referenceDate, mc);
         BigDecimal dailyInterestRate = dailyInterestRatePercentage.divide(BigDecimal.valueOf(100), mc);
-        BigDecimal totalInterest = loanApplicationTerms.getPrincipal().getAmount().multiply(dailyInterestRate, mc)
+        BigDecimal totalInterest = outstandingBalance.getAmount().multiply(dailyInterestRate, mc)
                 .multiply(BigDecimal.valueOf(daysInSegment), mc);
         return Money.of(loanApplicationTerms.getCurrency(), totalInterest, mc);
     }
