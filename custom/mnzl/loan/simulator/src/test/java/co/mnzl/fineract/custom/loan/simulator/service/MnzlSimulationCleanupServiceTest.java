@@ -36,6 +36,9 @@ class MnzlSimulationCleanupServiceTest {
 
         InOrder ordered = inOrder(jdbcTemplate);
         ordered.verify(jdbcTemplate).update("DELETE FROM m_loan_repayment_schedule_history WHERE loan_id = ?", 42L);
+        ordered.verify(jdbcTemplate).update("DELETE FROM m_loan_payment_allocation_rule WHERE loan_id = ?", 42L);
+        ordered.verify(jdbcTemplate).update("DELETE FROM m_loan_credit_allocation_rule WHERE loan_id = ?", 42L);
+        ordered.verify(jdbcTemplate).update("DELETE FROM m_loan_progressive_model WHERE loan_id = ?", 42L);
         ordered.verify(jdbcTemplate).update("DELETE FROM m_loan_recalculation_details WHERE loan_id = ?", 42L);
         ordered.verify(jdbcTemplate).update("DELETE FROM m_loan WHERE id = ?", 42L);
         ordered.verify(jdbcTemplate).update("DELETE FROM m_portfolio_command_source WHERE idempotency_key LIKE ?", "mnzlsim-run%");

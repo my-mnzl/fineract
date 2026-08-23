@@ -122,6 +122,9 @@ public class MnzlSimulationCleanupService {
         jdbcTemplate.update("DELETE FROM m_loan_rate WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan_status_change_history WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan_term_variations WHERE loan_id = ?", loanId);
+        jdbcTemplate.update("DELETE FROM m_loan_payment_allocation_rule WHERE loan_id = ?", loanId);
+        jdbcTemplate.update("DELETE FROM m_loan_credit_allocation_rule WHERE loan_id = ?", loanId);
+        jdbcTemplate.update("DELETE FROM m_loan_progressive_model WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan_recalculation_details WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_note WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan WHERE id = ?", loanId);
