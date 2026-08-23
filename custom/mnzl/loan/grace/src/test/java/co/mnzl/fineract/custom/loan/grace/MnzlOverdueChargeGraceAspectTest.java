@@ -170,6 +170,7 @@ class MnzlOverdueChargeGraceAspectTest {
         Object result = aspect.retrieveWorkingDayCandidates(joinPoint);
 
         assertThat((Collection<?>) result).hasSize(1);
+        assertThat(capturedProceedArgs()[0]).isEqualTo(0L);
         assertThat(capturedProceedArgs()[1]).isEqualTo(true);
     }
 

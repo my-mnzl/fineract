@@ -20,6 +20,8 @@ package co.mnzl.fineract.custom.loan.simulator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +30,7 @@ import co.mnzl.fineract.custom.loan.simulator.data.SimulationRequest;
 import co.mnzl.fineract.custom.loan.simulator.data.SimulationResult;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationActionType;
 import co.mnzl.fineract.custom.loan.simulator.domain.SimulationStatus;
+import com.google.gson.JsonParser;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -37,6 +40,7 @@ import java.util.Optional;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
@@ -47,6 +51,7 @@ import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanSummary;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleModel;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.service.LoanScheduleCalculationPlatformService;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProduct;
 import org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository;
@@ -93,6 +98,8 @@ class MnzlLoanSimulationRunnerTest {
     private LoanSummary loanSummary;
     @Mock
     private LoanProduct loanProduct;
+    @Mock
+    private LoanScheduleModel loanScheduleModel;
     @Mock
     private CommandProcessingResult commandResult;
 
@@ -167,6 +174,26 @@ class MnzlLoanSimulationRunnerTest {
 
         HashMap<BusinessDateType, LocalDate> currentDates = ThreadLocalContextUtil.getBusinessDates();
         assertThat(currentDates.get(BusinessDateType.BUSINESS_DATE)).isEqualTo(originalDates.get(BusinessDateType.BUSINESS_DATE));
+    }
+
+    @Test
+    void previewCalculatesScheduleOnSubmittedDateAndRestoresOriginalDates() {
+        LocalDate submittedOnDate = LocalDate.of(2026, 2, 10);
+        setupSecurityContext();
+        when(commandService.logCommandSource(any(CommandWrapper.class))).thenReturn(commandResult);
+        when(commandResult.getClientId()).thenReturn(CLIENT_ID);
+        when(fromJsonHelper.parse(anyString())).thenAnswer(invocation -> JsonParser.parseString(invocation.getArgument(0)));
+        when(loanScheduleModel.getPeriods()).thenReturn(List.of());
+        when(scheduleCalculationService.calculateLoanSchedule(any(JsonQuery.class), eq(false))).thenAnswer(invocation -> {
+            assertThat(ThreadLocalContextUtil.getBusinessDateByType(BusinessDateType.BUSINESS_DATE)).isEqualTo(submittedOnDate);
+            return loanScheduleModel;
+        });
+        SimulationRequest request = SimulationRequest.builder().name("Preview date test").loanProductId(1L)
+                .principal(BigDecimal.valueOf(100000)).interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12)
+                .submittedOnDate(submittedOnDate.toString()).disbursementDate("2026-03-01").actions(List.of()).build();
+
+        assertThat(runner.previewSchedule(request)).isEmpty();
+        assertThat(ThreadLocalContextUtil.getBusinessDates()).isEqualTo(originalDates);
     }
 
     private SimulationRequest buildSimpleRequest() {

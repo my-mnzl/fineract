@@ -421,10 +421,13 @@ public final class LoanChargeApiJsonValidator {
         }
     }
 
-    private void validateInterestBearingLoanProductRestriction(ChargeCalculationType chargeCalculationType, ChargeTimeType chargeTime,
+    void validateInterestBearingLoanProductRestriction(ChargeCalculationType chargeCalculationType, ChargeTimeType chargeTime,
             LoanProduct loanProduct, DataValidatorBuilder baseDataValidator) {
-        if (loanProduct.isInterestRecalculationEnabled()) {
-            String errorcode = switch (chargeCalculationType) {
+        String errorcode = null;
+        if (chargeCalculationType == ChargeCalculationType.CUSTOM) {
+            errorcode = validateCustomLoanProductCharge(chargeCalculationType, chargeTime, loanProduct);
+        } else if (loanProduct.isInterestRecalculationEnabled()) {
+            errorcode = switch (chargeCalculationType) {
                 case PERCENT_OF_AMOUNT -> {
                     if (chargeTime.isInstalmentFee()) {
                         yield "installment." + LoanApiConstants.LOAN_CHARGE_CAN_NOT_BE_ADDED_WITH_PRINCIPAL_CALCULATION_TYPE;
@@ -448,12 +451,11 @@ public final class LoanChargeApiJsonValidator {
                     }
                     yield null;
                 }
-                case CUSTOM -> validateCustomLoanProductCharge(chargeCalculationType, chargeTime, loanProduct);
                 default -> null;
             };
-            if (errorcode != null) {
-                baseDataValidator.reset().parameter("charges").failWithCode(errorcode);
-            }
+        }
+        if (errorcode != null) {
+            baseDataValidator.reset().parameter("charges").failWithCode(errorcode);
         }
     }
 

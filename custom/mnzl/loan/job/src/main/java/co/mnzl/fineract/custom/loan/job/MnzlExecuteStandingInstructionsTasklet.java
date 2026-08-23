@@ -52,7 +52,6 @@ import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.NonNull;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -67,19 +66,19 @@ public class MnzlExecuteStandingInstructionsTasklet extends ExecuteStandingInstr
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
     private final AccountTransfersWritePlatformService accountTransfersWritePlatformService;
-    private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate requiresNewTransactionTemplate;
     private final ScheduledDateGenerator scheduledDateGenerator;
 
     public MnzlExecuteStandingInstructionsTasklet(StandingInstructionReadPlatformService standingInstructionReadPlatformService,
             JdbcTemplate jdbcTemplate, DatabaseSpecificSQLGenerator sqlGenerator,
-            AccountTransfersWritePlatformService accountTransfersWritePlatformService, TransactionTemplate transactionTemplate,
+            AccountTransfersWritePlatformService accountTransfersWritePlatformService, TransactionTemplate requiresNewTransactionTemplate,
             ScheduledDateGenerator scheduledDateGenerator) {
         super(standingInstructionReadPlatformService, jdbcTemplate, sqlGenerator, accountTransfersWritePlatformService);
         this.standingInstructionReadPlatformService = standingInstructionReadPlatformService;
         this.jdbcTemplate = jdbcTemplate;
         this.sqlGenerator = sqlGenerator;
         this.accountTransfersWritePlatformService = accountTransfersWritePlatformService;
-        this.transactionTemplate = transactionTemplate;
+        this.requiresNewTransactionTemplate = requiresNewTransactionTemplate;
         this.scheduledDateGenerator = scheduledDateGenerator;
     }
 
@@ -247,8 +246,7 @@ public class MnzlExecuteStandingInstructionsTasklet extends ExecuteStandingInstr
     }
 
     private void executeInNewTransaction(final Runnable action) {
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+        requiresNewTransactionTemplate.execute(new TransactionCallbackWithoutResult() {
 
             @Override
             protected void doInTransactionWithoutResult(@NonNull TransactionStatus status) {

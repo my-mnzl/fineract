@@ -72,6 +72,10 @@ public class MnzlOverdueChargeGraceAspect {
         }
 
         Object[] broadenedArgs = args.clone();
+        // Let the working-day filter below own the entire grace calculation. Keeping the calendar-day wait period in
+        // the upstream query excludes an installment on its exact eligibility date whenever no weekend or holiday
+        // extends the interval because that query uses a strict due-date comparison.
+        broadenedArgs[0] = 0L;
         broadenedArgs[1] = true;
         Object result = proceed(joinPoint, broadenedArgs);
         if (!(result instanceof Collection<?> rawData) || rawData.isEmpty()) {

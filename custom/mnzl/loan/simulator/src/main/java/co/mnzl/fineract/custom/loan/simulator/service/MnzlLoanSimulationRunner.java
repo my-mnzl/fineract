@@ -536,6 +536,7 @@ public class MnzlLoanSimulationRunner {
         Long previewClientId = null;
         try {
             previewClientId = createSimulatedClient();
+            setBusinessDate(LocalDate.parse(request.getEffectiveSubmittedOnDate(), DATE_FORMAT));
             JsonObject json = buildLoanApplicationJson(request, previewClientId, null);
             String jsonString = json.toString();
             JsonQuery query = JsonQuery.from(jsonString, fromJsonHelper.parse(jsonString), fromJsonHelper);

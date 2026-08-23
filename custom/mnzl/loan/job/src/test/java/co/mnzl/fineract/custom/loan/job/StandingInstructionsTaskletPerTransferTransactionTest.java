@@ -24,7 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,7 +57,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -198,8 +197,8 @@ class StandingInstructionsTaskletPerTransferTransactionTest {
 
         // 3 transfers succeed, each in its own TransactionTemplate.execute() call.
         verify(transactionTemplate, times(3)).execute(any());
-        // Propagation must be REQUIRES_NEW each time — set before each call.
-        verify(transactionTemplate, atLeastOnce()).setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // The injected template is already configured as REQUIRES_NEW and must not be mutated while shared by workers.
+        verify(transactionTemplate, never()).setPropagationBehavior(anyInt());
         // Sanity: history rows + last-run-date rows reflect 3 successful, independent transfers.
         verify(jdbcTemplate, times(3)).update(eq("UPDATE m_account_transfer_standing_instructions SET last_run_date = ? where id = ?"),
                 any(LocalDate.class), any(Long.class));
