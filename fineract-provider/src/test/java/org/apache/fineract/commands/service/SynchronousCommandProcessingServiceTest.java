@@ -37,6 +37,7 @@ import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import org.apache.fineract.batch.exception.ErrorInfo;
@@ -55,12 +56,14 @@ import org.apache.fineract.infrastructure.core.domain.BatchRequestContextHolder;
 import org.apache.fineract.infrastructure.core.domain.FineractRequestContextHolder;
 import org.apache.fineract.infrastructure.core.exception.IdempotentCommandProcessUnderProcessingException;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.TransactionBoundApplicationEventPublisher;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.useradministration.domain.AppUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -155,6 +158,7 @@ public class SynchronousCommandProcessingServiceTest {
 
     @AfterEach
     public void teardown() {
+        ThreadLocalContextUtil.reset();
         reset(context);
         reset(applicationContext);
         reset(toApiJsonSerializer);
@@ -475,6 +479,40 @@ public class SynchronousCommandProcessingServiceTest {
         assertDoesNotThrow(() -> {
             underTest.publishHookEvent(entityName, actionName, command, Object.class);
         });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void publishHookEventIncludesCommandResourceReferences() {
+        JsonCommand command = Mockito.mock(JsonCommand.class);
+        when(command.json()).thenReturn("{}");
+        when(command.getUrl()).thenReturn("/clients/123/identifiers/456");
+        when(command.getResourceId()).thenReturn(123L);
+        when(command.getSubresourceId()).thenReturn(456L);
+
+        AppUser appUser = Mockito.mock(AppUser.class);
+        when(appUser.getId()).thenReturn(1L);
+        when(appUser.getUsername()).thenReturn("maker");
+        when(appUser.getDisplayName()).thenReturn("Test Maker");
+        when(context.authenticatedUser(any(CommandWrapper.class))).thenReturn(appUser);
+        when(context.authenticatedUser()).thenReturn(appUser);
+
+        when(toApiJsonSerializer.serialize(any())).thenReturn("{}");
+        ThreadLocalContextUtil.setBusinessDates(new HashMap<>());
+
+        SynchronousCommandProcessingService hookService = new SynchronousCommandProcessingService(context, applicationContext,
+                eventPublisher, toApiJsonSerializer, toApiResultJsonSerializer, configurationDomainService, commandHandlerProvider,
+                idempotencyKeyResolver, commandSourceService, retryConfigurationAssembler, fineractRequestContextHolder);
+
+        hookService.publishHookEvent("CLIENTIDENTIFIER", "CREATE", command, Object.class);
+
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(toApiJsonSerializer).serialize(payloadCaptor.capture());
+        Map<String, Object> payload = payloadCaptor.getValue();
+        assertEquals("/clients/123/identifiers/456", payload.get("resourceUrl"));
+        assertEquals(123L, payload.get("resourceId"));
+        assertEquals(456L, payload.get("subresourceId"));
+        verify(eventPublisher).publishEvent(any());
     }
 
     private static final class RetryException extends RuntimeException {}

@@ -47,6 +47,7 @@ import org.apache.fineract.portfolio.delinquency.service.DelinquencyReadPlatform
 import org.apache.fineract.portfolio.floatingrates.service.FloatingRatesReadPlatformService;
 import org.apache.fineract.portfolio.fund.service.FundReadPlatformService;
 import org.apache.fineract.portfolio.group.service.GroupReadPlatformService;
+import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionData;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
@@ -66,6 +67,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 /**
  * L1 unit tests for {@link LoanReadPlatformServiceImpl} (Task C.12).
@@ -191,6 +193,19 @@ class LoanReadPlatformServiceImplTest {
         assertThat(args[2]).isEqualTo(LoanStatus.SUBMITTED_AND_PENDING_APPROVAL.getValue());
         assertThat(args[3]).isEqualTo(LoanStatus.APPROVED.getValue());
         assertThat(args[4]).isEqualTo(LoanStatus.ACTIVE.getValue());
+    }
+
+    @Test
+    void retrieveLoanTransactionTemplateFallsBackToInstallmentDueDateWithoutPriorRepayment() {
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        when(jdbcTemplate.queryForObject(sqlCaptor.capture(), org.mockito.ArgumentMatchers.<RowMapper<LoanTransactionData>>any(),
+                any(Object[].class))).thenReturn(LoanTransactionData.builder().build());
+
+        service.retrieveLoanTransactionTemplate(42L);
+
+        assertThat(sqlCaptor.getValue()).contains(
+                "CASE WHEN loan_transaction.transaction_date > ls.dueDate THEN loan_transaction.transaction_date ELSE ls.dueDate END as transactionDate")
+                .doesNotContain("GREATEST(loan_transaction.transaction_date, ls.dueDate)");
     }
 
     static LoanReadPlatformServiceImpl newService(JdbcTemplate jdbcTemplate) {
