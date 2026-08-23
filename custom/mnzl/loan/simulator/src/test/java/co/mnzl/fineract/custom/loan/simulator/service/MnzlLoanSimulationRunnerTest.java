@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -40,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
@@ -142,7 +144,29 @@ class MnzlLoanSimulationRunnerTest {
         List<String> commandKeys = commands.getAllValues().stream().map(CommandWrapper::getIdempotencyKey).toList();
         assertThat(commandKeys).allMatch(key -> key.startsWith("mnzlsim-")).doesNotHaveDuplicates();
         String keyPrefix = commandKeys.get(0).substring(0, commandKeys.get(0).lastIndexOf('-'));
-        verify(cleanupService).cleanup(eq(LOAN_ID), eq(null), eq(CLIENT_ID), eq(keyPrefix));
+        verify(cleanupService).cleanup(eq(LOAN_ID), eq(null), eq(CLIENT_ID), eq(keyPrefix), eq(List.of()));
+    }
+
+    @Test
+    void simulationCleansUpTrackedCobJobExecutions() {
+        setupCommandService();
+        setupLoanMock(false, true);
+        doAnswer(invocation -> {
+            Consumer<Long> jobExecutionIdConsumer = invocation.getArgument(2);
+            jobExecutionIdConsumer.accept(501L);
+            return null;
+        }).when(inlineLoanCOBExecutorService).execute(eq(List.of(LOAN_ID)), eq("INLINE_LOAN_COB"), any());
+        SimulationRequest request = SimulationRequest.builder().name("COB test").loanProductId(1L).principal(BigDecimal.valueOf(100000))
+                .interestRatePerPeriod(BigDecimal.valueOf(12)).numberOfRepayments(12).disbursementDate("2026-01-01")
+                .actions(List.of(
+                        SimulationActionRequest.builder().type(SimulationActionType.DISBURSE).date(LocalDate.of(2026, 1, 1)).build(),
+                        SimulationActionRequest.builder().type(SimulationActionType.RUN_COB).date(LocalDate.of(2026, 1, 2)).build()))
+                .build();
+
+        SimulationResult result = runner.run(request);
+
+        assertThat(result.getStatus()).isEqualTo(SimulationStatus.COMPLETED);
+        verify(cleanupService).cleanup(eq(LOAN_ID), eq(null), eq(CLIENT_ID), anyString(), eq(List.of(501L)));
     }
 
     @Test

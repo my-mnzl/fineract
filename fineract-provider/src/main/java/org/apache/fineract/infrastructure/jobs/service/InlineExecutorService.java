@@ -20,6 +20,7 @@ package org.apache.fineract.infrastructure.jobs.service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 
@@ -28,6 +29,9 @@ public interface InlineExecutorService<T> {
     CommandProcessingResult executeInlineJob(JsonCommand command, String jobName);
 
     void execute(List<T> elements, String jobName);
+
+    /** Executes the job and reports each persisted Spring Batch execution ID before its status is evaluated. */
+    void execute(List<T> elements, String jobName, Consumer<Long> jobExecutionIdConsumer);
 
     default void execute(T element, String jobName) {
         execute(Collections.singletonList(element), jobName);

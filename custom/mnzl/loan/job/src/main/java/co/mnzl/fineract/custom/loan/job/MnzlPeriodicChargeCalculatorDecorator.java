@@ -69,8 +69,9 @@ public class MnzlPeriodicChargeCalculatorDecorator implements LoanScheduleCalcul
 
         final JsonArray charges = root.has("charges") && root.get("charges").isJsonArray() ? root.getAsJsonArray("charges")
                 : new JsonArray();
-        final String dateFormat = root.has("dateFormat") ? root.get("dateFormat").getAsString() : DEFAULT_DATE_FORMAT;
-        final String localeTag = root.has("locale") ? root.get("locale").getAsString() : DEFAULT_LOCALE;
+        final String dateFormat = root.has("dateFormat") && !root.get("dateFormat").isJsonNull() ? root.get("dateFormat").getAsString()
+                : DEFAULT_DATE_FORMAT;
+        final String localeTag = root.has("locale") && !root.get("locale").isJsonNull() ? root.get("locale").getAsString() : DEFAULT_LOCALE;
         final DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFormat, Locale.forLanguageTag(localeTag));
 
         boolean added = false;
@@ -105,7 +106,8 @@ public class MnzlPeriodicChargeCalculatorDecorator implements LoanScheduleCalcul
                 return;
             }
             final JsonObject entry = element.getAsJsonObject();
-            if (!entry.has("chargeId") || !entry.has("dueDate") || !chargeId.equals(entry.get("chargeId").getAsLong())) {
+            if (!entry.has("chargeId") || entry.get("chargeId").isJsonNull() || !entry.has("dueDate") || entry.get("dueDate").isJsonNull()
+                    || !chargeId.equals(entry.get("chargeId").getAsLong())) {
                 return;
             }
             try {

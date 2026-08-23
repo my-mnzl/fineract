@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -103,12 +104,18 @@ public abstract class InlineCommonLockableCOBExecutorService<T extends AccountLo
 
     @Override
     public void execute(List<Long> loanIds, String jobName) {
+        execute(loanIds, jobName, ignored -> {});
+    }
+
+    @Override
+    public void execute(List<Long> loanIds, String jobName, Consumer<Long> jobExecutionIdConsumer) {
         LocalDate cobBusinessDate = ThreadLocalContextUtil.getBusinessDateByType(BusinessDateType.COB_DATE);
         List<COBIdAndLastClosedBusinessDate> loansToBeProcessed = getLoansToBeProcessed(loanIds, cobBusinessDate);
         LocalDate executingBusinessDate = getOldestCOBBusinessDate(loansToBeProcessed).plusDays(1);
         if (!loansToBeProcessed.isEmpty()) {
             while (!DateUtils.isAfter(executingBusinessDate, cobBusinessDate)) {
-                execute(getLoanIdsToBeProcessed(loansToBeProcessed, executingBusinessDate), jobName, executingBusinessDate);
+                execute(getLoanIdsToBeProcessed(loansToBeProcessed, executingBusinessDate), jobName, executingBusinessDate,
+                        jobExecutionIdConsumer);
                 executingBusinessDate = executingBusinessDate.plusDays(1);
             }
         }
@@ -129,7 +136,7 @@ public abstract class InlineCommonLockableCOBExecutorService<T extends AccountLo
     }
 
     @SuppressFBWarnings("SLF4J_SIGN_ONLY_FORMAT")
-    private void execute(List<Long> loanIds, String jobName, LocalDate businessDate) {
+    private void execute(List<Long> loanIds, String jobName, LocalDate businessDate, Consumer<Long> jobExecutionIdConsumer) {
         lockLoanAccounts(loanIds, businessDate);
         Job inlineLoanCOBJob;
         try {
@@ -146,6 +153,7 @@ public abstract class InlineCommonLockableCOBExecutorService<T extends AccountLo
             log.error("{}{}", JOB_EXECUTION_FAILED_MESSAGE, jobName, e);
             throw new PlatformInternalServerException("error.msg.sheduler.job.execution.failed", JOB_EXECUTION_FAILED_MESSAGE, jobName, e);
         }
+        jobExecutionIdConsumer.accept(jobExecution.getId());
         if (!BatchStatus.COMPLETED.equals(jobExecution.getStatus())) {
             log.error("{}{}", JOB_EXECUTION_FAILED_MESSAGE, jobName);
             throw new PlatformInternalServerException("error.msg.sheduler.job.execution.failed", JOB_EXECUTION_FAILED_MESSAGE, jobName);

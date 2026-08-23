@@ -156,7 +156,7 @@ public class MnzlLoanSimulationRunner {
                     case DISBURSE -> disburseLoan(loanId, action);
                     case PAY -> makeRepayment(loanId, action);
                     case SKIP -> log.info("Simulation: skipping to {}", action.getDate());
-                    case RUN_COB -> runCob(loanId);
+                    case RUN_COB -> runCob(loanId, simulationContext);
                     case ADD_CHARGE -> addCharge(loanId, action);
                     case WRITE_OFF -> writeOff(loanId, action);
                     case CHANGE_INTEREST_RATE -> changeInterestRate(loanId, action);
@@ -180,7 +180,8 @@ public class MnzlLoanSimulationRunner {
                     .errorMessage(e.getMessage()).snapshots(snapshots).build();
         } finally {
             try {
-                cleanupService.cleanup(loanId, savingsId, clientId, simulationContext.keyPrefix());
+                cleanupService.cleanup(loanId, savingsId, clientId, simulationContext.keyPrefix(),
+                        simulationContext.batchJobExecutionIds());
             } finally {
                 ThreadLocalContextUtil.setBusinessDates(originalDates);
                 ThreadLocalContextUtil.setOutboundEventsSuppressed(outboundEventsWereSuppressed);
@@ -428,8 +429,8 @@ public class MnzlLoanSimulationRunner {
         commandService.logCommandSource(command);
     }
 
-    private void runCob(Long loanId) {
-        inlineLoanCOBExecutorService.execute(List.of(loanId), "INLINE_LOAN_COB");
+    private void runCob(Long loanId, SimulationCommandContext simulationContext) {
+        inlineLoanCOBExecutorService.execute(List.of(loanId), "INLINE_LOAN_COB", simulationContext::addBatchJobExecutionId);
     }
 
     private void addCharge(Long loanId, SimulationActionRequest action) {
@@ -584,6 +585,7 @@ public class MnzlLoanSimulationRunner {
     private static final class SimulationCommandContext {
 
         private final String keyPrefix;
+        private final List<Long> batchJobExecutionIds = new ArrayList<>();
         private int commandSequence;
 
         private SimulationCommandContext(String keyPrefix) {
@@ -596,6 +598,14 @@ public class MnzlLoanSimulationRunner {
 
         private String nextCommandKey() {
             return keyPrefix + "-" + ++commandSequence;
+        }
+
+        private void addBatchJobExecutionId(Long jobExecutionId) {
+            batchJobExecutionIds.add(jobExecutionId);
+        }
+
+        private List<Long> batchJobExecutionIds() {
+            return List.copyOf(batchJobExecutionIds);
         }
     }
 }

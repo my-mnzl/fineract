@@ -153,6 +153,32 @@ class MnzlPeriodicChargeCalculatorDecoratorTest {
     }
 
     @Test
+    void treatsNullDueDateAsMissingWhenProjectingPeriodicCharges() {
+        final LocalDate dueDate = LocalDate.of(2026, 5, 20);
+        final LoanScheduleModelPeriod period = period(dueDate, true, false);
+        when(scheduleModel.getPeriods()).thenReturn(List.of(period));
+        when(delegate.calculateLoanSchedule(any(JsonQuery.class), anyBoolean())).thenReturn(scheduleModel);
+        when(projectionService.occurrencesBetween(eq(periodicCharge), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(dueDate));
+
+        final JsonQuery query = makeQuery("""
+                {
+                  "productId": 2,
+                  "dateFormat": "dd MMMM yyyy",
+                  "locale": "en",
+                  "charges": [{"chargeId": 9, "amount": 0.01, "dueDate": null}]
+                }
+                """);
+
+        decorator.calculateLoanSchedule(query, false);
+
+        final JsonArray charges = query.parsedJson().getAsJsonObject().getAsJsonArray("charges");
+        assertThat(charges).hasSize(2);
+        assertThat(charges.get(1).getAsJsonObject().get("dueDate").getAsString()).isEqualTo("20 May 2026");
+        verify(delegate, times(2)).calculateLoanSchedule(eq(query), anyBoolean());
+    }
+
+    @Test
     void shiftedExistingOccurrenceIsCountedInsteadOfDuplicated() {
         final LocalDate shiftedAnchor = LocalDate.of(2026, 5, 20);
         final LocalDate second = LocalDate.of(2027, 5, 20);

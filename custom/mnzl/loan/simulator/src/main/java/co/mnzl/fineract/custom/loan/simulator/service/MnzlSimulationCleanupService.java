@@ -18,7 +18,11 @@
  */
 package co.mnzl.fineract.custom.loan.simulator.service;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.cob.COBConstant;
+import org.apache.fineract.infrastructure.springbatch.SpringBatchJobConstants;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +49,11 @@ public class MnzlSimulationCleanupService {
 
     @Transactional
     public void cleanup(Long loanId, Long savingsId, Long clientId, String commandKeyPrefix) {
+        cleanup(loanId, savingsId, clientId, commandKeyPrefix, List.of());
+    }
+
+    @Transactional
+    public void cleanup(Long loanId, Long savingsId, Long clientId, String commandKeyPrefix, List<Long> batchJobExecutionIds) {
         if (loanId != null) {
             cleanupLoan(loanId);
         }
@@ -57,6 +66,56 @@ public class MnzlSimulationCleanupService {
         if (commandKeyPrefix != null) {
             jdbcTemplate.update("DELETE FROM m_portfolio_command_source WHERE idempotency_key LIKE ?", commandKeyPrefix + "%");
         }
+        cleanupBatchJobExecutions(batchJobExecutionIds);
+    }
+
+    private void cleanupBatchJobExecutions(List<Long> batchJobExecutionIds) {
+        if (batchJobExecutionIds == null || batchJobExecutionIds.isEmpty()) {
+            return;
+        }
+        new LinkedHashSet<>(batchJobExecutionIds).forEach(this::cleanupBatchJobExecution);
+    }
+
+    private void cleanupBatchJobExecution(Long jobExecutionId) {
+        List<Long> jobInstanceIds = jdbcTemplate.queryForList("SELECT JOB_INSTANCE_ID FROM BATCH_JOB_EXECUTION WHERE JOB_EXECUTION_ID = ?",
+                Long.class, jobExecutionId);
+        List<Long> customJobParameterIds = jdbcTemplate.queryForList("""
+                SELECT PARAMETER_VALUE
+                FROM BATCH_JOB_EXECUTION_PARAMS
+                WHERE JOB_EXECUTION_ID = ? AND PARAMETER_NAME IN (?, ?)
+                """, String.class, jobExecutionId, SpringBatchJobConstants.CUSTOM_JOB_PARAMETER_ID_KEY,
+                COBConstant.BUSINESS_DATE_PARAMETER_NAME).stream().map(Long::valueOf).toList();
+
+        jdbcTemplate.update("DELETE FROM m_journal_entry_aggregation_tracking WHERE job_execution_id = ?", jobExecutionId);
+        jdbcTemplate.update("DELETE FROM m_journal_entry_aggregation_summary WHERE job_execution_id = ?", jobExecutionId);
+        jdbcTemplate.update("""
+                DELETE FROM BATCH_STEP_EXECUTION_CONTEXT
+                WHERE STEP_EXECUTION_ID IN (
+                    SELECT STEP_EXECUTION_ID FROM BATCH_STEP_EXECUTION WHERE JOB_EXECUTION_ID = ?
+                )
+                """, jobExecutionId);
+        jdbcTemplate.update("DELETE FROM BATCH_STEP_EXECUTION WHERE JOB_EXECUTION_ID = ?", jobExecutionId);
+        jdbcTemplate.update("DELETE FROM BATCH_JOB_EXECUTION_CONTEXT WHERE JOB_EXECUTION_ID = ?", jobExecutionId);
+        jdbcTemplate.update("DELETE FROM BATCH_JOB_EXECUTION_PARAMS WHERE JOB_EXECUTION_ID = ?", jobExecutionId);
+        jdbcTemplate.update("DELETE FROM BATCH_JOB_EXECUTION WHERE JOB_EXECUTION_ID = ?", jobExecutionId);
+
+        jobInstanceIds.forEach(jobInstanceId -> jdbcTemplate.update("""
+                DELETE FROM BATCH_JOB_INSTANCE
+                WHERE JOB_INSTANCE_ID = ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM BATCH_JOB_EXECUTION WHERE JOB_INSTANCE_ID = ?
+                  )
+                """, jobInstanceId, jobInstanceId));
+        customJobParameterIds.forEach(customJobParameterId -> jdbcTemplate.update("""
+                DELETE FROM batch_custom_job_parameters
+                WHERE id = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM BATCH_JOB_EXECUTION_PARAMS
+                      WHERE PARAMETER_NAME IN (?, ?) AND PARAMETER_VALUE = ?
+                  )
+                """, customJobParameterId, SpringBatchJobConstants.CUSTOM_JOB_PARAMETER_ID_KEY, COBConstant.BUSINESS_DATE_PARAMETER_NAME,
+                customJobParameterId.toString()));
     }
 
     private void cleanupLoan(Long loanId) {
