@@ -108,6 +108,7 @@ public class MnzlSimulationCleanupService {
                 WHERE loan_transaction_id IN (SELECT id FROM m_loan_transaction WHERE loan_id = ?)
                 """, loanId);
         jdbcTemplate.update("DELETE FROM m_loan_transaction WHERE loan_id = ?", loanId);
+        jdbcTemplate.update("DELETE FROM m_loan_repayment_schedule_history WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan_repayment_schedule WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan_charge WHERE loan_id = ?", loanId);
         jdbcTemplate.update("DELETE FROM m_loan_disbursement_detail WHERE loan_id = ?", loanId);
