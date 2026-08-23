@@ -91,4 +91,28 @@ class MnzlSimulationCleanupServiceTest {
                   )
                 """, 702L, "CUSTOM_JOB_PARAMETER_ID", "BusinessDate", "702");
     }
+
+    @Test
+    void removesPaymentDetailsAfterTheirSimulatedTransactions() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        MnzlSimulationCleanupService service = new MnzlSimulationCleanupService(jdbcTemplate);
+        when(jdbcTemplate.queryForList("""
+                SELECT DISTINCT payment_detail_id
+                FROM m_loan_transaction
+                WHERE loan_id = ? AND payment_detail_id IS NOT NULL
+                """, Long.class, 42L)).thenReturn(List.of(801L));
+
+        service.cleanup(42L, null, null, null);
+
+        InOrder ordered = inOrder(jdbcTemplate);
+        ordered.verify(jdbcTemplate).update("DELETE FROM m_loan_transaction WHERE loan_id = ?", 42L);
+        ordered.verify(jdbcTemplate).update("""
+                DELETE FROM m_payment_detail
+                WHERE id = ?
+                  AND NOT EXISTS (SELECT 1 FROM m_loan_transaction WHERE payment_detail_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM m_savings_account_transaction WHERE payment_detail_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM m_client_transaction WHERE payment_detail_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM acc_gl_journal_entry WHERE payment_details_id = ?)
+                """, 801L, 801L, 801L, 801L, 801L);
+    }
 }

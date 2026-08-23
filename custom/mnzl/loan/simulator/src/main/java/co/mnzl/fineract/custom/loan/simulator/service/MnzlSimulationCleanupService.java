@@ -20,6 +20,7 @@ package co.mnzl.fineract.custom.loan.simulator.service;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.cob.COBConstant;
 import org.apache.fineract.infrastructure.springbatch.SpringBatchJobConstants;
@@ -54,6 +55,7 @@ public class MnzlSimulationCleanupService {
 
     @Transactional
     public void cleanup(Long loanId, Long savingsId, Long clientId, String commandKeyPrefix, List<Long> batchJobExecutionIds) {
+        Set<Long> paymentDetailIds = findPaymentDetailIds(loanId, savingsId);
         if (loanId != null) {
             cleanupLoan(loanId);
         }
@@ -66,7 +68,38 @@ public class MnzlSimulationCleanupService {
         if (commandKeyPrefix != null) {
             jdbcTemplate.update("DELETE FROM m_portfolio_command_source WHERE idempotency_key LIKE ?", commandKeyPrefix + "%");
         }
+        cleanupPaymentDetails(paymentDetailIds);
         cleanupBatchJobExecutions(batchJobExecutionIds);
+    }
+
+    private Set<Long> findPaymentDetailIds(Long loanId, Long savingsId) {
+        Set<Long> paymentDetailIds = new LinkedHashSet<>();
+        if (loanId != null) {
+            paymentDetailIds.addAll(jdbcTemplate.queryForList("""
+                    SELECT DISTINCT payment_detail_id
+                    FROM m_loan_transaction
+                    WHERE loan_id = ? AND payment_detail_id IS NOT NULL
+                    """, Long.class, loanId));
+        }
+        if (savingsId != null) {
+            paymentDetailIds.addAll(jdbcTemplate.queryForList("""
+                    SELECT DISTINCT payment_detail_id
+                    FROM m_savings_account_transaction
+                    WHERE savings_account_id = ? AND payment_detail_id IS NOT NULL
+                    """, Long.class, savingsId));
+        }
+        return paymentDetailIds;
+    }
+
+    private void cleanupPaymentDetails(Set<Long> paymentDetailIds) {
+        paymentDetailIds.forEach(paymentDetailId -> jdbcTemplate.update("""
+                DELETE FROM m_payment_detail
+                WHERE id = ?
+                  AND NOT EXISTS (SELECT 1 FROM m_loan_transaction WHERE payment_detail_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM m_savings_account_transaction WHERE payment_detail_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM m_client_transaction WHERE payment_detail_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM acc_gl_journal_entry WHERE payment_details_id = ?)
+                """, paymentDetailId, paymentDetailId, paymentDetailId, paymentDetailId, paymentDetailId));
     }
 
     private void cleanupBatchJobExecutions(List<Long> batchJobExecutionIds) {
