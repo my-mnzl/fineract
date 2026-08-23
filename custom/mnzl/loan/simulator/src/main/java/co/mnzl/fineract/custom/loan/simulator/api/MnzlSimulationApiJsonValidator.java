@@ -200,6 +200,7 @@ public class MnzlSimulationApiJsonValidator {
         }
     }
 
+    @SuppressWarnings("AvoidHidingCauseException")
     private JsonObject parseRequest(String json) {
         if (StringUtils.isBlank(json)) {
             throw new InvalidJsonException();
@@ -212,7 +213,7 @@ public class MnzlSimulationApiJsonValidator {
             JsonObject root = element.getAsJsonObject();
             fromJsonHelper.checkForUnsupportedParameters(root, SUPPORTED_PARAMETERS);
             return root;
-        } catch (JsonParseException exception) {
+        } catch (JsonParseException ignored) {
             throw new InvalidJsonException();
         }
     }

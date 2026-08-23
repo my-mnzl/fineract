@@ -197,16 +197,9 @@ class MnzlSimulationApiJsonValidatorTest {
     }
 
     private String requestWithAction(String action) {
-        return """
-                {
-                  "loanProductId": 1,
-                  "principal": "100000",
-                  "numberOfRepayments": 12,
-                  "disbursementDate": "2026-01-01",
-                  "locale": "en",
-                  "actions": [%s]
-                }
-                """.formatted(action);
+        JsonObject request = JsonParser.parseString(buildValidRequest()).getAsJsonObject();
+        request.add("actions", JsonParser.parseString("[" + action + "]"));
+        return request.toString();
     }
 
     private void assertInvalidForCreateAndPreview(String json) {

@@ -104,7 +104,7 @@ public abstract class InlineCommonLockableCOBExecutorService<T extends AccountLo
 
     @Override
     public void execute(List<Long> loanIds, String jobName) {
-        execute(loanIds, jobName, ignored -> {});
+        execute(loanIds, jobName, ignored -> { /* no-op */ });
     }
 
     @Override
