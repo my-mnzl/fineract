@@ -101,6 +101,13 @@ public class ReceivablesWriteApiResource {
     }
 
     @POST
+    @Path("/borrowers/resolve")
+    public String resolveBorrower(@Context HttpHeaders headers, String request) {
+        authorizeRequest(headers, request);
+        return json.write(configuration.resolveBorrower(request));
+    }
+
+    @POST
     @Path("/configuration")
     public String configure(@Context HttpHeaders headers, String request) {
         authorizeRequest(headers, request);

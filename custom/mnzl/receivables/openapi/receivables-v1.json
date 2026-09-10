@@ -628,6 +628,61 @@
         }
       }
     },
+    "/borrowers/resolve": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeBorrowerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeBorrowerResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/configuration": {
       "post": {
         "parameters": [
@@ -10492,6 +10547,48 @@
           "businessDate",
           "financedFees",
           "repaymentSchedule"
+        ],
+        "additionalProperties": false
+      },
+      "nativeBorrowerRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "customerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "scope",
+          "accountMappingRevisionId",
+          "customerReferenceId"
+        ],
+        "additionalProperties": false
+      },
+      "nativeBorrowerResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "customerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeClientId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "scope",
+          "customerReferenceId",
+          "nativeClientId"
         ],
         "additionalProperties": false
       },

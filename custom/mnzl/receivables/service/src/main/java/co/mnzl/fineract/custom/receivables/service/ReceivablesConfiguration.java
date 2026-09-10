@@ -54,6 +54,26 @@ public class ReceivablesConfiguration {
     private final org.apache.fineract.portfolio.loanproduct.domain.LoanProductRepository products;
     private final co.mnzl.fineract.custom.loan.instrument.MnzlLoanProductStrategyReadService strategies;
 
+    private final co.mnzl.fineract.custom.receivables.nativeinstrument.NativeReceivableBridge nativeBridge;
+
+    @Transactional
+    public JsonNode resolveBorrower(String request) {
+        security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
+        JsonNode input = json.validate("nativeBorrowerRequest", request);
+        Map<String, Object> config = authorize(input.get("scope"), true);
+        require(text(input, "accountMappingRevisionId").equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
+        String customer = text(input, "customerReferenceId");
+        long clientId = nativeBridge
+                .createClient(new co.mnzl.fineract.custom.receivables.nativeinstrument.NativeReceivableBridge.ClientIdentity(
+                        "R" + ReceivablesStore.key(scopeKey(input.get("scope")), "customer", customer), customer,
+                        number(config, "office_id")));
+        ObjectNode result = json.object();
+        result.set("scope", input.get("scope"));
+        result.put("customerReferenceId", customer);
+        result.put("nativeClientId", Long.toString(clientId));
+        return result;
+    }
+
     public String scopeKey(JsonNode scope) {
         ObjectNode financier = json.object();
         for (String field : new String[] { "platformId", "financierOrganizationId", "environment", "ledgerEpoch" }) {
