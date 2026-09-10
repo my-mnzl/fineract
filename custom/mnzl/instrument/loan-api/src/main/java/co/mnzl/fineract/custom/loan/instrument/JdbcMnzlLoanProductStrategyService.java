@@ -64,6 +64,10 @@ public class JdbcMnzlLoanProductStrategyService implements MnzlLoanProductStrate
         final String chargeStrategyCode = fromJsonHelper.extractStringNamed("chargeStrategyCode", element);
         final String cobStrategyCode = fromJsonHelper.extractStringNamed("cobStrategyCode", element);
 
+        PurchasedReceivableProductValidator.validateStrategies(instrumentCode, scheduleStrategyCode, chargeStrategyCode, cobStrategyCode);
+        if (MnzlLoanProductStrategyCodes.INSTRUMENT_PURCHASED_RECEIVABLE.equals(instrumentCode)) {
+            PurchasedReceivableProductValidator.validate(loanProductRepository.findById(loanProductId).orElseThrow());
+        }
         int updated = jdbcTemplate.update(
                 "update m_mnzl_loan_product_strategy set instrument_code = ?, schedule_strategy_code = ?, charge_strategy_code = ?, "
                         + "cob_strategy_code = ?, last_modified_date = CURRENT_TIMESTAMP where loan_product_id = ?",

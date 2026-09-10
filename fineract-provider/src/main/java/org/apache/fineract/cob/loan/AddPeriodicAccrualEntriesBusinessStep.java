@@ -36,6 +36,9 @@ public class AddPeriodicAccrualEntriesBusinessStep implements LoanCOBBusinessSte
 
     @Override
     public Loan execute(Loan loan) {
+        if (loan.isPurchasedReceivable()) {
+            return loan;
+        }
         log.debug("start processing period accrual business step for loan with Id [{}]", loan.getId());
         try {
             loanAccrualsProcessingService.addPeriodicAccruals(DateUtils.getBusinessLocalDate(), loan);

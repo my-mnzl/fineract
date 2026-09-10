@@ -50,6 +50,9 @@ public class CustomCheckDueInstallmentsBusinessStep implements LoanCOBBusinessSt
 
     @Override
     public Loan execute(Loan loan) {
+        if (loan != null && loan.isPurchasedReceivable()) {
+            return loan;
+        }
         if (loan == null) {
             log.debug("Ignoring custom snapshot event processing for null loan.");
             return null;

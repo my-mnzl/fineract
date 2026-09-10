@@ -244,6 +244,28 @@ public class LoanProductRelatedDetail {
                 enableBuyDownFee, buyDownFeeCalculationType, buyDownFeeStrategy, buyDownFeeIncomeType, merchantBuyDownFee);
     }
 
+    public static LoanProductRelatedDetail fixedReceivable(MonetaryCurrency currency, BigDecimal face, int periods) {
+        LoanProductRelatedDetail detail = new LoanProductRelatedDetail();
+        detail.currency = currency.copy();
+        detail.principal = face;
+        detail.nominalInterestRatePerPeriod = BigDecimal.ZERO;
+        detail.annualNominalInterestRate = BigDecimal.ZERO;
+        detail.interestPeriodFrequencyType = PeriodFrequencyType.DAYS;
+        detail.interestMethod = InterestMethod.FLAT;
+        detail.interestCalculationPeriodMethod = InterestCalculationPeriodMethod.DAILY;
+        detail.repayEvery = 1;
+        detail.repaymentPeriodFrequencyType = PeriodFrequencyType.DAYS;
+        detail.numberOfRepayments = periods;
+        detail.fixedLength = periods;
+        detail.amortizationMethod = AmortizationMethod.EQUAL_PRINCIPAL;
+        detail.daysInMonthType = 1;
+        detail.daysInYearType = 1;
+        detail.loanScheduleType = LoanScheduleType.CUMULATIVE;
+        detail.loanScheduleProcessingType = LoanScheduleProcessingType.HORIZONTAL;
+        detail.merchantBuyDownFee = false;
+        return detail;
+    }
+
     protected LoanProductRelatedDetail() {
         //
     }
