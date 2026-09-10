@@ -49,16 +49,20 @@ class ReceivablesReadServiceTest {
         var date = LocalDate.of(2026, 9, 1);
         when(jdbc.queryForList(anyString(), eq("scope"), eq("LOT"), eq(7L), eq(date), eq(date))).thenReturn(List.of(
                 Map.of("subject_key", "a", "record_key", "a1", "created_at", "2026-08-01T00:00:00Z", "snapshot_json",
-                        "{\"lotId\":\"a\",\"settledMinor\":\"0\"}"),
-                Map.of("subject_key", "b", "record_key", "b1", "created_at", "2026-08-02T00:00:00Z", "snapshot_json", "{\"lotId\":\"b\"}"),
+                        "{\"lotId\":\"a\",\"settledMinor\":\"0\",\"originalAmountMinor\":\"100\"}"),
+                Map.of("subject_key", "b", "record_key", "b1", "created_at", "2026-08-02T00:00:00Z", "snapshot_json",
+                        "{\"lotId\":\"b\",\"settledMinor\":\"0\",\"originalAmountMinor\":\"100\"}"),
                 Map.of("subject_key", "a", "record_key", "a2", "created_at", "2026-08-03T00:00:00Z", "snapshot_json",
-                        "{\"lotId\":\"a\",\"settledMinor\":\"12\"}")));
+                        "{\"lotId\":\"a\",\"settledMinor\":\"12\",\"originalAmountMinor\":\"100\"}")));
+        when(store.require(eq("developer_lot"), anyString())).thenReturn(Map.of("snapshot_json",
+                "{\"effectiveDate\":\"2026-08-01\",\"dueDate\":\"2026-09-01\",\"rate\":0,\"direction\":\"RECEIVABLE\",\"principalMinor\":100,\"amountDueMinor\":100}"));
         var reads = new ReceivablesReadService(store, json, config, null, null, null, null);
         var boundary = new ReceivablesReadService.Boundary(date, "BEFORE_EVENTS", 7);
         var first = reads.snapshots(scope, boundary, "LOT", null, 1);
         assertThat(first.path("items").get(0).path("lotId").asText()).isEqualTo("b");
         var second = reads.snapshots(scope, boundary, "LOT", first.path("nextCursor").asText(), 1);
         assertThat(second.path("items").get(0).path("settledMinor").asText()).isEqualTo("12");
+        assertThat(second.path("items").get(0).path("outstandingMinor").asText()).isEqualTo("88");
         assertThat(second.path("nextCursor").isNull()).isTrue();
         verify(jdbc, times(2)).queryForList(contains("e.boundary_side='BEFORE_EVENTS'"), eq("scope"), eq("LOT"), eq(7L), eq(date),
                 eq(date));

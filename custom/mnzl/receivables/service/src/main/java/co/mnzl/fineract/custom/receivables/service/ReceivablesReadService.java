@@ -25,6 +25,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.strin
 
 import co.mnzl.fineract.custom.receivables.nativeinstrument.NativeHelBridge;
 import co.mnzl.fineract.custom.receivables.nativeinstrument.NativeReceivableBridge;
+import co.mnzl.fineract.receivables.math.ReceivableEvents;
 import co.mnzl.fineract.receivables.math.ReceivablesMath;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -358,8 +359,17 @@ public class ReceivablesReadService {
     }
 
     public JsonNode snapshots(JsonNode scope, Boundary boundary, String kind, String cursor, int limit) {
-        ObjectNode result = (ObjectNode) page(snapshotRows(scope, boundary, kind), cursor, limit,
-                row -> json.read(string(row, "snapshot_json")));
+        ObjectNode result = (ObjectNode) page(snapshotRows(scope, boundary, kind), cursor, limit, row -> {
+            ObjectNode value = (ObjectNode) json.read(string(row, "snapshot_json"));
+            if (kind.equals("LOT")) {
+                var persisted = store.require("developer_lot", string(row, "subject_key"));
+                var lot = json.convert(json.read(string(persisted, "snapshot_json")), ReceivableEvents.AdjustmentLot.class);
+                BigInteger carrying = lot.balanceMinor(boundary.date());
+                value.put("outstandingMinor", carrying.subtract(new BigInteger(text(value, "settledMinor"))).toString());
+                value.put("accruedUnwindMinor", carrying.subtract(new BigInteger(text(value, "originalAmountMinor"))).toString());
+            }
+            return value;
+        });
         result.set("scope", scope);
         result.put("businessDate", boundary.date().toString());
         result.put("boundarySide", boundary.side());
