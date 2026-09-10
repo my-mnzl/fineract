@@ -118,6 +118,7 @@ public class ReceivablesReadService {
             result.put("closureReason", string(account, "closure_reason"));
         }
         result.put("nativeLoanId", Long.toString(number(account, "native_loan_id")));
+        result.put("nativeClientId", Long.toString(number(account, "native_client_id")));
         result.set("position", position(scope, id, boundary));
         result.set("schedule", schedule(scope, id, boundary));
         return result;
@@ -132,7 +133,7 @@ public class ReceivablesReadService {
         var state = historicalState(account, boundary);
         var analytical = ReceivablesMath.position(state, boundary.date());
         ObjectNode result = issued.deepCopy();
-        result.setAll(measurement.measures(analytical, new BigInteger(text(issued, "lossAllowanceMinor"))));
+        result.setAll(measurement.measures(analytical, new BigInteger(text(issued, "lossAllowanceMinor")), boundary.side()));
         result.put("businessDate", boundary.date().toString());
         result.put("boundarySide", boundary.side());
         result.put("grossYield", state.segment().grossYield().rate().toPlainString());
@@ -175,6 +176,7 @@ public class ReceivablesReadService {
             legs.add(wire);
         }
         ObjectNode result = json.object();
+        result.put("nativeClientId", Long.toString(number(account, "native_client_id")));
         result.set("position", position(scope, id, boundary));
         result.set("measurementLegs", json.value(legs));
         result.put("eventWatermark", Long.toString(boundary.watermark()));

@@ -2983,6 +2983,9 @@
           "beneficiaryReferenceId": {
             "$ref": "#/components/schemas/id"
           },
+          "helFundingOperationId": {
+            "$ref": "#/components/schemas/id"
+          },
           "amountMinor": {
             "$ref": "#/components/schemas/positiveMinorUnits"
           }
@@ -5936,6 +5939,9 @@
           "nativeLoanId": {
             "$ref": "#/components/schemas/id"
           },
+          "nativeClientId": {
+            "$ref": "#/components/schemas/id"
+          },
           "position": {
             "$ref": "#/components/schemas/position"
           },
@@ -5947,6 +5953,7 @@
           "closureReason",
           "externalId",
           "nativeLoanId",
+          "nativeClientId",
           "position",
           "schedule"
         ],
@@ -6545,6 +6552,9 @@
             "items": {
               "$ref": "#/components/schemas/id"
             }
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
           },
           "reconciliationId": {
             "anyOf": [
@@ -7632,6 +7642,9 @@
               "$ref": "#/components/schemas/id"
             }
           },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
           "reconciliationId": {
             "anyOf": [
               {
@@ -7811,6 +7824,12 @@
           "applicationId": {
             "$ref": "#/components/schemas/id"
           },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "expectedNativeClientId": {
+            "$ref": "#/components/schemas/id"
+          },
           "loanExternalId": {
             "$ref": "#/components/schemas/id"
           },
@@ -7846,6 +7865,8 @@
           "approvalEvidenceIds",
           "commandType",
           "applicationId",
+          "dealId",
+          "expectedNativeClientId",
           "loanExternalId",
           "expectedPrincipalMinor",
           "expectedFinancedFeesMinor",
@@ -7916,6 +7937,9 @@
             "items": {
               "$ref": "#/components/schemas/id"
             }
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
           },
           "reconciliationId": {
             "anyOf": [
@@ -8278,6 +8302,9 @@
           },
           "boundarySide": {
             "$ref": "#/components/schemas/boundarySide"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
           }
         },
         "required": [
@@ -8334,6 +8361,16 @@
               }
             ]
           },
+          "helProductId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bankAccountReference": {
             "$ref": "#/components/schemas/id"
           },
@@ -8371,6 +8408,7 @@
           "officeId",
           "integrationUserId",
           "helPaymentTypeId",
+          "helProductId",
           "bankAccountReference",
           "accountMap"
         ],

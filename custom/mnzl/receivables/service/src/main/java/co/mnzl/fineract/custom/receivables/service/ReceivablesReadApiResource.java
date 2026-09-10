@@ -80,6 +80,12 @@ public class ReceivablesReadApiResource {
     }
 
     @GET
+    @Path("/hel-funding/allocations/{id}")
+    public String helAllocation(@Context HttpHeaders headers, @PathParam("id") String id) {
+        return json.write(reads.operation(scope(headers), id, false));
+    }
+
+    @GET
     @Path("/accounts/{id}")
     public String account(@Context HttpHeaders headers, @PathParam("id") String id) {
         return json.write(reads.account(scope(headers), id));

@@ -34,7 +34,6 @@ import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,7 +62,7 @@ public class ReceivablesCalculationService {
         ObjectNode hashInput = input.deepCopy();
         hashInput.remove("basisHash");
         if (input.has("basis")) {
-            hashInput = normalizedBasis(input.get("basis"));
+            hashInput = json.normalizedBasis(input.get("basis"));
             for (String key : List.of("calculationVersion", "productPolicyCode", "schemaVersion", "policyRevisionId", "calculatorBuild")) {
                 require(input.get(key).equals(hashInput.get(key)), "SOURCE_CHANGED");
             }
@@ -82,19 +81,6 @@ public class ReceivablesCalculationService {
             throw (ReceivablesException) new ReceivablesException("INVALID_DATA").initCause(exception);
         }
         return json.validate("calculationResult", json.write(result));
-    }
-
-    private ObjectNode normalizedBasis(JsonNode basis) {
-        ObjectNode normalized = basis.deepCopy();
-        for (String field : List.of("cashflows", "acceptedAccountPrices")) {
-            List<JsonNode> rows = new ArrayList<>();
-            basis.path(field).forEach(rows::add);
-            String id = field.equals("cashflows") ? "cashflowId" : "accountId";
-            rows.sort(Comparator.comparing(row -> text(row, id)));
-            require(rows.stream().map(row -> text(row, id)).distinct().count() == rows.size(), "INVALID_DATA");
-            normalized.set(field, json.value(rows));
-        }
-        return normalized;
     }
 
     private void price(JsonNode input, ObjectNode result, JsonNode basis) {
@@ -291,7 +277,8 @@ public class ReceivablesCalculationService {
         BigInteger n = minor(wire, "amortizedCostMinor");
         BigInteger allowance = minor(wire, "lossAllowanceMinor");
         require(n.compareTo(g) <= 0 && g.compareTo(future.add(due)) <= 0 && allowance.compareTo(n) <= 0
-                && n.subtract(allowance).equals(minor(wire, "netCarryingMinor")) && wire.path("daysPastDue").asInt() == dpd, "SOURCE_CHANGED");
+                && n.subtract(allowance).equals(minor(wire, "netCarryingMinor")) && wire.path("daysPastDue").asInt() == dpd,
+                "SOURCE_CHANGED");
         require(future.add(due).subtract(g).equals(minor(wire, "deferredDiscountMinor"))
                 && g.subtract(n).equals(minor(wire, "deferredIntegralFeeMinor")), "SOURCE_CHANGED");
         var position = new ReceivablesMath.Position(date, future.add(due), future, due, g, n, minor(wire, "deferredDiscountMinor"),
@@ -366,7 +353,8 @@ public class ReceivablesCalculationService {
         var position = ReceivablesMath.position(state, date(input, "settlementDate"));
         Map<String, BigInteger> selected = new LinkedHashMap<>();
         for (JsonNode id : input.path("cashflowIds")) {
-            var leg = position.legs().stream().filter(l -> l.cashflow().cashflowId().equals(id.asText())).findFirst().orElseThrow(() -> new ReceivablesException("INVALID_DATA"));
+            var leg = position.legs().stream().filter(l -> l.cashflow().cashflowId().equals(id.asText())).findFirst()
+                    .orElseThrow(() -> new ReceivablesException("INVALID_DATA"));
             require(selected.put(id.asText(), leg.outstandingMinor()) == null, "INVALID_DATA");
         }
         BigInteger oldAllowance = minor(input.get("position"), "lossAllowanceMinor");

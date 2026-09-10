@@ -18,27 +18,21 @@
  */
 package co.mnzl.fineract.custom.receivables.service;
 
-public final class ReceivablesException extends RuntimeException {
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.ext.ExceptionMapper;
+import jakarta.ws.rs.ext.Provider;
+import java.util.Map;
+import org.springframework.stereotype.Component;
 
-    private final String code;
+@Provider
+@Component
+public class ReceivablesExceptionMapper implements ExceptionMapper<ReceivablesException> {
 
-    public ReceivablesException(String code) {
-        super(code);
-        this.code = code;
-    }
-
-    public ReceivablesException(String code, Throwable cause) {
-        super(code, cause);
-        this.code = code;
-    }
-
-    public String code() {
-        return code;
-    }
-
-    public static void require(boolean condition, String code) {
-        if (!condition) {
-            throw new ReceivablesException(code);
-        }
+    @Override
+    public Response toResponse(ReceivablesException exception) {
+        int status = exception.code().equals("INVALID_DATA") ? 400 : 409;
+        return Response.status(status).type(MediaType.APPLICATION_JSON)
+                .entity(Map.of("code", exception.code(), "message", exception.code())).build();
     }
 }

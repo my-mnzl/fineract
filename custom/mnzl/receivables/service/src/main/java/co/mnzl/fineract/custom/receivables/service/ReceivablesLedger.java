@@ -19,6 +19,7 @@
 package co.mnzl.fineract.custom.receivables.service;
 
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesException.require;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -40,24 +41,50 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ReceivablesLedger {
-    public record Line(String accountKey, String side, BigInteger amountMinor, String accountId, String dealId, String component) {}
-    public static void pair(List<Line> lines, String debit, String credit, BigInteger signed, String account, String deal, String component) {
-        if (signed.signum() == 0) return;
-        lines.add(new Line(signed.signum() > 0 ? debit : credit, "DEBIT", signed.abs(), account, deal, component));
-        lines.add(new Line(signed.signum() > 0 ? credit : debit, "CREDIT", signed.abs(), account, deal, component));
+
+    public record Line(String accountKey, String side, BigInteger amountMinor, String accountId, String dealId, String component,
+            String bankMovementId) {
     }
-    public static void line(List<Line> lines, String accountKey, String side, BigInteger signed, String account, String deal, String component) {
-        if (signed.signum() == 0) return;
-        lines.add(new Line(accountKey, signed.signum() > 0 ? side : side.equals("DEBIT") ? "CREDIT" : "DEBIT", signed.abs(), account, deal, component));
+
+    public static void pair(List<Line> lines, String debit, String credit, BigInteger signed, String account, String deal,
+            String component) {
+        if (signed.signum() == 0) {
+            return;
+        }
+        lines.add(new Line(signed.signum() > 0 ? debit : credit, "DEBIT", signed.abs(), account, deal, component, null));
+        lines.add(new Line(signed.signum() > 0 ? credit : debit, "CREDIT", signed.abs(), account, deal, component, null));
     }
+
+    public static void line(List<Line> lines, String accountKey, String side, BigInteger signed, String account, String deal,
+            String component) {
+        if (signed.signum() == 0) {
+            return;
+        }
+        lines.add(new Line(accountKey, signed.signum() > 0 ? side : side.equals("DEBIT") ? "CREDIT" : "DEBIT", signed.abs(), account, deal,
+                component, null));
+    }
+
+    public static void bankPair(List<Line> lines, String debit, String credit, BigInteger amount, String account, String deal,
+            String component, String movementId) {
+        int start = lines.size();
+        pair(lines, debit, credit, amount, account, deal, component);
+        for (int i = start; i < lines.size(); i++) {
+            Line line = lines.get(i);
+            lines.set(i, new Line(line.accountKey(), line.side(), line.amountMinor(), line.accountId(), line.dealId(), line.component(),
+                    movementId));
+        }
+    }
+
     private final ReceivablesStore store;
     private final ReceivablesJson json;
     private final GLAccountRepository accounts;
     private final OfficeRepository offices;
     private final JournalEntryRepository journals;
+
     @Transactional(propagation = Propagation.MANDATORY)
     public List<JsonNode> post(String scope, String eventKey, LocalDate date, long officeId, List<Line> lines) {
-        BigInteger balance = lines.stream().map(l -> l.side().equals("DEBIT") ? l.amountMinor() : l.amountMinor().negate()).reduce(BigInteger.ZERO, BigInteger::add);
+        BigInteger balance = lines.stream().map(l -> l.side().equals("DEBIT") ? l.amountMinor() : l.amountMinor().negate())
+                .reduce(BigInteger.ZERO, BigInteger::add);
         require(balance.signum() == 0, "JOURNAL_MISMATCH");
         List<JsonNode> output = new ArrayList<>();
         int sequence = 0;
@@ -69,18 +96,41 @@ public class ReceivablesLedger {
             require(!account.isDisabled() && account.isDetailAccount(), "FINERACT_CAPABILITY_MISSING");
             String sourceId = eventKey + ":" + sequence++;
             JournalEntry entry = JournalEntry.createNew(offices.findById(officeId).orElseThrow(), null, account, "EGP",
-                    "R" + eventKey.substring(0, 40), false, date, line.side().equals("DEBIT") ? JournalEntryType.DEBIT : JournalEntryType.CREDIT,
-                    new BigDecimal(line.amountMinor(), 2), "Purchased receivables " + line.component(), null, null, sourceId, null, null, null, null);
+                    "R" + eventKey.substring(0, 40), false, date,
+                    line.side().equals("DEBIT") ? JournalEntryType.DEBIT : JournalEntryType.CREDIT, new BigDecimal(line.amountMinor(), 2),
+                    "Purchased receivables " + line.component(), null, null, sourceId, null, null, null, null);
             long journalId = journals.saveAndFlush(entry).getId();
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("scope_key", scope); fields.put("event_key", eventKey); fields.put("source_line_id", sourceId); fields.put("native_journal_id", journalId);
-            fields.put("native_gl_id", glId); fields.put("account_key", line.accountId() == null ? null : ReceivablesStore.key(scope, "account", line.accountId()));
-            fields.put("deal_id", line.dealId()); fields.put("semantic_account", line.accountKey()); fields.put("side", line.side());
-            fields.put("amount_minor", line.amountMinor().toString()); fields.put("component", line.component());
+            fields.put("scope_key", scope);
+            fields.put("event_key", eventKey);
+            fields.put("source_line_id", sourceId);
+            fields.put("native_journal_id", journalId);
+            fields.put("native_gl_id", glId);
+            fields.put("account_key", line.accountId() == null ? null : ReceivablesStore.key(scope, "account", line.accountId()));
+            fields.put("deal_id", line.dealId());
+            fields.put("semantic_account", line.accountKey());
+            fields.put("side", line.side());
+            fields.put("amount_minor", line.amountMinor().toString());
+            fields.put("component", line.component());
             store.insert("journal_line", ReceivablesStore.key(scope, "line", sourceId), fields);
-            var wire = json.object(); wire.put("sourceLineId", sourceId); wire.put("accountKey", line.accountKey()); wire.put("side", line.side());
-            wire.put("amountMinor", line.amountMinor().toString()); wire.put("currency", "EGP"); if (line.accountId() != null) wire.put("accountId", line.accountId());
-            wire.put("dealId", line.dealId()); wire.put("component", line.component()); output.add(wire);
+            var wire = json.object();
+            wire.put("sourceLineId", sourceId);
+            wire.put("journalId", Long.toString(journalId));
+            if (line.bankMovementId() != null) {
+                wire.put("bankMovementId", line.bankMovementId());
+            }
+            wire.put("accountKey", line.accountKey());
+            wire.put("side", line.side());
+            wire.put("amountMinor", line.amountMinor().toString());
+            wire.put("currency", "EGP");
+            if (line.accountId() != null) {
+                wire.put("accountId", line.accountId());
+            }
+            if (line.dealId() != null) {
+                wire.put("dealId", line.dealId());
+            }
+            wire.put("component", line.component());
+            output.add(wire);
         }
         return output;
     }

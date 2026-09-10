@@ -157,7 +157,7 @@
 <column name="native_journal_id" type="BIGINT"><constraints nullable="false"/></column>
 <column name="native_gl_id" type="BIGINT"><constraints nullable="false"/></column>
 <column name="account_key" type="VARCHAR(64)"><constraints nullable="true"/></column>
-<column name="deal_id" type="VARCHAR(200)"><constraints nullable="false"/></column>
+<column name="deal_id" type="VARCHAR(200)"><constraints nullable="true"/></column>
 <column name="semantic_account" type="VARCHAR(64)"><constraints nullable="false"/></column>
 <column name="side" type="VARCHAR(8)"><constraints nullable="false"/></column>
 <column name="amount_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
@@ -327,5 +327,11 @@
 </createTable>
 <createIndex tableName="m_mnzl_r_state_snapshot" indexName="ix_r_snapshot_subject"><column name="scope_key"/><column name="subject_key"/></createIndex>
 <addColumn tableName="m_mnzl_r_account"><column name="closure_reason" type="VARCHAR(40)"/></addColumn>
+<addColumn tableName="m_mnzl_r_funding_facility"><column name="accrued_expense_minor" type="VARCHAR(100)" defaultValue="0"><constraints nullable="false"/></column></addColumn>
+<addColumn tableName="m_mnzl_r_hel_funding"><column name="deal_id" type="VARCHAR(200)"><constraints nullable="false"/></column></addColumn>
+<addColumn tableName="m_mnzl_r_event"><column name="boundary_side" type="VARCHAR(20)" defaultValue="AFTER_EVENTS"><constraints nullable="false"/></column></addColumn>
+<addColumn tableName="m_mnzl_r_account"><column name="last_boundary_side" type="VARCHAR(20)" defaultValue="AFTER_EVENTS"><constraints nullable="false"/></column></addColumn>
+<addColumn tableName="m_mnzl_r_hel_funding"><column name="used_minor" type="VARCHAR(100)" defaultValue="0"><constraints nullable="false"/></column></addColumn>
+<addColumn tableName="m_mnzl_r_configuration"><column name="hel_product_id" type="BIGINT"/></addColumn>
 </changeSet>
 </databaseChangeLog>
