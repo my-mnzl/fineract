@@ -140,7 +140,11 @@ class ReceivablesDatabaseIntegrationTest {
                         "impaired-reversal-restores-allowance", "independent-controls-detect-mirrored-corruption", "future-close-rejected",
                         "preparing-close-blocks-historical-posting", "developer-payment-crosses-receivable-due-date",
                         "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
-                        "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees")));
+                        "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees",
+                        "persisted-native-configuration-readback", "stage-three-writeoff-later-recovery",
+                        "recovery-payer-and-exact-transaction-readback", "developer-lot-impairment-after-due",
+                        "missing-and-expired-lot-forecasts-block-close", "offsetting-missing-native-journals-rejected",
+                        "unregistered-native-transaction-rejected")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -260,6 +264,7 @@ class ReceivablesDatabaseIntegrationTest {
         });
         configuration.set("accountMap", json.value(mapping));
         assertThat(request("POST", PREFIX + "/configuration", configuration, 200).path("productConfigurationReady").asBoolean()).isTrue();
+        assertThat(request("GET", PREFIX + "/configuration", null, 200)).isEqualTo(configuration);
     }
 
     JsonNode purchase(String id) throws Exception {
@@ -692,12 +697,13 @@ class ReceivablesDatabaseIntegrationTest {
     }
 
     private void verifyServicingAndClose() throws Exception {
+        LocalDate boundary = startDate.withDayOfMonth(1).plusMonths(1);
         ObjectNode reset = command("RESET_RATE", "reset", "account-1", "RECEIVABLE");
         reset.put("expectedVersion", version("account-1"));
         reset.put("corridorObservationId", "reset-rate");
         reset.put("corridorRate", "0.30");
         reset.put("spread", "0");
-        reset.put("developerAdjustmentDueDate", startDate.plusDays(45).toString());
+        reset.put("developerAdjustmentDueDate", boundary.minusDays(1).toString());
         request("POST", PREFIX + "/commands", reset, 200);
         JsonNode lots = request("GET", PREFIX + "/developer-lots?businessDate=" + today + "&boundarySide=AFTER_EVENTS", null, 200);
         assertThat(lots.path("items").size()).isEqualTo(1);
@@ -707,7 +713,6 @@ class ReceivablesDatabaseIntegrationTest {
         impairment.set("qualitativeFindingIds", json.value(List.of()));
         impairment.set("cureEvidenceIds", json.value(List.of()));
         request("POST", PREFIX + "/commands", impairment, 200);
-        LocalDate boundary = startDate.withDayOfMonth(1).plusMonths(1);
         moveDate(boundary);
         String period = boundary.minusDays(1).toString().substring(0, 7);
         ObjectNode close = command("CLOSE_PERIOD", "close-prepare", period, "PERIOD");
@@ -725,6 +730,18 @@ class ReceivablesDatabaseIntegrationTest {
         future.put("subjectId", boundary.toString().substring(0, 7));
         future.put("boundaryDate", boundary.plusMonths(1).toString());
         assertThat(request("POST", PREFIX + "/commands", future, 409).path("code").asText()).isEqualTo("APPROVAL_SCOPE_CHANGED");
+        assertThat(request("POST", PREFIX + "/commands", close, 409).path("code").asText()).isEqualTo("EVIDENCE_EXPIRED");
+        moveDate(boundary.minusDays(1));
+        setCloseLotForecast("close-lot-expired", "1", today);
+        moveDate(boundary);
+        close.set("forecastIds", json.value(List.of("account-1-forecast", "rollback-forecast", "close-lot-expired")));
+        close.put("eventWatermark", request("GET", PREFIX + "/capabilities", null, 200).path("currentEventWatermark").asText());
+        assertThat(request("POST", PREFIX + "/commands", close, 409).path("code").asText()).isEqualTo("EVIDENCE_EXPIRED");
+        moveDate(boundary.minusDays(1));
+        setCloseLotForecast("close-lot-current", "2", today.plusDays(365));
+        moveDate(boundary);
+        close.set("forecastIds", json.value(List.of("account-1-forecast", "rollback-forecast", "close-lot-current")));
+        close.put("eventWatermark", request("GET", PREFIX + "/capabilities", null, 200).path("currentEventWatermark").asText());
         JsonNode prepared = request("POST", PREFIX + "/commands", close, 200);
         ObjectNode historyAuthorization = json.object();
         historyAuthorization.set("scope", scope(false));
@@ -797,6 +814,26 @@ class ReceivablesDatabaseIntegrationTest {
                 .isEqualTo("100000");
         assertThat(request("GET", PREFIX + "/controls?businessDate=" + boundary + "&boundarySide=BEFORE_EVENTS&eventWatermark=" + watermark,
                 null, 200)).isEqualTo(frozen);
+    }
+
+    private void setCloseLotForecast(String id, String forecastVersion, LocalDate validThrough) throws Exception {
+        JsonNode lot = request("GET", PREFIX + "/developer-lots", null, 200).path("items").get(0);
+        ObjectNode forecast = bookingCommands.get("account-1").path("riskForecast").deepCopy();
+        forecast.put("forecastId", id);
+        forecast.put("forecastVersion", forecastVersion);
+        forecast.put("asOfDate", today.toString());
+        forecast.put("validThroughDate", validThrough.toString());
+        forecast.put("stage", "STAGE_2");
+        ((ObjectNode) forecast.path("scenarios").get(0)).set("recoveries", json.value(List.of()));
+        forecast.remove("contentHash");
+        forecast.put("contentHash", json.hash(forecast));
+        ObjectNode impairment = command("SET_DEVELOPER_IMPAIRMENT", id, "account-1", "RECEIVABLE");
+        impairment.put("expectedVersion", version("account-1"));
+        impairment.set("lotId", lot.get("lotId"));
+        impairment.put("expectedCarryingMinor", Long.toString(lot.path("outstandingMinor").asLong() + lot.path("settledMinor").asLong()));
+        impairment.set("expectedAnnualNominalRate", lot.get("annualNominalRate"));
+        impairment.set("forecast", forecast);
+        request("POST", PREFIX + "/commands", impairment, 200);
     }
 
     void recordReceipt(String operation, String account, String amount) throws Exception {

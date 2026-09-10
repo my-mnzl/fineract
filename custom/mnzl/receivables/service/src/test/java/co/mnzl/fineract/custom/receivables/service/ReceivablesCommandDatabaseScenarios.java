@@ -641,7 +641,9 @@ final class ReceivablesCommandDatabaseScenarios {
         JsonNode lot = null;
         for (JsonNode value : harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/developer-lots", null, 200)
                 .path("items")) {
-            if (value.path("accountId").asText().equals(id)) lot = value;
+            if (value.path("accountId").asText().equals(id)) {
+                lot = value;
+            }
         }
         assertThat(lot).isNotNull();
         ObjectNode forecast = forecast(id, "developer-lot-forecast", List.of());
