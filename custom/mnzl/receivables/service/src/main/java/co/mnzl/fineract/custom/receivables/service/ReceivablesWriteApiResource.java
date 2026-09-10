@@ -24,6 +24,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.strin
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -105,6 +106,12 @@ public class ReceivablesWriteApiResource {
     public String resolveBorrower(@Context HttpHeaders headers, String request) {
         authorizeRequest(headers, request);
         return json.write(configuration.resolveBorrower(request));
+    }
+
+    @GET
+    @Path("/configuration")
+    public String readConfiguration(@Context HttpHeaders headers) {
+        return json.write(configuration.readConfiguration(scope(headers), headers.getHeaderString("X-MNZL-Account-Mapping")));
     }
 
     @POST

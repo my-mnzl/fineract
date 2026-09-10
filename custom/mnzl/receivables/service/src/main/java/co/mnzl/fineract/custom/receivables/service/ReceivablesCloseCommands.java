@@ -89,6 +89,7 @@ public class ReceivablesCloseCommands {
             require(!LocalDate.parse(string(account, "last_effective_date")).isAfter(boundary), "SOURCE_CHANGED");
             if (LocalDate.parse(string(account, "activation_date")).isBefore(boundary)) {
                 accounts.closeAccrue(e, account, forecastIds);
+                cash.closeDeveloperImpairment(e, string(account, "record_key"), forecastIds);
             }
         }
         for (var facility : store.scoped("funding_facility", e.scope)) {

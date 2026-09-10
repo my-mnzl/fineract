@@ -139,6 +139,47 @@ public class ReceivablesConfiguration {
         return capabilities(input.get("scope"), false);
     }
 
+    @Transactional(readOnly = true)
+    public JsonNode readConfiguration(JsonNode scope, String mappingRevision) {
+        var config = store.require("configuration", scopeKey(scope));
+        if (number(config, "integration_user_id") == security.authenticatedUser().getId()) {
+            security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES");
+        } else {
+            security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
+        }
+        require(string(config, "mapping_revision").equals(mappingRevision), "FINERACT_CAPABILITY_MISSING");
+        validateProduct(number(config, "product_id"));
+        ObjectNode result = (ObjectNode) json.read(string(config, "config_json"));
+        result.put("productId", Long.toString(number(config, "product_id")));
+        result.put("officeId", Long.toString(number(config, "office_id")));
+        result.put("integrationUserId", Long.toString(number(config, "integration_user_id")));
+        result.put("accountMappingRevisionId", string(config, "mapping_revision"));
+        result.put("policyRevisionId", string(config, "policy_revision"));
+        result.put("calculatorBuild", string(config, "calculator_build"));
+        if (config.get("hel_product_id") == null) {
+            result.putNull("helProductId");
+        } else {
+            result.put("helProductId", Long.toString(number(config, "hel_product_id")));
+        }
+        if (config.get("hel_payment_type_id") == null) {
+            result.putNull("helPaymentTypeId");
+        } else {
+            result.put("helPaymentTypeId", Long.toString(number(config, "hel_payment_type_id")));
+        }
+        var mappings = result.putArray("accountMap");
+        for (var mapping : store.scoped("account_map", scopeKey(scope))) {
+            var actual = store.jdbc().queryForMap("select disabled,account_usage from acc_gl_account where id=?",
+                    number(mapping, "native_gl_id"));
+            require(!Boolean.parseBoolean(string(actual, "disabled")) && !"1".equals(string(actual, "disabled"))
+                    && number(actual, "account_usage") == 1, "FINERACT_CAPABILITY_MISSING");
+            require(mappingRevision.equals(string(mapping, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
+            mappings.addObject().put("accountKey", string(mapping, "account_key")).put("nativeGlAccountId",
+                    Long.toString(number(mapping, "native_gl_id")));
+        }
+        require(mappings.size() == ACCOUNTS.size(), "FINERACT_CAPABILITY_MISSING");
+        return result;
+    }
+
     public void validateProduct(long id) {
         var product = products.findById(id).orElseThrow(() -> new ReceivablesException("FINERACT_CAPABILITY_MISSING"));
         var strategy = strategies.findOne(id);

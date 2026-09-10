@@ -220,6 +220,7 @@
 <column name="allowance_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
 <column name="rate" type="CLOB"><constraints nullable="false"/></column>
 <column name="watermark" type="DATE"><constraints nullable="false"/></column>
+<column name="forecast_json" type="CLOB"/>
 <column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
 <createIndex tableName="m_mnzl_r_developer_lot" indexName="ix_r_developer_lot_scope"><column name="scope_key"/></createIndex>
@@ -326,7 +327,10 @@
 <column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
 <createIndex tableName="m_mnzl_r_state_snapshot" indexName="ix_r_snapshot_subject"><column name="scope_key"/><column name="subject_key"/></createIndex>
-<addColumn tableName="m_mnzl_r_account"><column name="closure_reason" type="VARCHAR(40)"/></addColumn>
+<addColumn tableName="m_mnzl_r_account"><column name="written_off_minor" type="VARCHAR(100)" defaultValue="0"><constraints nullable="false"/></column>
+<column name="recovered_minor" type="VARCHAR(100)" defaultValue="0"><constraints nullable="false"/></column>
+<column name="writeoff_operation_id" type="VARCHAR(200)"/>
+<column name="closure_reason" type="VARCHAR(40)"/></addColumn>
 <addColumn tableName="m_mnzl_r_funding_facility"><column name="accrued_expense_minor" type="VARCHAR(100)" defaultValue="0"><constraints nullable="false"/></column></addColumn>
 <addColumn tableName="m_mnzl_r_hel_funding"><column name="deal_id" type="VARCHAR(200)"><constraints nullable="false"/></column></addColumn>
 <addColumn tableName="m_mnzl_r_event"><column name="boundary_side" type="VARCHAR(20)" defaultValue="AFTER_EVENTS"><constraints nullable="false"/></column></addColumn>

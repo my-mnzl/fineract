@@ -104,6 +104,11 @@ public class ReceivablesCommandService {
             case "SUBSTITUTE_RECEIVABLE" -> accounts.substitute(execution);
             case "WORKOUT" -> accounts.workout(execution);
             case "SET_IMPAIRMENT" -> accounts.impair(execution);
+            case "RECOVER_WRITTEN_OFF" -> accounts.recoverWrittenOff(execution);
+            case "SET_DEVELOPER_IMPAIRMENT" -> {
+                accounts.account(execution);
+                cash.impairDeveloper(execution);
+            }
             case "CLOSE_PERIOD" -> close.close(execution);
             case "CORRECT_EVENT" -> close.correct(execution);
             default -> throw new ReceivablesException("INVALID_DATA");

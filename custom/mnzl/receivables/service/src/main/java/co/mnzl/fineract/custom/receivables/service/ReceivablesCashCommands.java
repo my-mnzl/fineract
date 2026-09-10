@@ -28,6 +28,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.strin
 
 import co.mnzl.fineract.receivables.math.CreditAndFunding;
 import co.mnzl.fineract.receivables.math.ReceivableEvents;
+import co.mnzl.fineract.receivables.math.ReceivablesMath;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -46,6 +47,7 @@ public class ReceivablesCashCommands {
 
     private final ReceivablesStore store;
     private final ReceivablesJson json;
+    private final ReceivablesMeasurement measurement;
 
     public void recordCash(ReceivablesExecution e) {
         JsonNode source = e.command.get("source");
@@ -247,6 +249,68 @@ public class ReceivablesCashCommands {
         }
     }
 
+    public void impairDeveloper(ReceivablesExecution e) {
+        var lot = store.require("developer_lot", ReceivablesStore.key(e.scope, "lot", text(e.command, "lotId")));
+        require(e.accountKey(e.subjectId()).equals(string(lot, "account_key")), "OWNERSHIP_CONFLICT");
+        require(amount(lot, "carrying_minor").equals(minor(e.command, "expectedCarryingMinor"))
+                && new BigDecimal(string(lot, "rate")).compareTo(new BigDecimal(text(e.command, "expectedAnnualNominalRate"))) == 0,
+                "SOURCE_CHANGED");
+        JsonNode forecast = e.command.get("forecast");
+        var content = forecast.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) content).remove("contentHash");
+        require(json.hash(content).equals(text(forecast, "contentHash")), "SOURCE_CHANGED");
+        if (lot.get("forecast_json") != null) {
+            JsonNode prior = json.read(string(lot, "forecast_json"));
+            require(Long.parseLong(text(forecast, "forecastVersion")) > Long.parseLong(text(prior, "forecastVersion")), "SOURCE_CHANGED");
+        }
+        remeasureDeveloper(e, lot, forecast);
+        store.update("developer_lot", string(lot, "record_key"), Map.of("forecast_json", json.write(forecast)));
+    }
+
+    public void closeDeveloperImpairment(ReceivablesExecution e, String accountKey, java.util.Set<String> approvedForecastIds) {
+        for (var lot : store.children("developer_lot", "account_key", accountKey)) {
+            if (!"RECEIVABLE".equals(string(lot, "direction")) || amount(lot, "carrying_minor").equals(amount(lot, "settled_minor"))
+                    || !e.date.isAfter(LocalDate.parse(string(lot, "due_date")))) {
+                continue;
+            }
+            require(lot.get("forecast_json") != null, "EVIDENCE_EXPIRED");
+            JsonNode forecast = json.read(string(lot, "forecast_json"));
+            require(approvedForecastIds.contains(text(forecast, "forecastId")), "EVIDENCE_EXPIRED");
+            remeasureDeveloper(e, lot, forecast);
+        }
+    }
+
+    private void remeasureDeveloper(ReceivablesExecution e, Map<String, Object> lot, JsonNode forecast) {
+        LocalDate due = LocalDate.parse(string(lot, "due_date"));
+        require("RECEIVABLE".equals(string(lot, "direction")) && !e.date.isBefore(due), "APPROVAL_SCOPE_CHANGED");
+        require(!LocalDate.parse(text(forecast, "asOfDate")).isAfter(e.date)
+                && !LocalDate.parse(text(forecast, "validThroughDate")).isBefore(e.date), "EVIDENCE_EXPIRED");
+        String lotId = string(lot, "lot_id");
+        for (JsonNode scenario : forecast.get("scenarios")) {
+            for (JsonNode recovery : scenario.get("recoveries")) {
+                require(lotId.equals(text(recovery, "sourceCashflowId")) && "DEVELOPER".equals(text(recovery, "payer"))
+                        && !LocalDate.parse(text(recovery, "date")).isBefore(e.date), "SOURCE_CHANGED");
+            }
+        }
+        BigInteger outstanding = amount(lot, "carrying_minor").subtract(amount(lot, "settled_minor"));
+        BigDecimal major = ReceivablesMath.major(outstanding);
+        int dpd = Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(due, e.date));
+        int stage = Integer.parseInt(text(forecast, "stage").substring(6));
+        require(stage >= CreditAndFunding.stage(dpd, false, false), "SOURCE_CHANGED");
+        var flow = new ReceivablesMath.Cashflow(lotId, due, outstanding);
+        var position = new ReceivablesMath.Position(e.date, outstanding, BigInteger.ZERO, outstanding, outstanding, outstanding,
+                BigInteger.ZERO, BigInteger.ZERO, dpd, major, major, List.of(new ReceivablesMath.Leg(flow, 0, outstanding, major, major)));
+        BigInteger target = outstanding.signum() == 0 ? BigInteger.ZERO
+                : CreditAndFunding.impairment(position, new BigDecimal(string(lot, "rate")), stage, measurement.scenarios(forecast))
+                        .lossAllowanceMinor();
+        var account = store.require("account", string(lot, "account_key"));
+        pair(e.lines, "impairmentExpense", "developerReceivableAllowance", target.subtract(amount(lot, "allowance_minor")),
+                string(account, "external_id"), string(account, "deal_id"), "IMPAIRMENT");
+        store.update("developer_lot", string(lot, "record_key"), Map.of("allowance_minor", target.toString()));
+        e.lotKeys.add(string(lot, "record_key"));
+        e.accountKeys.add(string(lot, "account_key"));
+    }
+
     public void settleDeveloper(ReceivablesExecution e) {
         BigInteger payable = BigInteger.ZERO;
         BigInteger receivable = BigInteger.ZERO;
@@ -300,8 +364,15 @@ public class ReceivablesCashCommands {
                 ReceivablesLedger.line(e.lines, isPayable ? "developerPayable" : "developerReceivable", isPayable ? "DEBIT" : "CREDIT",
                         requested, accountId, deal, "DEVELOPER_ADJUSTMENT");
             }
-            store.update("developer_lot", string(row, "record_key"),
-                    Map.of("settled_minor", amount(row, "settled_minor").add(requested).toString()));
+            BigInteger oldAllowance = amount(row, "allowance_minor");
+            BigInteger remaining = amount(row, "carrying_minor").subtract(amount(row, "settled_minor")).subtract(requested);
+            BigInteger released = oldAllowance.signum() == 0 ? BigInteger.ZERO
+                    : ReceivablesMath
+                            .allocate(oldAllowance, Map.of("released", new BigDecimal(requested), "retained", new BigDecimal(remaining)))
+                            .get("released");
+            pair(e.lines, "developerReceivableAllowance", "impairmentExpense", released, accountId, deal, "IMPAIRMENT");
+            store.update("developer_lot", string(row, "record_key"), Map.of("settled_minor",
+                    amount(row, "settled_minor").add(requested).toString(), "allowance_minor", oldAllowance.subtract(released).toString()));
             var fields = new LinkedHashMap<String, Object>();
             fields.put("scope_key", e.scope);
             fields.put("lot_key", string(row, "record_key"));

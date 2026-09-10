@@ -565,6 +565,28 @@ public class ReceivablesAccountCommands {
         reconcileNative(store.require("account", key), restored, e.date);
     }
 
+    public void recoverWrittenOff(ReceivablesExecution e) {
+        var account = account(e);
+        String key = string(account, "record_key");
+        require("WRITTEN_OFF".equals(string(account, "status")) && "WRITE_OFF".equals(string(account, "closure_reason"))
+                && text(e.command, "originalWriteOffOperationId").equals(string(account, "writeoff_operation_id")), "RECOVERY_REQUIRED");
+        BigInteger value = minor(e.command, "amountMinor");
+        BigInteger recovered = amount(account, "recovered_minor").add(value);
+        require(recovered.compareTo(amount(account, "written_off_minor")) <= 0, "BANK_PROOF_MISMATCH");
+        var allocation = store.require("cash_allocation",
+                ReceivablesStore.key(e.scope, "cash-allocation", text(e.command, "bankAllocationId")));
+        String sourceKey = ReceivablesStore.key(e.scope, "cash", text(e.command, "cashMovementId"));
+        var source = store.require("cash_source", sourceKey);
+        require(sourceKey.equals(string(allocation, "source_key")) && key.equals(string(allocation, "account_key"))
+                && "INCOMING".equals(string(source, "direction")) && e.date.equals(LocalDate.parse(string(source, "value_date"))),
+                "BANK_PROOF_MISMATCH");
+        cash.consumeAllocations(e, json.value(List.of(text(e.command, "bankAllocationId"))), value, "RECEIPT_UNAPPLIED",
+                string(account, "deal_id"));
+        pair(e.lines, "cashUnapplied", "writtenOffRecoveryIncome", value, string(account, "external_id"), string(account, "deal_id"),
+                "CASH");
+        store.update("account", key, Map.of("recovered_minor", recovered.toString()));
+    }
+
     public void recourse(ReceivablesExecution e) {
         require(text(e.command, "developerOrganizationId").equals(text(e.command.get("scope"), "developerOrganizationId")),
                 "OWNERSHIP_CONFLICT");
@@ -765,6 +787,8 @@ public class ReceivablesAccountCommands {
             line(e.lines, "impairmentExpense", "DEBIT", before.amortizedCostMinor().subtract(amount(account, "allowance_minor")), id, deal,
                     "IMPAIRMENT");
             closeAccountState(e, account, "WRITTEN_OFF", "WRITE_OFF");
+            store.update("account", key, Map.of("written_off_minor", before.contractualOutstandingMinor().toString(), "recovered_minor",
+                    "0", "writeoff_operation_id", text(e.command, "operationId")));
             return;
         }
         if (classification.equals("DERECOGNITION")) {
