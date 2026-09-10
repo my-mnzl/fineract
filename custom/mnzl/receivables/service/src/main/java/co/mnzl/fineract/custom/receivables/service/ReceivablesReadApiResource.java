@@ -42,6 +42,7 @@ public class ReceivablesReadApiResource {
 
     private final ReceivablesReadService reads;
     private final ReceivablesJson json;
+    private final ReceivablesHelHistory helHistory;
 
     private JsonNode scope(HttpHeaders headers) {
         return reads.authorize(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
@@ -173,6 +174,13 @@ public class ReceivablesReadApiResource {
             @QueryParam("eventWatermark") String maximum) {
         JsonNode scope = scope(headers);
         return json.write(reads.journals(scope, ids, boundary(scope, null, null, maximum).watermark()));
+    }
+
+    @GET
+    @Path("/hel-loans/{id}")
+    public String helLoan(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date) {
+        var scope = scope(headers);
+        return json.write(helHistory.read(reads.scopeKey(scope), id, boundary(scope, date, null, null).date()));
     }
 
     @GET

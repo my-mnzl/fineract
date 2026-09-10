@@ -414,6 +414,10 @@ public class ReceivablesReadService {
         return result;
     }
 
+    public String scopeKey(JsonNode scope) {
+        return key(scope);
+    }
+
     public JsonNode helTerms(JsonNode scope, String id) {
         configuration.authorize(scope, false);
         var terms = hel.readTerms(id);
