@@ -168,7 +168,6 @@ public class ReceivablesMeasurement {
         result.put("tenantId", configuration.tenantId());
         result.put("dealId", string(account, "deal_id"));
         result.put("accountId", string(account, "external_id"));
-        JsonNode terms = json.read(string(account, "terms_json"));
         result.put("receivableId", string(account, "external_id"));
         result.put("businessDate", p.businessDate().toString());
         result.put("boundarySide", side);

@@ -22,6 +22,11 @@ base { archivesName = 'custom-mnzl-receivables-service' }
 apply from: 'dependencies.gradle'
 sourceSets.main.resources.srcDir('../openapi')
 
+// Generated from the MNZL runtime wire schemas; JSON does not support license comments.
+license {
+    excludes(['**/receivables-v1.json'])
+}
+
 // Database selection is an explicit test input; real evidence must never be reused from another engine or cached run.
 tasks.named('test', Test) {
     def database = providers.environmentVariable('RECEIVABLES_TEST_DATABASE')

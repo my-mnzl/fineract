@@ -771,7 +771,6 @@ public class ReceivablesAccountCommands {
         String kind = text(outcome, "kind");
         BigInteger consideration = minor(e.command, "approvedConsiderationMinor");
         configuration.requireWorkout(e, kind, consideration);
-        String key = string(account, "record_key");
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
         e.nativeTransactions.add(Long.toString(nativeBridge.adjustFace(number(account, "native_loan_id"), e.date,
