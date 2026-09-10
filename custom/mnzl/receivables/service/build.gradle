@@ -21,3 +21,16 @@ group = 'co.mnzl.fineract.custom'
 base { archivesName = 'custom-mnzl-receivables-service' }
 apply from: 'dependencies.gradle'
 sourceSets.main.resources.srcDir('../openapi')
+
+// Database selection is an explicit test input; real evidence must never be reused from another engine or cached run.
+tasks.named('test', Test) {
+    def database = providers.environmentVariable('RECEIVABLES_TEST_DATABASE')
+        .orElse(providers.systemProperty('receivables.test.database')).orElse('')
+    inputs.property('receivablesDatabase', database)
+    environment 'RECEIVABLES_TEST_DATABASE', database.get()
+    if (!database.get().isEmpty()) {
+        outputs.file(layout.buildDirectory.file('receivables-database-evidence.json'))
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
+}
