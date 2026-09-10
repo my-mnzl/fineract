@@ -447,7 +447,32 @@ public class ReceivablesAccountCommands {
         reconcileNative(store.require("account", key), partial.retainedPosition(), e.date);
     }
 
+    private void linkResetCorrection(ReceivablesExecution e) {
+        if (!e.command.has("originalResetOperationId")) {
+            require(!text(e.command, "executionMode").equals("CORRECTION"), "APPROVAL_SCOPE_CHANGED");
+            return;
+        }
+        require(text(e.command, "executionMode").equals("CORRECTION")
+                && e.date.equals(org.apache.fineract.infrastructure.core.service.DateUtils.getBusinessLocalDate()),
+                "APPROVAL_SCOPE_CHANGED");
+        var current = store.require("account", e.accountKey(e.subjectId()));
+        require("ACTIVE".equals(string(current, "status")) && current.get("closure_reason") == null, "RECOVERY_REQUIRED");
+        String originalKey = ReceivablesStore.key(e.scope, "operation", text(e.command, "originalResetOperationId"));
+        var original = store.require("command", originalKey);
+        JsonNode request = json.read(string(original, "request_json"));
+        require(text(request, "commandType").equals("RESET_RATE") && original.get("result_json") != null
+                && text(request, "subjectId").equals(e.subjectId()) && request.get("scope").equals(e.command.get("scope"))
+                && !text(request, "corridorObservationId").equals(text(e.command, "corridorObservationId")), "SOURCE_CHANGED");
+        require(!e.date.isBefore(date(request, "businessDate")) && store.jdbc().queryForObject(
+                "select count(*) from m_mnzl_r_command where scope_key=? and subject_key=? and command_type='RESET_RATE' "
+                        + "and expected_version>? and record_key<>?",
+                Long.class, e.scope, e.subjectKey(), number(original, "expected_version"), e.operationKey) == 0, "RECOVERY_REQUIRED");
+        e.correctionOf = json.read(string(original, "result_json")).path("financialEventIds").get(0).asText();
+        e.originalValueDate = date(request, "businessDate");
+    }
+
     public void reset(ReceivablesExecution e) {
+        linkResetCorrection(e);
         var account = account(e);
         String key = string(account, "record_key");
         String id = string(account, "external_id");

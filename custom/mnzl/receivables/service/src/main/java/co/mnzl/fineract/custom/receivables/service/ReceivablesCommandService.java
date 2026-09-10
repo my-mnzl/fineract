@@ -200,6 +200,9 @@ public class ReceivablesCommandService {
         event.put("operationId", text(e.command, "operationId"));
         event.put("causationId", text(e.command, "operationId"));
         event.put("businessDate", e.date.toString());
+        if (e.originalValueDate != null) {
+            event.put("originalValueDate", e.originalValueDate.toString());
+        }
         event.put("postingPeriod", e.postingDate.toString().substring(0, 7));
         event.set("sourceTransactionIds", json.value(e.nativeTransactions));
         event.put("reversalOfEventId", e.reversalOf);

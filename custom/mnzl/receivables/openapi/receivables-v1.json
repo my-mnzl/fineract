@@ -4227,6 +4227,9 @@
                 "type": "string",
                 "const": "RESET_RATE"
               },
+              "originalResetOperationId": {
+                "$ref": "#/components/schemas/id"
+              },
               "corridorObservationId": {
                 "$ref": "#/components/schemas/id"
               },
@@ -6780,6 +6783,9 @@
                         "type": "string",
                         "const": "RESET_RATE"
                       },
+                      "originalResetOperationId": {
+                        "$ref": "#/components/schemas/id"
+                      },
                       "corridorObservationId": {
                         "$ref": "#/components/schemas/id"
                       },
@@ -8824,6 +8830,9 @@
                 "type": "null"
               }
             ]
+          },
+          "originalValueDate": {
+            "$ref": "#/components/schemas/financialDate"
           },
           "journalLines": {
             "type": "array",

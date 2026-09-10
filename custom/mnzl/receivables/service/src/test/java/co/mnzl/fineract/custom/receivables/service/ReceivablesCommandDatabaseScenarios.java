@@ -56,11 +56,61 @@ final class ReceivablesCommandDatabaseScenarios {
         missingNativeSourcesCannotCancel();
         writtenOffRecovery();
         developerImpairmentAfterDue();
+        rateCorrection();
         assertThat(harness
                 .queryLong("select count(*) from m_mnzl_r_journal_line l left join acc_gl_journal_entry j on j.id=l.native_journal_id "
                         + "where j.id is null or l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100 "
                         + "or j.type_enum<>case when l.side='DEBIT' then 2 else 1 end or j.currency_code<>'EGP'"))
                 .isZero();
+    }
+
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE", justification = "Isolated test queries interpolate only native SHA-256 event IDs")
+    private void rateCorrection() throws Exception {
+        String id = "rate-correction-account";
+        harness.purchase(id, "50000", "50000");
+        var originalDate = harness.today;
+        ObjectNode reset = command("RESET_RATE", "rate-correction-original", id);
+        reset.put("corridorObservationId", "rate-original");
+        reset.put("corridorRate", "0.30");
+        reset.put("spread", "0");
+        reset.put("developerAdjustmentDueDate", harness.today.plusDays(45).toString());
+        JsonNode original = execute(reset);
+        String originalEvent = original.path("financialEventIds").get(0).asText();
+        String immutableEvent = harness.queryText("select event_json from m_mnzl_r_event where record_key='" + originalEvent + "'");
+        long nativeTransactions = harness.queryLong("select count(*) from m_loan_transaction");
+        harness.moveDate(harness.today.plusDays(1));
+        ObjectNode authorization = harness.json.object();
+        authorization.set("scope", harness.scope(false));
+        authorization.put("authorizationId", "rate-correction-authorization");
+        authorization.put("scopeHash", "0".repeat(64));
+        authorization.put("approvedBy", "1");
+        authorization.put("effectiveFrom", harness.today.toString());
+        authorization.put("effectiveThrough", harness.today.toString());
+        authorization.put("mode", "CORRECTION");
+        harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/authorizations", authorization, 200);
+        authorization.remove(List.of("scope", "mode"));
+        ObjectNode correction = command("RESET_RATE", "rate-correction", id);
+        correction.put("executionMode", "CORRECTION");
+        correction.set("executionAuthorization", authorization);
+        correction.put("originalResetOperationId", "rate-correction-original");
+        correction.put("corridorObservationId", "rate-corrected");
+        correction.put("corridorRate", "0.25");
+        correction.put("spread", "0");
+        correction.put("developerAdjustmentDueDate", originalDate.plusDays(45).toString());
+        JsonNode result = execute(correction);
+        JsonNode event = harness.json.read(harness.queryText(
+                "select event_json from m_mnzl_r_event where record_key='" + result.path("financialEventIds").get(0).asText() + "'"));
+        assertThat(event.path("correctionOfEventId").asText()).isEqualTo(originalEvent);
+        assertThat(event.path("originalValueDate").asText()).isEqualTo(originalDate.toString());
+        assertThat(event.path("businessDate").asText()).isEqualTo(harness.today.toString());
+        assertThat(harness.queryText("select event_json from m_mnzl_r_event where record_key='" + originalEvent + "'"))
+                .isEqualTo(immutableEvent);
+        assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("100000");
+        assertThat(harness.queryLong("select count(*) from m_loan_transaction")).isEqualTo(nativeTransactions);
+        correction.put("operationId", "rate-correction-superseded");
+        correction.put("idempotencyKey", "rate-correction-superseded");
+        correction.put("expectedVersion", harness.version(id));
+        harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", correction, 409);
     }
 
     private void borrowerIdentity() throws Exception {
