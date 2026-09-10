@@ -26,6 +26,7 @@ import static co.mnzl.fineract.receivables.math.ReceivableEvents.developerMemo;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.modify;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.reset;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.settle;
+import static co.mnzl.fineract.receivables.math.ReceivableEvents.settleBuyback;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.settlePortions;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.substitute;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.MC;
@@ -311,6 +312,29 @@ class FinancialIdentitiesTest {
         assertTrue(unwind.interestIncomeMinor().signum() > 0);
         assertTrue(unwind.interestIncomeMinor().compareTo(unwind.scheduledEirIncomeMinor()) < 0);
         assertEquals(opening.contractualOutstandingMinor(), closing.contractualOutstandingMinor());
+    }
+
+    @Test
+    void developerBuybackHasNoVoluntaryShareAndRequiresWorkoutForBelowGrossConsideration() {
+        BigInteger face = BigInteger.valueOf(100000);
+        BigInteger gross = BigInteger.valueOf(80000);
+        BigInteger net = BigInteger.valueOf(79000);
+        BigInteger allowance = BigInteger.valueOf(5000);
+        Settlement buyback = settleBuyback(face, gross, net, BigInteger.valueOf(90000), allowance, false);
+        assertEquals(BigInteger.ZERO, buyback.developerShareMinor());
+        assertEquals(BigInteger.valueOf(11000), buyback.financierIncomeMinor());
+        assertEquals(BigInteger.valueOf(20000), buyback.deferredDiscountMinor());
+        assertEquals(BigInteger.valueOf(1000), buyback.deferredIntegralFeeMinor());
+        assertEquals(allowance, buyback.allowanceReleasedMinor());
+        Settlement voluntary = settle(face, gross, net, BigInteger.valueOf(90000), allowance);
+        assertEquals(BigInteger.valueOf(5000), voluntary.developerShareMinor());
+        assertEquals(BigInteger.valueOf(6000), voluntary.financierIncomeMinor());
+        assertThrows(IllegalArgumentException.class, () -> settleBuyback(face, gross, net, BigInteger.valueOf(75000), allowance, false));
+        Settlement workout = settleBuyback(face, gross, net, BigInteger.valueOf(75000), allowance, true);
+        assertEquals(BigInteger.valueOf(-4000), workout.financierIncomeMinor());
+        assertEquals(BigInteger.ZERO, workout.developerShareMinor());
+        assertEquals(allowance, workout.allowanceReleasedMinor());
+        assertThrows(IllegalArgumentException.class, () -> settleBuyback(face, gross, net, BigInteger.valueOf(-1), allowance, true));
     }
 
 }

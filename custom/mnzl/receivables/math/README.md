@@ -9,7 +9,8 @@ other services consume native results rather than duplicating the calculations.
   rounded bases by largest remainder. `explain` returns conventions, input legs,
   day counts, solved rates/residuals and measured contributions.
 - `ReceivableEvents` computes reset segments and immutable adjustment lots,
-  full/partial settlement, cashless substitution, modification losses and the
+  full/partial settlement, contractual developer buyback, cashless substitution,
+  modification losses and the
   independent non-posting developer memo recurrence.
 - `CreditAndFunding` measures forecast cash shortfalls, Stage 3 time passage,
   separate simple Actual/360 funding intervals and disclosed annualized margin.
@@ -27,6 +28,11 @@ legs mature before events and stop acquisition accretion. A due payment reduces
 remaining face; reversal restores it. Reducing future face requires authorized
 settlement, not ordinary collection. `income` applies only across intervals with
 no reset/modification/settlement; split at those events and supply exact receipts.
+`settleBuyback` uses actual approved consideration with zero voluntary developer
+share and reports the signed consideration-minus-N result. Below-gross buyback
+requires the caller to verify workout authorization before asserting the helper
+flag. Existing allowance release remains separate.
+
 A month close measures the first day of the next month before that day's events.
 
 `reset` returns the future segment separately from unchanged overdue face. The

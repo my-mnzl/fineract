@@ -153,6 +153,17 @@ public final class ReceivableEvents {
         return new Settlement(face, gross, net, face.subtract(gross), fee, payoff, share, surplus.subtract(share).add(fee), allowance);
     }
 
+    /** Contractual developer buyback; the caller must verify workout approval before asserting workoutAuthorized. */
+    public static Settlement settleBuyback(BigInteger face, BigInteger gross, BigInteger net, BigInteger payoff, BigInteger allowance,
+            boolean workoutAuthorized) {
+        require(face.signum() > 0 && net.signum() >= 0 && net.compareTo(gross) <= 0 && gross.compareTo(face) <= 0, "Invalid buyback bases");
+        require(payoff.signum() >= 0, "Invalid buyback consideration");
+        require(payoff.compareTo(gross) >= 0 || workoutAuthorized, "Below-gross buyback requires authorized workout");
+        require(allowance.signum() >= 0 && allowance.compareTo(net) <= 0, "Invalid allowance release");
+        return new Settlement(face, gross, net, face.subtract(gross), gross.subtract(net), payoff, BigInteger.ZERO, payoff.subtract(net),
+                allowance);
+    }
+
     /** Allocate both the selected and retained portions together, preserving the existing posted bases exactly. */
     public static PartialSettlement settlePortions(Position p, Map<String, BigInteger> selectedFace, BigInteger payoff,
             BigInteger allowance) {
