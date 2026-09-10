@@ -109,6 +109,206 @@
         }
       }
     },
+    "/hel-journals": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "loanId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "transactionIds",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/id"
+              },
+              "minItems": 1
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/helJournals"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/hel-funding/commands": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/helFundingCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/helFundingResult"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted replayable operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/helFundingResult"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Operation readback URL"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/hel-funding/operations/{operationId}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/helFundingResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/capabilities": {
       "get": {
         "parameters": [
@@ -1126,6 +1326,56 @@
         ],
         "additionalProperties": false
       },
+      "measurementLeg": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/measurementLeg",
+        "type": "object",
+        "properties": {
+          "cashflow": {
+            "$ref": "#/components/schemas/cashflow"
+          },
+          "segmentId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "segmentStartDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "asOfDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "grossBasisMinor": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "netBasisMinor": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "grossYield": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "netEir": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "collectedMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "adjustedMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          }
+        },
+        "required": [
+          "cashflow",
+          "segmentId",
+          "segmentStartDate",
+          "asOfDate",
+          "grossBasisMinor",
+          "netBasisMinor",
+          "grossYield",
+          "netEir",
+          "collectedMinor",
+          "adjustedMinor"
+        ],
+        "additionalProperties": false
+      },
       "monthlyIncome": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/monthlyIncome",
@@ -1841,6 +2091,13 @@
                 "type": "string",
                 "const": "SETTLEMENT"
               },
+              "measurementLegs": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/measurementLeg"
+                }
+              },
               "position": {
                 "$ref": "#/components/schemas/position"
               },
@@ -1866,6 +2123,7 @@
               "calculatorBuild",
               "basisHash",
               "calculationType",
+              "measurementLegs",
               "position",
               "cashflowIds",
               "settlementDate",
@@ -4984,6 +5242,7 @@
         "type": "string",
         "enum": [
           "POLICY_INCOMPLETE",
+          "RETIRED_LEDGER_EPOCH",
           "SOURCE_CHANGED",
           "SOURCE_CUTOFF_MISSING",
           "EVIDENCE_EXPIRED",
@@ -5183,6 +5442,24 @@
               "$ref": "#/components/schemas/controlBalance"
             }
           },
+          "activeAccountIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "developerLotIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "fundingFacilityIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
           "nativeContractualOutstandingMinor": {
             "$ref": "#/components/schemas/minorUnits"
           },
@@ -5199,6 +5476,9 @@
           "boundarySide",
           "eventWatermark",
           "balances",
+          "activeAccountIds",
+          "developerLotIds",
+          "fundingFacilityIds",
           "nativeContractualOutstandingMinor",
           "subledgerContractualOutstandingMinor",
           "snapshotHash"
@@ -5975,6 +6255,466 @@
           "initialAmountMinor",
           "currentAmountMinor",
           "annualNominalRate"
+        ],
+        "additionalProperties": false
+      },
+      "helFundingCommand": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/helFundingCommand",
+        "type": "object",
+        "properties": {
+          "executionMode": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "RECONSTRUCTION",
+              "CORRECTION"
+            ]
+          },
+          "executionAuthorization": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "authorizationId": {
+                    "$ref": "#/components/schemas/id"
+                  },
+                  "scopeHash": {
+                    "$ref": "#/components/schemas/sha256"
+                  },
+                  "approvedBy": {
+                    "$ref": "#/components/schemas/id"
+                  },
+                  "effectiveFrom": {
+                    "$ref": "#/components/schemas/financialDate"
+                  },
+                  "effectiveThrough": {
+                    "$ref": "#/components/schemas/financialDate"
+                  }
+                },
+                "required": [
+                  "authorizationId",
+                  "scopeHash",
+                  "approvedBy",
+                  "effectiveFrom",
+                  "effectiveThrough"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "operationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "idempotencyKey": {
+            "$ref": "#/components/schemas/id"
+          },
+          "expectedVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "basisHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "subjectKind": {
+            "type": "string",
+            "const": "HEL_LOAN"
+          },
+          "affectedAccountVersions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/accountVersion"
+            }
+          },
+          "executionScopeHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "actorId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "approverIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "approvalEvidenceIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "commandType": {
+            "type": "string",
+            "const": "FUND_HEL_TO_SETTLEMENT_CLEARING"
+          },
+          "applicationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "loanExternalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "expectedPrincipalMinor": {
+            "$ref": "#/components/schemas/positiveMinorUnits"
+          },
+          "expectedFinancedFeesMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "financedFeeIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "executionMode",
+          "executionAuthorization",
+          "accountMappingRevisionId",
+          "operationId",
+          "idempotencyKey",
+          "expectedVersion",
+          "businessDate",
+          "basisHash",
+          "scope",
+          "subjectId",
+          "subjectKind",
+          "affectedAccountVersions",
+          "executionScopeHash",
+          "actorId",
+          "approverIds",
+          "approvalEvidenceIds",
+          "commandType",
+          "applicationId",
+          "loanExternalId",
+          "expectedPrincipalMinor",
+          "expectedFinancedFeesMinor",
+          "financedFeeIds"
+        ],
+        "additionalProperties": false
+      },
+      "helFundingOperation": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/helFundingOperation",
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "commandType": {
+            "type": "string",
+            "const": "FUND_HEL_TO_SETTLEMENT_CLEARING"
+          },
+          "subjectKind": {
+            "type": "string",
+            "const": "HEL_LOAN"
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/financialScope"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "payloadHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "expectedVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "affectedAccountVersions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/accountVersion"
+            }
+          },
+          "executionScopeHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "actorId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "approverIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "state": {
+            "$ref": "#/components/schemas/operationState"
+          },
+          "nativeTransactionIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "financialEventIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "reconciliationId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "$ref": "#/components/schemas/blockerCode"
+                  },
+                  "retryClassification": {
+                    "type": "string",
+                    "enum": [
+                      "RETRY_SAME_OPERATION",
+                      "READ_BEFORE_RETRY",
+                      "CORRECTIVE_COMMAND_REQUIRED",
+                      "NEW_APPROVAL_REQUIRED",
+                      "NOT_RETRYABLE"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "retryClassification"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/utcInstant"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/utcInstant"
+          }
+        },
+        "required": [
+          "operationId",
+          "commandType",
+          "subjectKind",
+          "subjectId",
+          "scope",
+          "businessDate",
+          "payloadHash",
+          "expectedVersion",
+          "affectedAccountVersions",
+          "executionScopeHash",
+          "actorId",
+          "approverIds",
+          "state",
+          "nativeTransactionIds",
+          "financialEventIds",
+          "reconciliationId",
+          "error",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "helFundingResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/helFundingResult",
+        "type": "object",
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/helFundingOperation"
+          },
+          "nativeLoanId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nativeLoanStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "PENDING",
+                  "ACTIVE",
+                  "CLOSED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clearingAmountMinor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/version"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nativeTransactionIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "journalIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "operation",
+          "nativeLoanId",
+          "nativeLoanStatus",
+          "clearingAmountMinor",
+          "nativeTransactionIds",
+          "journalIds"
+        ],
+        "additionalProperties": false
+      },
+      "helJournalLine": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/helJournalLine",
+        "type": "object",
+        "properties": {
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "journalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "sourceLineId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "DEBIT",
+              "CREDIT"
+            ]
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/currency"
+          },
+          "transactionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "operationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "sourceReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "HEL_PRINCIPAL",
+              "FINANCED_FEE",
+              "CLEARING"
+            ]
+          },
+          "feeId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "componentId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          }
+        },
+        "required": [
+          "nativeGlAccountId",
+          "journalId",
+          "sourceLineId",
+          "side",
+          "amountMinor",
+          "currency",
+          "transactionId",
+          "operationId",
+          "sourceReferenceId",
+          "role",
+          "businessDate"
+        ],
+        "additionalProperties": false
+      },
+      "helJournals": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/helJournals",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "nativeLoanId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/helJournalLine"
+            }
+          },
+          "nativeTransactionIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "scope",
+          "nativeLoanId",
+          "businessDate",
+          "eventWatermark",
+          "lines",
+          "nativeTransactionIds"
         ],
         "additionalProperties": false
       }
