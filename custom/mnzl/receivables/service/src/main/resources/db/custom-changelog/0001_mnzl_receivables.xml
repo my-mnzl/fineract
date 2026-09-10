@@ -316,5 +316,16 @@
 <insert tableName="m_permission"><column name="grouping" value="portfolio"/><column name="code" value="CONFIGURE_MNZL_RECEIVABLES"/><column name="entity_name" value="MNZL_RECEIVABLES"/><column name="action_name" value="CONFIGURE"/><column name="can_maker_checker" valueBoolean="false"/></insert>
 <insert tableName="m_permission"><column name="grouping" value="portfolio"/><column name="code" value="RECONSTRUCT_MNZL_RECEIVABLES"/><column name="entity_name" value="MNZL_RECEIVABLES"/><column name="action_name" value="RECONSTRUCT"/><column name="can_maker_checker" valueBoolean="false"/></insert>
 <insert tableName="m_permission"><column name="grouping" value="portfolio"/><column name="code" value="CORRECT_MNZL_RECEIVABLES"/><column name="entity_name" value="MNZL_RECEIVABLES"/><column name="action_name" value="CORRECT"/><column name="can_maker_checker" valueBoolean="false"/></insert>
+<createTable tableName="m_mnzl_r_state_snapshot">
+<column name="record_key" type="VARCHAR(64)"><constraints primaryKey="true" nullable="false"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="subject_kind" type="VARCHAR(16)"><constraints nullable="false"/></column>
+<column name="subject_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="event_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="business_date" type="DATE"><constraints nullable="false"/></column>
+<column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
+</createTable>
+<createIndex tableName="m_mnzl_r_state_snapshot" indexName="ix_r_snapshot_subject"><column name="scope_key"/><column name="subject_key"/></createIndex>
+<addColumn tableName="m_mnzl_r_account"><column name="closure_reason" type="VARCHAR(40)"/></addColumn>
 </changeSet>
 </databaseChangeLog>
