@@ -51,6 +51,11 @@ public class ReceivablesCloseCommands {
             require(existing != null && string(existing, "status").equals("PREPARING")
                     && number(existing, "event_watermark") == Long.parseLong(text(e.command, "eventWatermark"))
                     && string(existing, "cutoff_hash").equals(text(e.command, "sourceCutoffHash")), "SOURCE_CHANGED");
+            var prepared = store.jdbc().queryForMap(
+                    "select c.request_json from m_mnzl_r_event e join m_mnzl_r_command c on c.record_key=e.operation_key where e.scope_key=? and e.sequence_id=?",
+                    e.scope, number(existing, "event_watermark"));
+            require(text(json.read(string(prepared, "request_json")), "actorId").equals(text(e.command, "actorId")),
+                    "APPROVAL_SCOPE_CHANGED");
             require(e.command.get("approverIds").size() > 0, "APPROVAL_SCOPE_CHANGED");
             store.update("period", key, Map.of("status", "CLOSED", "reconciliation_id", text(e.command, "reconciliationId"), "locked_by",
                     text(e.command, "actorId"), "version", number(existing, "version") + 1));
@@ -64,6 +69,13 @@ public class ReceivablesCloseCommands {
         Set<String> forecastIds = new HashSet<>();
         e.command.get("forecastIds").forEach(f -> forecastIds.add(f.asText()));
         for (var account : store.scoped("account", e.scope)) {
+            boolean exposure = ReceivablesMeasurement.amount(account, "face_minor").signum() > 0
+                    || store.children("developer_lot", "account_key", string(account, "record_key")).stream()
+                            .anyMatch(lot -> !ReceivablesMeasurement.amount(lot, "carrying_minor")
+                                    .equals(ReceivablesMeasurement.amount(lot, "settled_minor")));
+            if (!exposure) {
+                continue;
+            }
             require(!LocalDate.parse(string(account, "last_effective_date")).isAfter(boundary), "SOURCE_CHANGED");
             if (LocalDate.parse(string(account, "activation_date")).isBefore(boundary)) {
                 accounts.closeAccrue(e, account, forecastIds);

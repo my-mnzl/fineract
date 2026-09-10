@@ -5242,7 +5242,6 @@
                 "$ref": "#/components/schemas/id"
               },
               "approverIds": {
-                "minItems": 1,
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/id"
@@ -7472,7 +7471,6 @@
                         "$ref": "#/components/schemas/id"
                       },
                       "approverIds": {
-                        "minItems": 1,
                         "type": "array",
                         "items": {
                           "$ref": "#/components/schemas/id"
@@ -8329,6 +8327,26 @@
           "currentEventWatermark": {
             "$ref": "#/components/schemas/version"
           },
+          "helProductId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "helPaymentTypeId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "eventVersion": {
             "type": "string",
             "const": "flex.receivables.financial-event.v1"
@@ -8386,6 +8404,8 @@
           "policyRevisionId",
           "calculatorBuild",
           "currentEventWatermark",
+          "helProductId",
+          "helPaymentTypeId",
           "eventVersion",
           "productCode",
           "scheduleCode",

@@ -157,6 +157,16 @@ public class ReceivablesConfiguration {
         Long watermark = store.jdbc().queryForObject("select coalesce(max(sequence_id),0) from m_mnzl_r_event where scope_key=?",
                 Long.class, scopeKey(scope));
         result.put("currentEventWatermark", Long.toString(watermark));
+        if (config.get("hel_product_id") == null) {
+            result.putNull("helProductId");
+        } else {
+            result.put("helProductId", Long.toString(number(config, "hel_product_id")));
+        }
+        if (config.get("hel_payment_type_id") == null) {
+            result.putNull("helPaymentTypeId");
+        } else {
+            result.put("helPaymentTypeId", Long.toString(number(config, "hel_payment_type_id")));
+        }
         result.put("periodState", "OPEN");
         result.put("businessDate", DateUtils.getBusinessLocalDate().toString());
         result.set("blockers", json.value(ready ? java.util.List.of() : java.util.List.of("FINERACT_CAPABILITY_MISSING")));
@@ -189,7 +199,8 @@ public class ReceivablesConfiguration {
                     && !date.isBefore(LocalDate.parse(string(recorded, "effective_from")))
                     && !date.isAfter(LocalDate.parse(string(recorded, "effective_through"))), "APPROVAL_SCOPE_CHANGED");
         }
-        require(!text(command, "actorId").isBlank() && command.get("approverIds").size() > 0, "APPROVAL_SCOPE_CHANGED");
+        boolean prepare = text(command, "commandType").equals("CLOSE_PERIOD") && text(command, "phase").equals("PREPARE");
+        require(!text(command, "actorId").isBlank() && (prepare || command.get("approverIds").size() > 0), "APPROVAL_SCOPE_CHANGED");
         for (JsonNode approver : command.get("approverIds")) {
             require(!approver.asText().equals(text(command, "actorId")), "APPROVAL_SCOPE_CHANGED");
         }

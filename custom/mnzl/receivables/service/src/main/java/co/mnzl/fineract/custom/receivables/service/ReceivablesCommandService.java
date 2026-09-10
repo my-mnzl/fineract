@@ -49,7 +49,7 @@ public class ReceivablesCommandService {
     private final ReceivablesHelCommands hel;
     private final PlatformSecurityContext security;
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public JsonNode execute(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
         JsonNode input = json.read(request);
@@ -156,7 +156,7 @@ public class ReceivablesCommandService {
         event.put("tenantId", configuration.tenantId());
         String commandType = text(e.command, "commandType");
         event.put("sourceKind",
-                commandType.contains("HEL") ? "HEL"
+                commandType.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "HEL"
                         : commandType.equals("CLOSE_PERIOD") ? "CLOSE"
                                 : commandType.equals("RECORD_FUNDING_EVENT") ? "FUNDING"
                                         : commandType.equals("RECORD_CASH_MOVEMENT") ? "CASH" : "RECEIVABLE");

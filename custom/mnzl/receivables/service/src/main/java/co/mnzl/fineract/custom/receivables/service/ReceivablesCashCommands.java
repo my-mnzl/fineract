@@ -153,6 +153,7 @@ public class ReceivablesCashCommands {
             String key = ReceivablesStore.key(e.scope, "cash-allocation", id.asText());
             var row = store.require("cash_allocation", key);
             require(kind.equals(string(row, "kind")) && deal.equals(string(row, "deal_id")), "BANK_PROOF_MISMATCH");
+            requireSourceScope(e, store.require("cash_source", string(row, "source_key")));
             BigInteger available = amount(row, "amount_minor").subtract(amount(row, "used_minor"));
             BigInteger take = remaining.min(available);
             require(take.signum() > 0, "BANK_PROOF_MISMATCH");
@@ -166,6 +167,7 @@ public class ReceivablesCashCommands {
     public void consumeReceipt(ReceivablesExecution e, String movementId, BigInteger amount, String deal) {
         String sourceKey = ReceivablesStore.key(e.scope, "cash", movementId);
         var source = store.require("cash_source", sourceKey);
+        requireSourceScope(e, source);
         require("INCOMING".equals(string(source, "direction"))
                 && (e.originalValueDate == null ? e.date : e.originalValueDate).equals(LocalDate.parse(string(source, "value_date"))),
                 "BANK_PROOF_MISMATCH");
@@ -194,9 +196,15 @@ public class ReceivablesCashCommands {
         require(rows.size() == 1, "BANK_PROOF_MISMATCH");
         var row = rows.getFirst();
         require(e.scope.equals(string(row, "scope_key")) && deal.equals(string(row, "deal_id")), "BANK_PROOF_MISMATCH");
+        requireSourceScope(e, row);
         BigInteger used = amount(row, "used_minor");
         require(amount.signum() > 0 && used.add(amount).compareTo(amount(row, "clearing_minor")) <= 0, "BANK_PROOF_MISMATCH");
         store.update("hel_funding", string(row, "record_key"), Map.of("used_minor", used.add(amount).toString()));
+    }
+
+    private void requireSourceScope(ReceivablesExecution e, Map<String, Object> source) {
+        var operation = store.require("command", string(source, "operation_key"));
+        require(json.read(string(operation, "request_json")).get("scope").equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
     }
 
     public void restoreReceipt(ReceivablesExecution e, String sourceKey, BigInteger amount, String deal) {
