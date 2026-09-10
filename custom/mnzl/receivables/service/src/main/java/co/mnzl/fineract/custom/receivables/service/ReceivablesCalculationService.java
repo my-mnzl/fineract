@@ -351,12 +351,7 @@ public class ReceivablesCalculationService {
     private void settlement(JsonNode input, ObjectNode result) {
         var state = state(input);
         var position = ReceivablesMath.position(state, date(input, "settlementDate"));
-        Map<String, BigInteger> selected = new LinkedHashMap<>();
-        for (JsonNode id : input.path("cashflowIds")) {
-            var leg = position.legs().stream().filter(l -> l.cashflow().cashflowId().equals(id.asText())).findFirst()
-                    .orElseThrow(() -> new ReceivablesException("INVALID_DATA"));
-            require(selected.put(id.asText(), leg.outstandingMinor()) == null, "INVALID_DATA");
-        }
+        var selected = ReceivablesMeasurement.settlementPortions(input, position);
         BigInteger oldAllowance = minor(input.get("position"), "lossAllowanceMinor");
         BigInteger selectedFace = selected.values().stream().reduce(BigInteger.ZERO, BigInteger::add);
         BigInteger released = oldAllowance;
@@ -371,8 +366,12 @@ public class ReceivablesCalculationService {
             position.legs().forEach(leg -> {
                 String id = leg.cashflow().cashflowId();
                 BigDecimal loss = losses.lossByCashflow().getOrDefault(id, BigDecimal.ZERO);
-                weights.put(id + ":selected", selected.containsKey(id) ? loss : BigDecimal.ZERO);
-                weights.put(id + ":retained", selected.containsKey(id) ? BigDecimal.ZERO : loss);
+                BigDecimal fraction = leg.outstandingMinor().signum() == 0 ? BigDecimal.ZERO
+                        : new BigDecimal(selected.getOrDefault(id, BigInteger.ZERO)).divide(new BigDecimal(leg.outstandingMinor()),
+                                ReceivablesMath.MC);
+                BigDecimal picked = loss.multiply(fraction, ReceivablesMath.MC);
+                weights.put(id + ":selected", picked);
+                weights.put(id + ":retained", loss.subtract(picked));
             });
             var allocations = ReceivablesMath.allocate(oldAllowance, weights);
             released = selected.keySet().stream().map(id -> allocations.get(id + ":selected")).reduce(BigInteger.ZERO, BigInteger::add);

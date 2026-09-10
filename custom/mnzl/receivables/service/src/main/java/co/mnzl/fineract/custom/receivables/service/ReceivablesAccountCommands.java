@@ -384,11 +384,7 @@ public class ReceivablesAccountCommands {
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
         Position before = measurement.position(account, e.date);
-        var selected = new LinkedHashMap<String, BigInteger>();
-        for (JsonNode flow : e.command.get("cashflowIds")) {
-            var leg = store.require("leg", ReceivablesStore.key(e.scope, "leg", key + ":" + flow.asText()));
-            require(selected.put(flow.asText(), outstanding(leg)) == null && outstanding(leg).signum() > 0, "INVALID_DATA");
-        }
+        var selected = ReceivablesMeasurement.settlementPortions(e.command, before);
         BigInteger payoff = minor(e.command, "payoffMinor");
         BigInteger released = allocateAllowance(account, before, selected);
         var partial = ReceivableEvents.settlePortions(before, selected, payoff, released);

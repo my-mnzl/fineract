@@ -322,12 +322,19 @@ final class ReceivablesCommandDatabaseScenarios {
     }
 
     private void settle(String id, String operation, String flow, String payoff, List<JsonNode> retained) throws Exception {
+        settle(id, operation, flow, payoff, retained, null);
+    }
+
+    private void settle(String id, String operation, String flow, String payoff, List<JsonNode> retained, String face) throws Exception {
         harness.recordReceipt(operation + "-cash", id, payoff);
         ObjectNode c = command("SETTLE_RECEIVABLE", operation, id);
         c.set("settlementSource", harness.json
                 .value(Map.of("kind", "BANK_CASH", "cashMovementId", operation + "-cash", "closureReason", "VOLUNTARY_SETTLEMENT")));
         c.set("allocationIds", harness.json.value(List.of(operation + "-allocation")));
         c.set("cashflowIds", harness.json.value(List.of(flow)));
+        if (face != null) {
+            c.set("cashflowPortions", harness.json.value(List.of(Map.of("cashflowId", flow, "faceMinor", face))));
+        }
         c.put("payoffMinor", payoff);
         c.put("acceptedCustomerTermsHash", "0".repeat(64));
         c.put("settlementApprovalId", operation + "-approval");
@@ -340,7 +347,11 @@ final class ReceivablesCommandDatabaseScenarios {
         harness.purchase(id, "50000", "50000");
         assertThat(account(id).path("nativeClientId").asLong()).isEqualTo(resolvedBorrower);
         JsonNode remaining = harness.bookingCommands.get(id).path("basis").path("cashflows").get(1);
-        settle(id, "partial-settlement", id + "-0", "50000", List.of(remaining));
+        ObjectNode retainedFirst = ((ObjectNode) harness.bookingCommands.get(id).path("basis").path("cashflows").get(0)).deepCopy();
+        retainedFirst.put("amountMinor", "25000");
+        settle(id, "partial-leg-settlement", id + "-0", "25000", List.of(retainedFirst, remaining), "25000");
+        assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("75000");
+        settle(id, "partial-settlement", id + "-0", "25000", List.of(remaining));
         assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("50000");
         settle(id, "full-settlement", id + "-1", "48000", List.of());
         JsonNode closed = account(id);

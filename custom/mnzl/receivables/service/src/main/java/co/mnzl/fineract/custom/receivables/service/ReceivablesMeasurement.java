@@ -64,6 +64,29 @@ public class ReceivablesMeasurement {
         return new BigInteger(string(row, key));
     }
 
+    public static Map<String, BigInteger> settlementPortions(JsonNode input, Position position) {
+        Map<String, BigInteger> selected = new LinkedHashMap<>();
+        for (JsonNode id : input.path("cashflowIds")) {
+            var leg = position.legs().stream().filter(l -> l.cashflow().cashflowId().equals(id.asText())).findFirst()
+                    .orElseThrow(() -> new ReceivablesException("INVALID_DATA"));
+            require(leg.outstandingMinor().signum() > 0 && selected.put(id.asText(), leg.outstandingMinor()) == null, "INVALID_DATA");
+        }
+        require(!selected.isEmpty(), "INVALID_DATA");
+        if (!input.has("cashflowPortions")) {
+            return selected;
+        }
+        Map<String, BigInteger> portions = new LinkedHashMap<>();
+        for (JsonNode portion : input.get("cashflowPortions")) {
+            String id = text(portion, "cashflowId");
+            BigInteger face = minor(portion, "faceMinor");
+            require(selected.containsKey(id) && face.signum() > 0 && face.compareTo(selected.get(id)) <= 0
+                    && portions.put(id, face) == null, "INVALID_DATA");
+        }
+        require(portions.keySet().equals(selected.keySet()), "INVALID_DATA");
+        selected.replaceAll((id, face) -> portions.get(id));
+        return selected;
+    }
+
     public List<Cashflow> flows(JsonNode flows) {
         List<Cashflow> result = new ArrayList<>();
         for (JsonNode flow : flows) {

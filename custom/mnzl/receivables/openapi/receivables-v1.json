@@ -2983,6 +2983,26 @@
                   "$ref": "#/components/schemas/id"
                 }
               },
+              "cashflowPortions": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cashflowId": {
+                      "$ref": "#/components/schemas/id"
+                    },
+                    "faceMinor": {
+                      "$ref": "#/components/schemas/positiveMinorUnits"
+                    }
+                  },
+                  "required": [
+                    "cashflowId",
+                    "faceMinor"
+                  ],
+                  "additionalProperties": false
+                }
+              },
               "settlementDate": {
                 "$ref": "#/components/schemas/financialDate"
               },
@@ -4538,6 +4558,26 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/id"
+                }
+              },
+              "cashflowPortions": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cashflowId": {
+                      "$ref": "#/components/schemas/id"
+                    },
+                    "faceMinor": {
+                      "$ref": "#/components/schemas/positiveMinorUnits"
+                    }
+                  },
+                  "required": [
+                    "cashflowId",
+                    "faceMinor"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "payoffMinor": {
@@ -7071,6 +7111,26 @@
                         "type": "array",
                         "items": {
                           "$ref": "#/components/schemas/id"
+                        }
+                      },
+                      "cashflowPortions": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "cashflowId": {
+                              "$ref": "#/components/schemas/id"
+                            },
+                            "faceMinor": {
+                              "$ref": "#/components/schemas/positiveMinorUnits"
+                            }
+                          },
+                          "required": [
+                            "cashflowId",
+                            "faceMinor"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "payoffMinor": {

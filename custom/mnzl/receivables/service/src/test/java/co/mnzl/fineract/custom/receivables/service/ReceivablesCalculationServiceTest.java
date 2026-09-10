@@ -179,6 +179,33 @@ class ReceivablesCalculationServiceTest {
     }
 
     @Test
+    void partialLegSettlementRetainsUnselectedFaceAndRejectsInvalidPortions() throws Exception {
+        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode request = positioned(basis);
+        request.put("calculationType", "SETTLEMENT");
+        request.set("settlementDate", basis.get("settlementDate"));
+        request.set("cashflowIds", json.value(List.of("cf-01")));
+        request.set("cashflowPortions", json.value(List.of(Map.of("cashflowId", "cf-01", "faceMinor", "2000000"))));
+        request.put("payoffMinor", "1900000");
+        JsonNode result = calculate(request);
+        var purchase = measurement.purchase(basis, "account-1");
+        var position = ReceivablesMath.position(purchase.segment(), LocalDate.parse(basis.path("settlementDate").asText()), Map.of());
+        var expected = ReceivableEvents.settlePortions(position, Map.of("cf-01", BigInteger.valueOf(2000000)), BigInteger.valueOf(1900000),
+                BigInteger.ZERO);
+        assertThat(result.path("extinguishedFaceMinor").asText()).isEqualTo("2000000");
+        assertThat(result.path("grossPurchaseBasisMinor").asText()).isEqualTo(expected.settlement().grossBasisMinor().toString());
+        assertThat(result.path("positionAfter").path("amortizedCostMinor").asText())
+                .isEqualTo(expected.retainedPosition().amortizedCostMinor().toString());
+        for (var portions : List.of(List.of(Map.of("cashflowId", "cf-01", "faceMinor", "4000001")),
+                List.of(Map.of("cashflowId", "unknown", "faceMinor", "1")),
+                List.of(Map.of("cashflowId", "cf-01", "faceMinor", "1"), Map.of("cashflowId", "cf-01", "faceMinor", "1")))) {
+            request.remove("basisHash");
+            request.set("cashflowPortions", json.value(portions));
+            assertThatThrownBy(() -> calculate(request)).isInstanceOf(ReceivablesException.class);
+        }
+    }
+
+    @Test
     void resetAndInstantaneousImpairmentUseSameNativeMath() throws Exception {
         ObjectNode basis = basis(vector("irregular-integral-fee"));
         ObjectNode request = positioned(basis);
@@ -248,6 +275,8 @@ class ReceivablesCalculationServiceTest {
         forecast.set("scenarios",
                 json.read("[{\"scenarioId\":\"loss\",\"probability\":\"1\",\"defaultDate\":\"2030-01-01\",\"recoveries\":[]}]"));
         request.set("currentForecast", forecast);
+        request.set("cashflowPortions", json.value(List.of(Map.of("cashflowId", "cf-01", "faceMinor", "2000000"))));
+        request.put("payoffMinor", "2000000");
         JsonNode result = calculate(request);
         assertThat(result.path("positionAfter").path("netCarryingMinor").asText()).isEqualTo("0");
         assertThat(new BigInteger(result.path("releasedAllowanceMinor").asText())).isPositive();
