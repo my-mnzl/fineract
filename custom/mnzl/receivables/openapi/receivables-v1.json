@@ -12,6 +12,9 @@
   "security": [
     {
       "fineractAuthentication": []
+    },
+    {
+      "fineractBearerAuthentication": []
     }
   ],
   "paths": {
@@ -959,13 +962,19 @@
     "securitySchemes": {
       "fineractAuthentication": {
         "type": "http",
-        "scheme": "basic"
+        "scheme": "basic",
+        "description": "Use when HTTP Basic authentication is enabled on the deployment."
+      },
+      "fineractBearerAuthentication": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Use when OAuth2/JWT authentication is enabled on the deployment."
       }
     },
     "schemas": {
       "boundarySide": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/boundarySide",
         "type": "string",
         "enum": [
           "BEFORE_EVENTS",
@@ -974,19 +983,16 @@
       },
       "currency": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/currency",
         "type": "string",
         "const": "EGP"
       },
       "decimal": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/decimal",
         "type": "string",
         "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
       },
       "executionVersions": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/executionVersions",
         "type": "object",
         "properties": {
           "calculationVersion": {
@@ -1019,14 +1025,12 @@
       },
       "financialDate": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financialDate",
         "type": "string",
         "format": "date",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
       },
       "financialScope": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financialScope",
         "anyOf": [
           {
             "$ref": "#/components/schemas/scope"
@@ -1038,7 +1042,6 @@
       },
       "financierScope": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financierScope",
         "type": "object",
         "properties": {
           "platformId": {
@@ -1070,38 +1073,32 @@
       },
       "id": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/id",
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       },
       "minorUnits": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/minorUnits",
         "type": "string",
         "pattern": "^(?:0|-?[1-9][0-9]*)$"
       },
       "nonnegativeMinorUnits": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/version",
         "type": "string",
         "pattern": "^(?:0|[1-9][0-9]*)$"
       },
       "positiveMinorUnits": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/positiveMinorUnits",
         "type": "string",
         "pattern": "^[1-9][0-9]*$"
       },
       "rate": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/rate",
         "type": "string",
         "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
       },
       "scope": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/scope",
         "type": "object",
         "properties": {
           "platformId": {
@@ -1137,26 +1134,22 @@
       },
       "sha256": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/sha256",
         "type": "string",
         "pattern": "^[a-f0-9]{64}$"
       },
       "utcInstant": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/utcInstant",
         "type": "string",
         "format": "date-time",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
       },
       "version": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/version",
         "type": "string",
         "pattern": "^(?:0|[1-9][0-9]*)$"
       },
       "acceptedAccountPrice": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/acceptedAccountPrice",
         "type": "object",
         "properties": {
           "accountId": {
@@ -1182,7 +1175,6 @@
       },
       "calculationBasis": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/calculationBasis",
         "type": "object",
         "properties": {
           "calculationVersion": {
@@ -1258,7 +1250,6 @@
       },
       "cashflow": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/cashflow",
         "type": "object",
         "properties": {
           "cashflowId": {
@@ -1296,7 +1287,6 @@
       },
       "fundingTerms": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/fundingTerms",
         "type": "object",
         "properties": {
           "facilityId": {
@@ -1328,7 +1318,6 @@
       },
       "measurementLeg": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/measurementLeg",
         "type": "object",
         "properties": {
           "cashflow": {
@@ -1378,7 +1367,6 @@
       },
       "monthlyIncome": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/monthlyIncome",
         "type": "object",
         "properties": {
           "accountId": {
@@ -1409,7 +1397,6 @@
       },
       "position": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/position",
         "type": "object",
         "properties": {
           "scope": {
@@ -1543,7 +1530,6 @@
       },
       "pricingAccount": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/pricingAccount",
         "type": "object",
         "properties": {
           "contractualFaceMinor": {
@@ -1602,7 +1588,6 @@
       },
       "pricingResult": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/pricingResult",
         "type": "object",
         "properties": {
           "basis": {
@@ -1638,7 +1623,6 @@
       },
       "pricingTotals": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/pricingTotals",
         "type": "object",
         "properties": {
           "contractualFaceMinor": {
@@ -1664,7 +1648,6 @@
       },
       "recovery": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/recovery",
         "type": "object",
         "properties": {
           "sourceCashflowId": {
@@ -1694,7 +1677,6 @@
       },
       "riskForecast": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/riskForecast",
         "type": "object",
         "properties": {
           "forecastId": {
@@ -1768,7 +1750,6 @@
       },
       "scheduleRow": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/scheduleRow",
         "type": "object",
         "properties": {
           "cashflowId": {
@@ -1822,7 +1803,6 @@
       },
       "schedule": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/schedule",
         "type": "object",
         "properties": {
           "accountId": {
@@ -1859,7 +1839,6 @@
       },
       "validationError": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/validationError",
         "type": "object",
         "properties": {
           "code": {
@@ -1880,7 +1859,6 @@
       },
       "accountVersion": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/accountVersion",
         "type": "object",
         "properties": {
           "accountId": {
@@ -1898,7 +1876,6 @@
       },
       "calculationRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/calculationRequest",
         "anyOf": [
           {
             "type": "object",
@@ -2266,7 +2243,6 @@
       },
       "cashAllocation": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/cashAllocation",
         "type": "object",
         "properties": {
           "allocationId": {
@@ -2305,7 +2281,6 @@
       },
       "collectionAllocation": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/collectionAllocation",
         "type": "object",
         "properties": {
           "allocationId": {
@@ -2339,7 +2314,6 @@
       },
       "commandContext": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/commandContext",
         "type": "object",
         "properties": {
           "executionMode": {
@@ -2467,7 +2441,6 @@
       },
       "commandType": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/commandType",
         "type": "string",
         "enum": [
           "RECORD_CASH_MOVEMENT",
@@ -2488,7 +2461,6 @@
       },
       "financialCommand": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financialCommand",
         "anyOf": [
           {
             "type": "object",
@@ -4649,7 +4621,6 @@
       },
       "fundingEvent": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/fundingEvent",
         "anyOf": [
           {
             "type": "object",
@@ -4735,7 +4706,6 @@
       },
       "verifiedCashSource": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/verifiedCashSource",
         "type": "object",
         "properties": {
           "bankSourceId": {
@@ -4782,7 +4752,6 @@
       },
       "verifiedFundingCashSource": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/verifiedFundingCashSource",
         "type": "object",
         "properties": {
           "bankSourceId": {
@@ -4825,7 +4794,6 @@
       },
       "accountKey": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/accountKey",
         "type": "string",
         "enum": [
           "contractualReceivable",
@@ -4854,7 +4822,6 @@
       },
       "financialEvent": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financialEvent",
         "type": "object",
         "properties": {
           "calculationVersion": {
@@ -5039,7 +5006,6 @@
       },
       "journalLine": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/journalLine",
         "type": "object",
         "properties": {
           "journalId": {
@@ -5102,7 +5068,6 @@
       },
       "accountRead": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/accountRead",
         "type": "object",
         "properties": {
           "externalId": {
@@ -5128,7 +5093,6 @@
       },
       "accountSummary": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/accountSummary",
         "type": "object",
         "properties": {
           "externalId": {
@@ -5187,7 +5151,6 @@
       },
       "accountsPage": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/accountsPage",
         "type": "object",
         "properties": {
           "scope": {
@@ -5238,7 +5201,6 @@
       },
       "blockerCode": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/blockerCode",
         "type": "string",
         "enum": [
           "POLICY_INCOMPLETE",
@@ -5264,7 +5226,6 @@
       },
       "capabilities": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/capabilities",
         "type": "object",
         "properties": {
           "calculationVersion": {
@@ -5357,7 +5318,6 @@
       },
       "controlBalance": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/controlBalance",
         "type": "object",
         "properties": {
           "accountKey": {
@@ -5415,7 +5375,6 @@
       },
       "controls": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/controls",
         "type": "object",
         "properties": {
           "scope": {
@@ -5487,7 +5446,6 @@
       },
       "financialEventsPage": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financialEventsPage",
         "type": "object",
         "properties": {
           "items": {
@@ -5516,7 +5474,6 @@
       },
       "financialOperation": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/financialOperation",
         "type": "object",
         "properties": {
           "operationId": {
@@ -5654,7 +5611,6 @@
       },
       "operationState": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/operationState",
         "type": "string",
         "enum": [
           "REQUESTED",
@@ -5670,7 +5626,6 @@
       },
       "pageRequest": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/pageRequest",
         "type": "object",
         "properties": {
           "cursor": {
@@ -5690,7 +5645,6 @@
       },
       "transaction": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/transaction",
         "type": "object",
         "properties": {
           "transactionId": {
@@ -5748,7 +5702,6 @@
       },
       "transactionsPage": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/transactionsPage",
         "type": "object",
         "properties": {
           "items": {
@@ -5777,7 +5730,6 @@
       },
       "calculationResult": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/calculationResult",
         "anyOf": [
           {
             "type": "object",
@@ -6214,7 +6166,6 @@
       },
       "developerAdjustment": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/developerAdjustment",
         "type": "object",
         "properties": {
           "lotId": {
@@ -6260,7 +6211,6 @@
       },
       "helFundingCommand": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/helFundingCommand",
         "type": "object",
         "properties": {
           "executionMode": {
@@ -6411,7 +6361,6 @@
       },
       "helFundingOperation": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/helFundingOperation",
         "type": "object",
         "properties": {
           "operationId": {
@@ -6545,7 +6494,6 @@
       },
       "helFundingResult": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/helFundingResult",
         "type": "object",
         "properties": {
           "operation": {
@@ -6611,7 +6559,6 @@
       },
       "helJournalLine": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/helJournalLine",
         "type": "object",
         "properties": {
           "nativeGlAccountId": {
@@ -6680,7 +6627,6 @@
       },
       "helJournals": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "#/components/schemas/helJournals",
         "type": "object",
         "properties": {
           "scope": {
