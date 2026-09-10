@@ -18,18 +18,17 @@
  */
 package co.mnzl.fineract.receivables.math;
 
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Leg;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.MC;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Position;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Segment;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.days;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.growth;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.major;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.minor;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.position;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.require;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.segment;
 
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Leg;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Position;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Segment;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.LocalDate;
