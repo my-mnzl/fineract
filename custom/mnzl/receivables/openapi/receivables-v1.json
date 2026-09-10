@@ -4555,7 +4555,7 @@
                 "$ref": "#/components/schemas/sha256"
               },
               "scope": {
-                "$ref": "#/components/schemas/scope"
+                "$ref": "#/components/schemas/financialScope"
               },
               "subjectId": {
                 "$ref": "#/components/schemas/id"
