@@ -1,0 +1,142 @@
+name: Flex receivables paired build
+
+on:
+  pull_request:
+    paths:
+      - 'custom/**'
+      - 'fineract-*/**'
+      - '*.gradle'
+      - '.github/workflows/flex-receivables.yml'
+  push:
+    branches: ['mnzl/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flex-receivables-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-databases:
+    name: Native receivables (${{ matrix.database }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [mariadb, mysql, postgresql]
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e
+        with:
+          distribution: zulu
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
+      - name: Run mathematics and real native/database integration
+        env:
+          RECEIVABLES_TEST_DATABASE: ${{ matrix.database }}
+        run: |
+          ./gradlew --no-daemon --console=plain \
+            -Dreceivables.test.database="$RECEIVABLES_TEST_DATABASE" \
+            :custom:mnzl:receivables:math:test \
+            :custom:mnzl:receivables:native:test \
+            :custom:mnzl:receivables:service:test \
+            :custom:mnzl:instrument:loan-api:test \
+            :custom:mnzl:charge:calculation-engine:test \
+            :custom:mnzl:loan:cob:test
+      - name: Require executed tests and native database proof
+        env:
+          RECEIVABLES_TEST_DATABASE: ${{ matrix.database }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, xml.etree.ElementTree as ET
+          root = pathlib.Path('custom/mnzl/receivables')
+          counts = {}
+          for module in ['math', 'native', 'service']:
+              reports = list((root / module / 'build/test-results/test').glob('TEST-*.xml'))
+              suites = [ET.parse(report).getroot() for report in reports]
+              total = sum(int(suite.attrib.get('tests', 0)) for suite in suites)
+              invalid = sum(int(suite.attrib.get(key, 0)) for suite in suites for key in ['failures', 'errors', 'skipped'])
+              if total == 0 or invalid:
+                  raise SystemExit(f'{module}: required tests absent, failed or skipped')
+              counts[module] = total
+          proof = root / 'service/build/receivables-database-evidence.json'
+          evidence = json.loads(proof.read_text())
+          if evidence.get('database') != os.environ['RECEIVABLES_TEST_DATABASE'] or evidence.get('nativeJournalReadbackMatched') is not True or evidence.get('ordinaryProductRegressionPassed') is not True:
+              raise SystemExit('Required real native journal/ordinary product database evidence missing')
+          pathlib.Path('flex-database-evidence.json').write_text(json.dumps({'database': os.environ['RECEIVABLES_TEST_DATABASE'], 'tests': counts, 'evidence': evidence}, indent=2) + '\n')
+          PY
+      - name: Upload native database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flex-native-${{ matrix.database }}
+          path: |
+            flex-database-evidence.json
+            custom/mnzl/receivables/*/build/test-results/test/
+            custom/mnzl/receivables/service/build/receivables-database-evidence.json
+          if-no-files-found: error
+
+  image:
+    name: Publish immutable paired image
+    needs: native-databases
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e
+        with:
+          distribution: zulu
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push exact tested source
+        env:
+          REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild \
+            -Djib.to.image=flex-receivables-build -x test -x cucumber
+          native_commit="$(git rev-parse HEAD)"
+          docker tag flex-receivables-build "$REGISTRY_IMAGE:$native_commit"
+          docker push "$REGISTRY_IMAGE:$native_commit"
+          docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY_IMAGE:$native_commit" > flex-image-digest.txt
+      - name: Record paired artifacts and versions
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, subprocess
+          root = pathlib.Path('custom/mnzl/receivables')
+          openapi = root / 'openapi/receivables-v1.json'
+          vectors = root / 'math/src/test/resources/reference-vectors.json'
+          properties = json.loads(openapi.read_text())['components']['schemas']['capabilities']['properties']
+          image = pathlib.Path('flex-image-digest.txt').read_text().strip()
+          if not re.fullmatch(r'[^\s@]+@sha256:[a-f0-9]{64}', image):
+              raise SystemExit('Published image digest is absent or invalid')
+          metadata = {
+              'schemaVersion': properties['schemaVersion']['const'],
+              'calculationVersion': properties['calculationVersion']['const'],
+              'eventVersion': properties['eventVersion']['const'],
+              'fineractCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'fineractImage': image,
+              'nativeOpenapiSha256': hashlib.sha256(openapi.read_bytes()).hexdigest(),
+              'nativeVectorSha256': hashlib.sha256(vectors.read_bytes()).hexdigest(),
+          }
+          pathlib.Path('flex-native-build.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flex-native-build
+          path: |
+            flex-native-build.json
+            custom/mnzl/receivables/openapi/receivables-v1.json
+            custom/mnzl/receivables/math/src/test/resources/reference-vectors.json
+          if-no-files-found: error
