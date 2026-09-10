@@ -68,8 +68,9 @@ public class ReceivablesReadService {
             require(date != null && Set.of("BEFORE_EVENTS", "AFTER_EVENTS").contains(side) && watermark >= 0, "INVALID_DATA");
         }
 
-        String comparison() {
-            return side.equals("BEFORE_EVENTS") ? "<" : "<=";
+        String eventCutoff() {
+            return "(e.business_date<? or (e.business_date=?" + (side.equals("BEFORE_EVENTS") ? " and e.boundary_side='BEFORE_EVENTS'" : "")
+                    + "))";
         }
     }
 
@@ -169,7 +170,8 @@ public class ReceivablesReadService {
             wire.put("grossYield", state.segment().grossYield().rate().toPlainString());
             wire.put("netEir", state.segment().netEir().rate().toPlainString());
             wire.put("collectedMinor", nativePeriod.collectedMinor().toString());
-            wire.put("adjustedMinor", nativePeriod.adjustedMinor().toString());
+            wire.put("adjustedMinor", new BigInteger(text(source.get(leg.cashflow().cashflowId()), "amountMinor"))
+                    .subtract(nativePeriod.collectedMinor()).subtract(nativePeriod.outstandingMinor()).toString());
             legs.add(wire);
         }
         ObjectNode result = json.object();
@@ -202,7 +204,8 @@ public class ReceivablesReadService {
             version = text(row, "scheduleVersionId");
             row.put("nativeRepaymentPeriodId", Long.toString(period.nativePeriodId()));
             row.put("collectedMinor", period.collectedMinor().toString());
-            row.put("adjustedMinor", period.adjustedMinor().toString());
+            row.put("adjustedMinor", new BigInteger(text(row, "amountMinor")).subtract(period.collectedMinor())
+                    .subtract(period.outstandingMinor()).toString());
             row.put("outstandingMinor", period.outstandingMinor().toString());
             rows.add(row);
         }
@@ -328,9 +331,9 @@ public class ReceivablesReadService {
     private List<Map<String, Object>> snapshotRows(JsonNode scope, Boundary boundary, String kind) {
         var rows = store.jdbc().queryForList(
                 "select s.*,e.created_at,e.sequence_id from m_mnzl_r_state_snapshot s join m_mnzl_r_event e on e.record_key=s.event_key "
-                        + "where s.scope_key=? and s.subject_kind=? and e.sequence_id<=? and s.business_date" + boundary.comparison()
-                        + "? order by e.sequence_id",
-                key(scope), kind, boundary.watermark(), boundary.date());
+                        + "where s.scope_key=? and s.subject_kind=? and e.sequence_id<=? and " + boundary.eventCutoff()
+                        + " order by e.sequence_id",
+                key(scope), kind, boundary.watermark(), boundary.date(), boundary.date());
         Map<String, Map<String, Object>> latest = new LinkedHashMap<>();
         rows.forEach(row -> latest.put(string(row, "subject_key"), row));
         List<Map<String, Object>> sorted = new ArrayList<>(latest.values());
@@ -480,7 +483,7 @@ public class ReceivablesReadService {
                 activeIds.add(id);
             }
         }
-        List<Object> args = new ArrayList<>(List.of(key(scope), boundary.watermark(), boundary.date()));
+        List<Object> args = new ArrayList<>(List.of(key(scope), boundary.watermark(), boundary.date(), boundary.date()));
         String filter = "";
         if (dealId != null) {
             filter += " and l.deal_id=?";
@@ -493,14 +496,13 @@ public class ReceivablesReadService {
         var rows = store.jdbc().queryForList(
                 "select l.*,j.amount actual_amount,j.type_enum actual_side,j.account_id actual_gl,j.currency_code,j.transaction_id actual_source "
                         + "from m_mnzl_r_journal_line l join m_mnzl_r_event e on e.record_key=l.event_key left join acc_gl_journal_entry j on j.id=l.native_journal_id "
-                        + "where l.scope_key=? and e.sequence_id<=? and e.business_date" + boundary.comparison() + "?" + filter
-                        + " order by l.record_key",
+                        + "where l.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff() + filter + " order by l.record_key",
                 args.toArray());
         // Independently find native rows in the event's actual accounting transaction, including unregistered extras.
         Long extra = store.jdbc().queryForObject("select count(*) from acc_gl_journal_entry j join m_mnzl_r_event e "
                 + "on j.transaction_id=concat('R',substring(e.record_key,1,40)) left join m_mnzl_r_journal_line l on l.native_journal_id=j.id "
-                + "where e.scope_key=? and e.sequence_id<=? and e.business_date" + boundary.comparison() + "? and l.record_key is null",
-                Long.class, key(scope), boundary.watermark(), boundary.date());
+                + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff() + " and l.record_key is null", Long.class,
+                key(scope), boundary.watermark(), boundary.date(), boundary.date());
         require(extra != null && extra == 0, "JOURNAL_MISMATCH");
         Map<String, BigInteger> sub = new HashMap<>();
         Map<String, BigInteger> actual = new HashMap<>();
@@ -521,13 +523,15 @@ public class ReceivablesReadService {
                 journalIds.computeIfAbsent(semantic, ignored -> new ArrayList<>()).add(Long.toString(number(row, "native_journal_id")));
             }
         }
-        if (accountId == null && dealId == null) {
+        if (accountId == null) {
             String semantic = "helSettlementClearing";
             long clearing = number(store.require("account_map", ReceivablesStore.key(key(scope), "map", semantic)), "native_gl_id");
             var fundingRows = store.jdbc().queryForList(
                     "select h.* from m_mnzl_r_hel_funding h join m_mnzl_r_event e on e.operation_key=h.operation_key "
-                            + "where h.scope_key=? and e.sequence_id<=? and e.business_date" + boundary.comparison() + "?",
-                    key(scope), boundary.watermark(), boundary.date());
+                            + "where h.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
+                            + (dealId == null ? "" : " and h.deal_id=?"),
+                    dealId == null ? new Object[] { key(scope), boundary.watermark(), boundary.date(), boundary.date() }
+                            : new Object[] { key(scope), boundary.watermark(), boundary.date(), boundary.date(), dealId });
             for (var funding : fundingRows) {
                 BigInteger expected = new BigInteger(string(funding, "principal_minor"))
                         .subtract(new BigInteger(string(funding, "fees_minor"))).negate();
@@ -610,9 +614,11 @@ public class ReceivablesReadService {
 
     private List<Map<String, Object>> eventRows(JsonNode scope, Boundary boundary) {
         return store.jdbc()
-                .queryForList("select e.*,c.command_type from m_mnzl_r_event e join m_mnzl_r_command c on c.record_key=e.operation_key "
-                        + "where e.scope_key=? and e.sequence_id<=? and e.business_date" + boundary.comparison()
-                        + "? order by e.business_date,e.sequence_id", key(scope), boundary.watermark(), boundary.date());
+                .queryForList(
+                        "select e.*,c.command_type from m_mnzl_r_event e join m_mnzl_r_command c on c.record_key=e.operation_key "
+                                + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
+                                + " order by e.business_date,e.sequence_id",
+                        key(scope), boundary.watermark(), boundary.date(), boundary.date());
     }
 
     private Map<String, ObjectNode> issuedPositions(JsonNode scope, Boundary boundary) {
@@ -643,9 +649,9 @@ public class ReceivablesReadService {
     private Map<String, Object> historicalSegment(Map<String, Object> account, Boundary boundary) {
         var rows = store.jdbc().queryForList(
                 "select s.* from m_mnzl_r_segment s join m_mnzl_r_event e on e.operation_key=s.source_operation_key "
-                        + "where s.account_key=? and e.sequence_id<=? and s.effective_from" + boundary.comparison()
-                        + "? order by s.effective_from desc,e.sequence_id desc",
-                string(account, "record_key"), boundary.watermark(), boundary.date());
+                        + "where s.account_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
+                        + " order by s.effective_from desc,e.sequence_id desc",
+                string(account, "record_key"), boundary.watermark(), boundary.date(), boundary.date());
         if (rows.isEmpty()) {
             throw new NotFoundException();
         }

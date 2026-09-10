@@ -47,7 +47,7 @@ class ReceivablesReadServiceTest {
         when(store.jdbc()).thenReturn(jdbc);
         when(config.scopeKey(scope)).thenReturn("scope");
         var date = LocalDate.of(2026, 9, 1);
-        when(jdbc.queryForList(anyString(), eq("scope"), eq("LOT"), eq(7L), eq(date))).thenReturn(List.of(
+        when(jdbc.queryForList(anyString(), eq("scope"), eq("LOT"), eq(7L), eq(date), eq(date))).thenReturn(List.of(
                 Map.of("subject_key", "a", "record_key", "a1", "created_at", "2026-08-01T00:00:00Z", "snapshot_json",
                         "{\"lotId\":\"a\",\"settledMinor\":\"0\"}"),
                 Map.of("subject_key", "b", "record_key", "b1", "created_at", "2026-08-02T00:00:00Z", "snapshot_json", "{\"lotId\":\"b\"}"),
@@ -60,7 +60,8 @@ class ReceivablesReadServiceTest {
         var second = reads.snapshots(scope, boundary, "LOT", first.path("nextCursor").asText(), 1);
         assertThat(second.path("items").get(0).path("settledMinor").asText()).isEqualTo("12");
         assertThat(second.path("nextCursor").isNull()).isTrue();
-        verify(jdbc, times(2)).queryForList(contains("s.business_date<?"), eq("scope"), eq("LOT"), eq(7L), eq(date));
+        verify(jdbc, times(2)).queryForList(contains("e.boundary_side='BEFORE_EVENTS'"), eq("scope"), eq("LOT"), eq(7L), eq(date),
+                eq(date));
         assertThatThrownBy(() -> reads.snapshots(scope, boundary, "LOT", "!", 1)).isInstanceOf(ReceivablesException.class);
     }
 
