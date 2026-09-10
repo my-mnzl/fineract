@@ -82,25 +82,29 @@ public class ReceivablesMaintenance {
             require(text(apply, "planHash").equals(string(config, "reset_plan_hash")), "SOURCE_CHANGED");
             return json.read(string(config, "reset_result_json"));
         }
-        for (String id : ids(input, "nativeLoanIds"))
+        for (String id : ids(input, "nativeLoanIds")) {
             store.jdbc().queryForList("select id from m_loan where id=? for update", Long.parseLong(id));
-        for (String id : ids(input, "journalIds"))
+        }
+        for (String id : ids(input, "journalIds")) {
             store.jdbc().queryForList("select id from acc_gl_journal_entry where id=? for update", Long.parseLong(id));
+        }
         ObjectNode planned = plan(input, config);
         require(text(apply, "planHash").equals(text(planned, "planHash")), "SOURCE_CHANGED");
         var rows = inventory.collect(scope, ids(input, "nativeLoanIds"), ids(input, "journalIds"));
         require(inventory.manifest(rows).equals(planned.get("rows")), "SOURCE_CHANGED");
         var result = json.object();
-        for (String field : List.of("scope", "tenantId", "nextLedgerEpoch", "maintenanceWindowId"))
+        for (String field : List.of("scope", "tenantId", "nextLedgerEpoch", "maintenanceWindowId")) {
             result.set(field, input.get(field));
+        }
         result.put("planHash", text(planned, "planHash"));
         result.set("removedCounts", inventory.remove(rows));
         result.put("retired", true);
         // Keep the old scope/configuration as a permanent epoch tombstone, including the idempotent reset receipt.
         store.update("configuration", scope,
                 Map.of("retired", true, "reset_plan_hash", text(planned, "planHash"), "reset_result_json", json.write(result)));
-        for (String table : ReceivablesResetInventory.SCOPED)
+        for (String table : ReceivablesResetInventory.SCOPED) {
             require(store.scoped(table, scope).isEmpty(), "RECOVERY_REQUIRED");
+        }
         return result;
     }
 
@@ -110,8 +114,9 @@ public class ReceivablesMaintenance {
         JsonNode input = json.validate("nativeResetRequest", request);
         require(configuration.tenantId().equals(text(input, "tenantId")), "OWNERSHIP_CONFLICT");
         require(!text(input, "nextLedgerEpoch").equals(text(input.get("scope"), "ledgerEpoch")), "INVALID_DATA");
-        for (String field : List.of("developerOrganizationIds", "accountIds", "nativeLoanIds", "productIds", "sourceIds", "journalIds"))
+        for (String field : List.of("developerOrganizationIds", "accountIds", "nativeLoanIds", "productIds", "sourceIds", "journalIds")) {
             ids(input, field);
+        }
         require(!ids(input, "developerOrganizationIds").isEmpty() && !ids(input, "productIds").isEmpty(), "INVALID_DATA");
         return input;
     }
@@ -194,8 +199,9 @@ public class ReceivablesMaintenance {
 
     static Set<String> ids(JsonNode input, String field) {
         Set<String> values = new TreeSet<>();
-        for (JsonNode value : input.get(field))
+        for (JsonNode value : input.get(field)) {
             require(values.add(value.asText()), "INVALID_DATA");
+        }
         return values;
     }
 

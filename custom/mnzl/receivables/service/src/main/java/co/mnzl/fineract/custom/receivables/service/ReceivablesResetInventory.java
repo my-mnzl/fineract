@@ -69,7 +69,9 @@ public class ReceivablesResetInventory {
             do {
                 changed = false;
                 for (String parent : NATIVE) {
-                    if (selected.get(parent).isEmpty()) continue;
+                    if (selected.get(parent).isEmpty()) {
+                        continue;
+                    }
                     try (var keys = metadata.getExportedKeys(catalog, schema, parent)) {
                         while (keys.next()) {
                             String child = identifier(keys.getString("FKTABLE_NAME"));
@@ -77,7 +79,9 @@ public class ReceivablesResetInventory {
                             require(primaryKey(parent).equals(keys.getString("PKCOLUMN_NAME")) && keys.getShort("KEY_SEQ") == 1,
                                     "OWNERSHIP_CONFLICT");
                             List<Map<String, Object>> children = matching(child, column, selected.get(parent));
-                            if (children.isEmpty()) continue;
+                            if (children.isEmpty()) {
+                                continue;
+                            }
                             require(NATIVE.contains(child), "OWNERSHIP_CONFLICT");
                             Set<String> ids = new Rows(child, primaryKey(child), children).ids();
                             if (child.equals("m_loan") || child.equals("acc_gl_journal_entry")) {
@@ -90,14 +94,20 @@ public class ReceivablesResetInventory {
                 }
             } while (changed);
             for (String table : NATIVE) {
-                if (selected.get(table).isEmpty()) continue;
+                if (selected.get(table).isEmpty()) {
+                    continue;
+                }
                 try (var keys = metadata.getImportedKeys(catalog, schema, table)) {
                     while (keys.next()) {
                         String parent = keys.getString("PKTABLE_NAME");
-                        if (!NATIVE.contains(parent)) continue;
+                        if (!NATIVE.contains(parent)) {
+                            continue;
+                        }
                         String column = identifier(keys.getString("FKCOLUMN_NAME"));
                         for (var row : matching(table, primaryKey(table), selected.get(table))) {
-                            if (row.get(column) != null) require(selected.get(parent).contains(string(row, column)), "OWNERSHIP_CONFLICT");
+                            if (row.get(column) != null) {
+                                require(selected.get(parent).contains(string(row, column)), "OWNERSHIP_CONFLICT");
+                            }
                         }
                     }
                 }
@@ -105,10 +115,12 @@ public class ReceivablesResetInventory {
             return null;
         });
         List<Rows> rows = new ArrayList<>();
-        for (String table : SCOPED)
+        for (String table : SCOPED) {
             rows.add(new Rows("m_mnzl_r_" + table, "record_key", store.scoped(table, scope)));
-        for (String table : NATIVE)
+        }
+        for (String table : NATIVE) {
             rows.add(new Rows(table, primaryKey(table), matching(table, primaryKey(table), selected.get(table))));
+        }
         return rows;
     }
 
@@ -133,9 +145,10 @@ public class ReceivablesResetInventory {
         ArrayNode counts = json.object().putArray("counts");
         for (Rows rows : tables) {
             int count = 0;
-            for (String id : rows.ids())
+            for (String id : rows.ids()) {
                 count += store.jdbc().update("delete from " + rows.table() + " where " + rows.primaryKey() + "=?",
                         rows.primaryKey().equals("record_key") ? id : Long.parseLong(id));
+            }
             require(count == rows.values().size(), "SOURCE_CHANGED");
             counts.addObject().put("table", rows.table()).put("count", count);
         }
@@ -143,7 +156,9 @@ public class ReceivablesResetInventory {
     }
 
     private List<Map<String, Object>> matching(String table, String column, Set<String> ids) {
-        if (ids.isEmpty()) return List.of();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         // Bounded parameters avoid backend-specific array syntax and unbounded SQL parameter lists.
         Map<String, Map<String, Object>> found = new TreeMap<>();
         for (String id : ids) {
