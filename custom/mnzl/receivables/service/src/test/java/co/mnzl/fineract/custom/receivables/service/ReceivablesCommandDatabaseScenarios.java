@@ -635,9 +635,9 @@ final class ReceivablesCommandDatabaseScenarios {
         reset.put("corridorObservationId", "developer-impaired-rate");
         reset.put("corridorRate", "0.30");
         reset.put("spread", "0");
-        reset.put("developerAdjustmentDueDate", harness.today.plusDays(1).toString());
+        reset.put("developerAdjustmentDueDate", harness.today.plusDays(45).toString());
         execute(reset);
-        harness.moveDate(harness.today.plusDays(2));
+        harness.moveDate(harness.today.plusDays(46));
         JsonNode lot = null;
         for (JsonNode value : harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/developer-lots", null, 200)
                 .path("items")) {
@@ -648,6 +648,7 @@ final class ReceivablesCommandDatabaseScenarios {
         assertThat(lot).isNotNull();
         ObjectNode forecast = forecast(id, "developer-lot-forecast", List.of());
         forecast.put("stage", "STAGE_2");
+        ((ObjectNode) forecast.path("scenarios").get(0)).put("defaultDate", harness.today.toString());
         forecast.remove("contentHash");
         forecast.put("contentHash", harness.json.hash(forecast));
         ObjectNode impairment = command("SET_DEVELOPER_IMPAIRMENT", "developer-lot-impairment", id);
