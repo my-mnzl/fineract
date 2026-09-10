@@ -16,13 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package co.mnzl.fineract.custom.loan.starter;
-
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.ComponentScan;
-
-@AutoConfiguration
-@ComponentScan({"co.mnzl.fineract.custom.loan", "co.mnzl.fineract.custom.receivables"})
-@ConditionalOnProperty(name = "mnzl.loan.enabled", havingValue = "true", matchIfMissing = true)
-public class CustomLoanAutoConfiguration {}
+description = 'Purchased Receivables Service'
+group = 'co.mnzl.fineract.custom'
+base { archivesName = 'custom-mnzl-receivables-service' }
+apply from: 'dependencies.gradle'
+sourceSets.main.resources.srcDir('../openapi')

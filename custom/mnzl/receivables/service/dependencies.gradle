@@ -16,29 +16,31 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 dependencies {
-    implementation(project(':custom:mnzl:receivables:service'))
+    implementation(project(':fineract-core'))
+    implementation(project(':fineract-loan'))
+    implementation(project(':fineract-accounting'))
+    implementation(project(':fineract-provider'))
+    implementation(project(':custom:mnzl:instrument:loan-api'))
     implementation(project(':custom:mnzl:receivables:math'))
     implementation(project(':custom:mnzl:receivables:native'))
-    implementation(project(':fineract-core'))
-    implementation(project(':fineract-cob'))
-    implementation(project(':fineract-loan'))
-    implementation(project(':fineract-provider'))
-    implementation(project(':custom:mnzl:instrument:balloon-loan'))
-    implementation(project(':custom:mnzl:instrument:loan-api'))
-    implementation(project(':custom:mnzl:loan:cob'))
-    implementation(project(':custom:mnzl:loan:grace'))
-    implementation(project(':custom:mnzl:loan:job'))
-    implementation(project(':custom:mnzl:loan:schedule-api'))
-    implementation(project(':custom:mnzl:loan:schedule-engine'))
-    implementation(project(':custom:mnzl:loan:simulator'))
-    implementation('org.springframework.boot:spring-boot-starter')
-    testImplementation(project(':fineract-provider'))
-    testImplementation('org.springframework.boot:spring-boot-starter-jdbc')
-    testImplementation('org.springframework.boot:spring-boot-starter-data-jpa')
-    testImplementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
+    implementation('org.springframework.security:spring-security-core')
+    implementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
         exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
     }
+    implementation('org.springframework.boot:spring-boot-starter-jdbc')
+    implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+    implementation('jakarta.ws.rs:jakarta.ws.rs-api')
+    implementation('com.fasterxml.jackson.core:jackson-databind')
+    implementation('com.fasterxml.jackson.datatype:jackson-datatype-jsr310')
+    implementation('com.networknt:json-schema-validator:1.5.8')
+    implementation('io.github.erdtman:java-json-canonicalization:1.1')
     testImplementation('org.springframework.boot:spring-boot-starter-test')
+    testImplementation('org.testcontainers:junit-jupiter')
+    testImplementation('org.testcontainers:mariadb')
+    testImplementation('org.testcontainers:mysql')
+    testImplementation('org.testcontainers:postgresql')
+    testRuntimeOnly('org.mariadb.jdbc:mariadb-java-client')
+    testRuntimeOnly('com.mysql:mysql-connector-j')
+    testRuntimeOnly('org.postgresql:postgresql')
 }

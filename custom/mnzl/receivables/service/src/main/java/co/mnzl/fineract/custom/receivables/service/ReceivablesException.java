@@ -16,13 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package co.mnzl.fineract.custom.loan.starter;
+package co.mnzl.fineract.custom.receivables.service;
 
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.ComponentScan;
-
-@AutoConfiguration
-@ComponentScan({"co.mnzl.fineract.custom.loan", "co.mnzl.fineract.custom.receivables"})
-@ConditionalOnProperty(name = "mnzl.loan.enabled", havingValue = "true", matchIfMissing = true)
-public class CustomLoanAutoConfiguration {}
+public final class ReceivablesException extends RuntimeException {
+    private final String code;
+    public ReceivablesException(String code) { super(code); this.code = code; }
+    public String code() { return code; }
+    public static void require(boolean condition, String code) {
+        if (!condition) throw new ReceivablesException(code);
+    }
+}
