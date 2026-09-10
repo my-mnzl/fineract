@@ -146,12 +146,13 @@ public class NativeReceivableBridge {
         }
         loan.addLoanTransaction(transaction);
         loan.refreshPurchasedReceivableSummary(activationDate);
-        loans.saveAndFlush(loan);
+        loan = loans.saveAndFlush(loan);
         Map<String, Long> ids = new HashMap<>();
         for (int i = 0; i < legs.size(); i++) {
             ids.put(legs.get(i).sourceInstallmentId(), loan.getRepaymentScheduleInstallments().get(i).getId());
         }
-        return new Booking(loan.getId(), transaction.getId(), Map.copyOf(ids), state(loan, activationDate, "AFTER_EVENTS"));
+        return new Booking(loan.getId(), savedTransactionId(loan, transaction.getExternalId()), Map.copyOf(ids),
+                state(loan, activationDate, "AFTER_EVENTS"));
     }
 
     public Effect collect(long loanId, LocalDate date, List<Allocation> allocations, String externalTransactionId) {
@@ -208,8 +209,8 @@ public class NativeReceivableBridge {
         loan.addLoanTransaction(transaction);
         loan.refreshPurchasedReceivableSummary(date);
         transaction.updateOutstandingLoanBalance(loan.getSummary().getTotalOutstanding());
-        loans.saveAndFlush(loan);
-        return new Effect(transaction.getId(), state(loan, date, "AFTER_EVENTS"));
+        loan = loans.saveAndFlush(loan);
+        return new Effect(savedTransactionId(loan, transaction.getExternalId()), state(loan, date, "AFTER_EVENTS"));
     }
 
     public Effect reverse(long loanId, long transactionId, LocalDate date) {
@@ -228,8 +229,8 @@ public class NativeReceivableBridge {
         }
         transaction.reversePurchasedReceivable(date);
         loan.refreshPurchasedReceivableSummary(date);
-        loans.saveAndFlush(loan);
-        return new Effect(transaction.getId(), state(loan, date, "AFTER_EVENTS"));
+        loan = loans.saveAndFlush(loan);
+        return new Effect(savedTransactionId(loan, transaction.getExternalId()), state(loan, date, "AFTER_EVENTS"));
     }
 
     /** Retains old native periods and mappings; a signed modification maps old exposure out and new exact legs in. */
@@ -267,12 +268,19 @@ public class NativeReceivableBridge {
         loan.setExpectedMaturityDate(legs.getLast().dueDate());
         loan.getLoanProductRelatedDetail().setNumberOfRepayments(offset + legs.size());
         loan.refreshPurchasedReceivableSummary(date);
-        loans.saveAndFlush(loan);
+        loan = loans.saveAndFlush(loan);
         Map<String, Long> ids = new HashMap<>();
         for (int i = 0; i < legs.size(); i++) {
-            ids.put(legs.get(i).sourceInstallmentId(), added.get(i).getId());
+            int installmentNumber = offset + i + 1;
+            ids.put(legs.get(i).sourceInstallmentId(), loan.getRepaymentScheduleInstallments().stream()
+                    .filter(period -> period.getInstallmentNumber() == installmentNumber).findFirst().orElseThrow().getId());
         }
-        return new Booking(loan.getId(), tx.getId(), Map.copyOf(ids), state(loan, date, "AFTER_EVENTS"));
+        return new Booking(loan.getId(), savedTransactionId(loan, tx.getExternalId()), Map.copyOf(ids), state(loan, date, "AFTER_EVENTS"));
+    }
+
+    private long savedTransactionId(Loan loan, ExternalId externalId) {
+        return loan.getLoanTransactions().stream().filter(transaction -> externalId.equals(transaction.getExternalId())).findFirst()
+                .orElseThrow().getId();
     }
 
     @Transactional(readOnly = true)
