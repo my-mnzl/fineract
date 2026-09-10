@@ -33,6 +33,9 @@ final class ReceivablesCommandDatabaseScenarios {
 
     private final ReceivablesDatabaseIntegrationTest harness;
     private long resolvedBorrower;
+    private long transferredLotAmount;
+    private java.time.LocalDate transferredLotDue;
+    private List<JsonNode> replacementFlows;
 
     ReceivablesCommandDatabaseScenarios(ReceivablesDatabaseIntegrationTest harness) {
         this.harness = harness;
@@ -47,6 +50,9 @@ final class ReceivablesCommandDatabaseScenarios {
         modificationAndWriteOff();
         correction();
         funding();
+        developerSettlementAcrossDueDate();
+        impairedReversal();
+        corruptedMirrorsCannotHidePositionMismatch();
         assertThat(harness
                 .queryLong("select count(*) from m_mnzl_r_journal_line l left join acc_gl_journal_entry j on j.id=l.native_journal_id "
                         + "where j.id is null or l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100 "
@@ -179,10 +185,12 @@ final class ReceivablesCommandDatabaseScenarios {
         c.put("modifiedScheduleVersionId", "modified-schedule");
         c.put("approvedConsiderationMinor", "0");
         c.set("modifiedCashflows", harness.json.value(flows));
-        c.set("riskForecast", forecast(id, "modified-forecast", flows));
+        c.set("riskForecast", forecast(id, "modified-forecast", flows).put("stage", "STAGE_2"));
         c.set("legalEvidenceIds", harness.json.value(List.of("signed-modification")));
         execute(c);
         JsonNode modified = account(id);
+        assertThat(modified.path("position").path("stage").asText()).isEqualTo("STAGE_2");
+        controls(id);
         assertThat(modified.path("position").path("contractualOutstandingMinor").asText()).isEqualTo("90000");
         long net = modified.path("position").path("amortizedCostMinor").asLong();
         assertThat(glBalance("modificationGainLoss") - loss).isEqualTo(before - net);
@@ -359,6 +367,15 @@ final class ReceivablesCommandDatabaseScenarios {
     private void substitution() throws Exception {
         String id = "substitution-account";
         harness.purchase(id);
+        transferredLotDue = harness.today.plusDays(45);
+        ObjectNode reset = command("RESET_RATE", "substitution-reset", id);
+        reset.put("corridorObservationId", "substitution-rate");
+        reset.put("corridorRate", "0.30");
+        reset.put("spread", "0");
+        reset.put("developerAdjustmentDueDate", transferredLotDue.toString());
+        execute(reset);
+        transferredLotAmount = balance(controls(id), "developerReceivable");
+        assertThat(transferredLotAmount).isPositive();
         JsonNode before = account(id).path("position");
         String replacement = "substitution-replacement";
         List<JsonNode> flows = new ArrayList<>();
@@ -370,18 +387,22 @@ final class ReceivablesCommandDatabaseScenarios {
             flow.put("amountMinor", "60000");
             flows.add(flow);
         }
+        replacementFlows = List.copyOf(flows);
         long bankBefore = glBalance("bank");
         long incomeBefore = glBalance("portfolioInterestIncome");
         ObjectNode c = command("SUBSTITUTE_RECEIVABLE", "substitute", id);
         c.put("replacementAccountId", replacement);
         c.put("replacementCustomerReferenceId", "replacement-customer");
         c.set("replacementCashflows", harness.json.value(flows));
-        c.set("developerAdjustmentAllocationIds", harness.json.value(List.of()));
-        c.set("replacementRiskForecast", forecast(id, "substitution-forecast", flows));
+        c.set("developerAdjustmentAllocationIds", harness.json.value(List.of("substitution-reset:reset")));
+        c.set("replacementRiskForecast", forecast(id, "substitution-forecast", flows).put("stage", "STAGE_2"));
         c.set("assignmentEvidenceIds", harness.json.value(List.of("signed-assignment")));
         execute(c);
         JsonNode after = account(replacement).path("position");
         assertThat(after.path("contractualOutstandingMinor").asText()).isEqualTo("120000");
+        assertThat(after.path("stage").asText()).isEqualTo("STAGE_2");
+        assertThat(balance(controls(id), "developerReceivable")).isZero();
+        assertThat(balance(controls(replacement), "developerReceivable")).isEqualTo(transferredLotAmount);
         for (String field : List.of("grossPurchaseBasisMinor", "amortizedCostMinor", "deferredIntegralFeeMinor")) {
             assertThat(after.path(field)).isEqualTo(before.path(field));
         }
@@ -428,6 +449,100 @@ final class ReceivablesCommandDatabaseScenarios {
         return harness.queryLong(
                 "select coalesce(sum(case when type_enum=2 then amount*100 else -amount*100 end),0) from acc_gl_journal_entry where account_id="
                         + harness.accounts.get(account));
+    }
+
+    private JsonNode controls(String accountId) throws Exception {
+        JsonNode controls = harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/controls?accountId=" + accountId, null,
+                200);
+        for (JsonNode balance : controls.path("balances")) {
+            assertThat(balance.path("differenceMinor").asText()).describedAs(accountId + ":" + balance.path("accountKey").asText())
+                    .isEqualTo("0");
+        }
+        assertThat(controls.path("nativeContractualOutstandingMinor")).isEqualTo(controls.path("subledgerContractualOutstandingMinor"));
+        return controls;
+    }
+
+    private long balance(JsonNode controls, String semantic) {
+        for (JsonNode balance : controls.path("balances")) {
+            if (balance.path("accountKey").asText().equals(semantic)) {
+                return balance.path("nativeGlMinor").asLong();
+            }
+        }
+        throw new AssertionError("Missing native control " + semantic);
+    }
+
+    private void developerSettlementAcrossDueDate() throws Exception {
+        harness.moveDate(transferredLotDue);
+        String id = "substitution-replacement";
+        harness.recordReceipt("due-developer-cash", id, Long.toString(transferredLotAmount));
+        ObjectNode payment = command("SETTLE_DEVELOPER_ADJUSTMENT", "due-developer-settle", id);
+        payment.put("method", "CASH");
+        payment.put("cashMovementId", "due-developer-cash");
+        payment.set("lots", harness.json
+                .value(List.of(Map.of("lotId", "substitution-reset:reset", "amountMinor", Long.toString(transferredLotAmount)))));
+        execute(payment);
+        JsonNode controls = controls(id);
+        assertThat(balance(controls, "installmentDues")).isEqualTo(60000);
+        assertThat(balance(controls, "contractualReceivable")).isEqualTo(60000);
+        assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("120000");
+    }
+
+    private void impairedReversal() throws Exception {
+        String id = "substitution-replacement";
+        ObjectNode risk = forecast("substitution-account", "impaired-reversal-forecast", replacementFlows);
+        risk.put("stage", "STAGE_2");
+        risk.put("forecastVersion", "2");
+        ((ObjectNode) risk.path("scenarios").get(0).path("recoveries").get(0)).put("amountMinor", "30000");
+        ObjectNode impair = command("SET_IMPAIRMENT", "impaired-reversal", id);
+        impair.set("forecast", risk);
+        impair.set("qualitativeFindingIds", harness.json.value(List.of("credit-review")));
+        impair.set("cureEvidenceIds", harness.json.value(List.of()));
+        execute(impair);
+        assertThat(account(id).path("position").path("lossAllowanceMinor").asText()).isEqualTo("30000");
+        harness.recordReceipt("impaired-cash", id, "10000");
+        ObjectNode collect = command("COLLECT", "impaired-collection", id);
+        collect.set("allocations",
+                harness.json.value(List.of(Map.of("allocationId", "impaired-allocation", "cashMovementId", "impaired-cash", "cashflowId",
+                        id + "-0", "installmentId", id + "-0", "instrumentId", "impaired-cheque", "amountMinor", "10000"))));
+        JsonNode collected = execute(collect);
+        assertThat(account(id).path("position").path("lossAllowanceMinor").asText()).isEqualTo("25000");
+        ObjectNode reverse = command("REVERSE_COLLECTION", "impaired-reverse", id);
+        reverse.put("originalOperationId", "impaired-collection");
+        reverse.set("nativeTransactionId", collected.path("nativeTransactionIds").get(0));
+        reverse.set("allocationIds", harness.json.value(List.of("impaired-allocation")));
+        reverse.put("reasonCode", "bank-return");
+        execute(reverse);
+        assertThat(account(id).path("position").path("lossAllowanceMinor").asText()).isEqualTo("30000");
+        assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("120000");
+        assertThat(balance(controls(id), "lossAllowance")).isEqualTo(-30000);
+    }
+
+    private void corruptedMirrorsCannotHidePositionMismatch() throws Exception {
+        String id = "substitution-replacement";
+        long face = harness.queryLong(
+                "select min(l.native_journal_id) from m_mnzl_r_journal_line l join m_mnzl_r_account a on a.record_key=l.account_key where a.external_id='substitution-replacement' and l.semantic_account='contractualReceivable' and l.side='DEBIT'");
+        long discount = harness.queryLong(
+                "select min(l.native_journal_id) from m_mnzl_r_journal_line l join m_mnzl_r_account a on a.record_key=l.account_key where a.external_id='substitution-replacement' and l.semantic_account='deferredDiscount' and l.side='CREDIT'");
+        controls(id);
+        try {
+            for (long journal : List.of(face, discount)) {
+                harness.executeSql(
+                        "update m_mnzl_r_journal_line set amount_minor=cast(amount_minor as decimal(19,0))+1 where native_journal_id="
+                                + journal);
+                harness.executeSql("update acc_gl_journal_entry set amount=amount+0.01 where id=" + journal);
+            }
+            JsonNode corrupt = harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/controls?accountId=" + id, null, 200);
+            assertThat(corrupt.path("balances"))
+                    .anySatisfy(balance -> assertThat(balance.path("differenceMinor").asText()).isNotEqualTo("0"));
+        } finally {
+            for (long journal : List.of(face, discount)) {
+                harness.executeSql(
+                        "update m_mnzl_r_journal_line set amount_minor=cast(amount_minor as decimal(19,0))-1 where native_journal_id="
+                                + journal);
+                harness.executeSql("update acc_gl_journal_entry set amount=amount-0.01 where id=" + journal);
+            }
+        }
+        controls(id);
     }
 
     private void funding() throws Exception {

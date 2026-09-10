@@ -130,16 +130,17 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));
                 evidence.put("nativeGlEntries", queryLong("select count(*) from acc_gl_journal_entry"));
                 evidence.put("pendingOutboxEvents", queryLong("select count(*) from m_mnzl_r_event where delivered_at is null"));
-                evidence.set("assertions",
-                        json.value(List.of("exact-face-and-small-cheque", "actual-native-journal-readback", "idempotent-retry",
-                                "changed-payload-conflict", "stale-version", "scope-conflict",
-                                "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
-                                "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing",
-                                "separate-tenant-database-isolation", "rate-reset", "impairment", "frozen-period-close",
-                                "closed-period-rejection", "due-collection-reversal", "canonical-borrower-without-financial-effects",
-                                "partial-and-full-settlement", "developer-cash-settlement", "cashless-substitution-carries-basis",
-                                "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
-                                "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees")));
+                evidence.set("assertions", json.value(List.of("exact-face-and-small-cheque", "actual-native-journal-readback",
+                        "idempotent-retry", "changed-payload-conflict", "stale-version", "scope-conflict",
+                        "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
+                        "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
+                        "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
+                        "canonical-borrower-without-financial-effects", "partial-and-full-settlement", "developer-cash-settlement",
+                        "cashless-substitution-carries-basis", "substitution-transfers-lot-controls", "forecast-stage-transitions",
+                        "impaired-reversal-restores-allowance", "independent-controls-detect-mirrored-corruption", "future-close-rejected",
+                        "preparing-close-blocks-historical-posting", "developer-payment-crosses-receivable-due-date",
+                        "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
+                        "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -717,7 +718,36 @@ class ReceivablesDatabaseIntegrationTest {
         close.put("eventWatermark", request("GET", PREFIX + "/capabilities", null, 200).path("currentEventWatermark").asText());
         close.put("sourceCutoffHash", "0".repeat(64));
         close.set("forecastIds", json.value(List.of("account-1-forecast", "rollback-forecast")));
+        ObjectNode future = close.deepCopy();
+        future.put("operationId", "future-close");
+        future.put("idempotencyKey", "future-close");
+        future.put("periodId", boundary.toString().substring(0, 7));
+        future.put("subjectId", boundary.toString().substring(0, 7));
+        future.put("boundaryDate", boundary.plusMonths(1).toString());
+        assertThat(request("POST", PREFIX + "/commands", future, 409).path("code").asText()).isEqualTo("APPROVAL_SCOPE_CHANGED");
         JsonNode prepared = request("POST", PREFIX + "/commands", close, 200);
+        ObjectNode historyAuthorization = json.object();
+        historyAuthorization.set("scope", scope(false));
+        historyAuthorization.put("authorizationId", "preparing-history");
+        historyAuthorization.put("scopeHash", "0".repeat(64));
+        historyAuthorization.put("approvedBy", "1");
+        historyAuthorization.put("effectiveFrom", boundary.minusDays(1).toString());
+        historyAuthorization.put("effectiveThrough", boundary.minusDays(1).toString());
+        historyAuthorization.put("mode", "CORRECTION");
+        request("POST", PREFIX + "/authorizations", historyAuthorization, 200);
+        historyAuthorization.remove(List.of("scope", "mode"));
+        ObjectNode historicalCash = command("RECORD_CASH_MOVEMENT", "preparing-cash", "deal", "DEAL");
+        historicalCash.put("executionMode", "CORRECTION");
+        historicalCash.set("executionAuthorization", historyAuthorization);
+        historicalCash.put("businessDate", boundary.minusDays(1).toString());
+        historicalCash.set("source",
+                json.value(Map.of("bankSourceId", "preparing-bank", "bankAccountReference", "test-bank", "verificationEvidenceId",
+                        "verified", "valueDate", boundary.minusDays(1).toString(), "currency", "EGP", "amountMinor", "1", "direction",
+                        "INCOMING", "allocations", List.of(Map.of("allocationId", "preparing-allocation", "kind", "RECEIPT_UNAPPLIED",
+                                "dealId", "deal", "accountId", "account-1", "beneficiaryReferenceId", "financier", "amountMinor", "1")))));
+        Map<String, Long> preparedCounts = counts();
+        assertThat(request("POST", PREFIX + "/commands", historicalCash, 409).path("code").asText()).isEqualTo("PERIOD_CLOSED");
+        assertThat(counts()).isEqualTo(preparedCounts);
         String watermark = prepared.path("eventWatermark").asText();
         JsonNode frozen = request("GET",
                 PREFIX + "/controls?businessDate=" + boundary + "&boundarySide=BEFORE_EVENTS&eventWatermark=" + watermark, null, 200);
