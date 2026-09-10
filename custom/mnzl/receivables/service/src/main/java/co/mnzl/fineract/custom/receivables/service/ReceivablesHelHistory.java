@@ -141,10 +141,13 @@ public class ReceivablesHelHistory {
         if (loan.getExpectedMaturityDate() != null) {
             timeline.put("expectedMaturityDate", loan.getExpectedMaturityDate().toString());
         }
+        if (loan.getWrittenOffOnDate() != null) {
+            timeline.put("writtenOffOnDate", loan.getWrittenOffOnDate().toString());
+        }
         if (loan.getClosedOnDate() != null) {
             timeline.put("closedOnDate", loan.getClosedOnDate().toString());
         }
-        result.putObject("summary").put("totalOutstanding",
+        result.putObject("summary").put("totalWrittenOff", loan.getTotalWrittenOff().toPlainString()).put("totalOutstanding",
                 loan.getSummary().getTotalOutstanding(loan.getCurrency()).getAmount().toPlainString());
         var periods = result.putObject("repaymentSchedule").putArray("periods");
         for (var period : loan.getRepaymentScheduleInstallments()) {
@@ -165,7 +168,8 @@ public class ReceivablesHelHistory {
             value.put("date", transaction.getTransactionDate().toString());
             value.put("amount", transaction.getAmount().toPlainString());
             value.put("reversed", transaction.isReversed());
-            value.putObject("type").put("id", transaction.getTypeOf().getValue()).put("repayment", transaction.isRepayment());
+            value.putObject("type").put("id", transaction.getTypeOf().getValue()).put("repayment", transaction.isRepayment())
+                    .put("writeOff", transaction.isWriteOff());
         }
         return result;
     }
