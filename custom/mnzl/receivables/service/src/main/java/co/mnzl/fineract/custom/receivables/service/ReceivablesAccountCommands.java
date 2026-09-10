@@ -184,7 +184,7 @@ public class ReceivablesAccountCommands {
             }
         }
         BigInteger allowance = amount(account, "allowance_minor");
-        if ("STAGE_3".equals(string(account, "stage")) && e.date.isAfter(previous)) {
+        if ("STAGE_3".equals(string(account, "stage")) && e.date.isAfter(previous) && p.contractualOutstandingMinor().signum() > 0) {
             JsonNode forecast = latestForecast(key);
             var state = measurement.state(account);
             var unwind = CreditAndFunding.stage3Unwind(state.segment(), previous, e.date, state.outstandingMinor(),
