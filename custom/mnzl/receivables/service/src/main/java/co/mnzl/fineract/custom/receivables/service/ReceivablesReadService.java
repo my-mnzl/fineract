@@ -516,7 +516,10 @@ public class ReceivablesReadService {
             BigInteger amount = new BigInteger(string(row, "amount_minor"));
             sub.merge(semantic, string(row, "side").equals("DEBIT") ? amount : amount.negate(), BigInteger::add);
             sourceIds.computeIfAbsent(semantic, ignored -> new ArrayList<>()).add(string(row, "source_line_id"));
+            require(row.get("actual_gl") != null, "JOURNAL_MISMATCH");
             if (row.get("actual_gl") != null) {
+                require(new BigDecimal(string(row, "actual_amount")).movePointRight(2).toBigIntegerExact().equals(amount)
+                        && (number(row, "actual_side") == 2) == string(row, "side").equals("DEBIT"), "JOURNAL_MISMATCH");
                 eventIds.computeIfAbsent(semantic, ignored -> new ArrayList<>()).add(string(row, "actual_source"));
                 require(number(row, "native_gl_id") == number(row, "actual_gl") && string(row, "currency_code").equals("EGP"),
                         "JOURNAL_MISMATCH");
@@ -682,6 +685,22 @@ public class ReceivablesReadService {
     }
 
     private NativeReceivableBridge.NativeState nativeState(JsonNode scope, Map<String, Object> account, Boundary boundary) {
+        Set<Long> registered = new HashSet<>();
+        Set<Long> registeredReversals = new HashSet<>();
+        for (var row : store.scoped("event", key(scope))) {
+            JsonNode event = json.read(string(row, "event_json"));
+            event.path("sourceTransactionIds").forEach(id -> registered.add(Long.parseLong(id.asText())));
+            registeredReversals.addAll(reversedSourceIds(event));
+        }
+        for (var transaction : store.jdbc().queryForList(
+                "select id,is_reversed from m_loan_transaction where loan_id=? and transaction_date<=?", number(account, "native_loan_id"),
+                boundary.date())) {
+            long id = number(transaction, "id");
+            require(registered.contains(id), "JOURNAL_MISMATCH");
+            if (Boolean.parseBoolean(string(transaction, "is_reversed")) || "1".equals(string(transaction, "is_reversed"))) {
+                require(registeredReversals.contains(id), "JOURNAL_MISMATCH");
+            }
+        }
         Set<Long> transactions = new HashSet<>();
         Set<Long> reversals = new HashSet<>();
         for (var row : eventRows(scope, boundary)) {
