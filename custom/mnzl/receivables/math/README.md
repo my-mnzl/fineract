@@ -39,10 +39,17 @@ retains the segment EIR and requires preserved legal schedule versions.
 The caller owns currency/tenant/version validation, reconciled source cutoffs,
 authorization, scenario/forecast evidence and freshness, event sequencing,
 posting, netting approval and legal derecognition. No method performs cash or
-journal side effects. `settlePortions` allocates selected and retained portions
-together; the caller persists both and separately releases the selected allowance.
+journal side effects. `settlePortions` returns a `PartialSettlement` containing selected and retained
+allocations. Persist its `remainingMeasurement(segment)` state. Use
+`position(state, date)` and `reset(state, date, rate)` thereafter so another event
+on that boundary consumes the exact retained targets. Later boundaries evaluate
+unchanged analytical yields and recognize signed rounding in target differences;
+final maturity clears discount/fee exactly. Separately release the selected allowance.
 Forecast scenarios must be mutually exclusive with weights totaling exactly one;
-recoveries cannot duplicate a payer/date/exposure or exceed the exposure.
+recoveries cannot duplicate a payer/date/exposure or exceed the exposure. Stage 3
+requires every positive-weight scenario to be conditioned on an observed default
+(non-null default date no later than the measurement date); unconditional or
+future-default forecasts are rejected without renormalizing Credit evidence.
 
 Run focused checks with:
 

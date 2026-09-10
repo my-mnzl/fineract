@@ -21,6 +21,7 @@ package co.mnzl.fineract.receivables.math;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.Cashflow;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.Leg;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.MC;
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.MeasurementState;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.Position;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.Segment;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.allocate;
@@ -78,6 +79,20 @@ public final class ReceivableEvents {
             BigInteger financierIncomeMinor, BigInteger allowanceReleasedMinor) {
     }
 
+    public record PartialSettlement(Settlement settlement, Position retainedPosition, Map<String, BigInteger> remainingFaceMinor,
+            Map<String, BigInteger> grossAllocationMinor, Map<String, BigInteger> netAllocationMinor) {
+
+        public PartialSettlement {
+            remainingFaceMinor = Map.copyOf(remainingFaceMinor);
+            grossAllocationMinor = Map.copyOf(grossAllocationMinor);
+            netAllocationMinor = Map.copyOf(netAllocationMinor);
+        }
+
+        public MeasurementState remainingMeasurement(Segment segment) {
+            return new MeasurementState(segment, retainedPosition, remainingFaceMinor);
+        }
+    }
+
     public record Substitution(Segment replacement, BigInteger oldFaceMinor, BigInteger replacementFaceMinor,
             BigInteger allowanceReleasedMinor) {
     }
@@ -91,23 +106,29 @@ public final class ReceivableEvents {
     }
 
     public static Reset reset(Segment segment, LocalDate date, Map<String, BigInteger> outstanding, BigDecimal newRate) {
-        Position p = position(segment, date, outstanding);
+        return reset(position(segment, date, outstanding), newRate);
+    }
+
+    public static Reset reset(MeasurementState state, LocalDate date, BigDecimal newRate) {
+        return reset(position(state, date), newRate);
+    }
+
+    private static Reset reset(Position p, BigDecimal newRate) {
+        LocalDate date = p.businessDate();
         List<Cashflow> future = new ArrayList<>();
         BigDecimal oldPv = BigDecimal.ZERO;
-        BigDecimal oldNet = BigDecimal.ZERO;
         for (Leg leg : p.legs()) {
             if (leg.discountDays() > 0 && leg.outstandingMinor().signum() > 0) {
                 future.add(new Cashflow(leg.cashflow().cashflowId(), leg.cashflow().dueDate(), leg.outstandingMinor()));
                 oldPv = oldPv.add(leg.grossBasis(), MC);
-                oldNet = oldNet.add(leg.netBasis(), MC);
             }
         }
         if (future.isEmpty()) {
             return new Reset(BigDecimal.ZERO, BigDecimal.ZERO, BigInteger.ZERO, BigInteger.ZERO, BigInteger.ZERO, null, null,
                     p.pastDueMinor());
         }
-        BigInteger oldG = minor(oldPv);
-        BigInteger oldN = minor(oldNet);
+        BigInteger oldG = p.grossPurchaseBasisMinor().subtract(p.pastDueMinor());
+        BigInteger oldN = p.amortizedCostMinor().subtract(p.pastDueMinor());
         BigDecimal newPv = pv(date, future, newRate);
         BigInteger newG = minor(newPv);
         BigInteger delta = newG.subtract(oldG);
@@ -133,7 +154,8 @@ public final class ReceivableEvents {
     }
 
     /** Allocate both the selected and retained portions together, preserving the existing posted bases exactly. */
-    public static Settlement settlePortions(Position p, Map<String, BigInteger> selectedFace, BigInteger payoff, BigInteger allowance) {
+    public static PartialSettlement settlePortions(Position p, Map<String, BigInteger> selectedFace, BigInteger payoff,
+            BigInteger allowance) {
         require(!selectedFace.isEmpty(), "Selected portions required");
         Map<String, BigDecimal> gWeights = new LinkedHashMap<>();
         Map<String, BigDecimal> nWeights = new LinkedHashMap<>();
@@ -162,7 +184,39 @@ public final class ReceivableEvents {
             g = g.add(ga.get(id + ":selected"));
             n = n.add(na.get(id + ":selected"));
         }
-        return settle(selected, g, n, payoff, allowance);
+        Settlement settlement = settle(selected, g, n, payoff, allowance);
+        List<Leg> retainedLegs = new ArrayList<>();
+        Map<String, BigInteger> remaining = new LinkedHashMap<>();
+        BigInteger future = BigInteger.ZERO;
+        BigInteger due = BigInteger.ZERO;
+        BigDecimal analyticalGross = BigDecimal.ZERO;
+        BigDecimal analyticalNet = BigDecimal.ZERO;
+        int dpd = 0;
+        for (Leg leg : p.legs()) {
+            String id = leg.cashflow().cashflowId();
+            BigInteger amount = leg.outstandingMinor().subtract(selectedFace.getOrDefault(id, BigInteger.ZERO));
+            remaining.put(id, amount);
+            BigDecimal rg = gWeights.get(id + ":retained");
+            BigDecimal rn = nWeights.get(id + ":retained");
+            retainedLegs.add(new Leg(leg.cashflow(), leg.discountDays(), amount, rg, rn));
+            analyticalGross = analyticalGross.add(rg, MC);
+            analyticalNet = analyticalNet.add(rn, MC);
+            if (leg.discountDays() > 0) {
+                future = future.add(amount);
+            } else {
+                due = due.add(amount);
+                if (amount.signum() > 0) {
+                    dpd = Math.max(dpd, Math.toIntExact(days(leg.cashflow().dueDate(), p.businessDate())));
+                }
+            }
+        }
+        BigInteger retainedGross = p.grossPurchaseBasisMinor().subtract(g);
+        BigInteger retainedNet = p.amortizedCostMinor().subtract(n);
+        BigInteger retainedFace = future.add(due);
+        Position retained = new Position(p.businessDate(), retainedFace, future, due, retainedGross, retainedNet,
+                retainedFace.subtract(retainedGross), retainedGross.subtract(retainedNet), dpd, analyticalGross, analyticalNet,
+                retainedLegs);
+        return new PartialSettlement(settlement, retained, remaining, ga, na);
     }
 
     public static Substitution substitute(Position old, List<Cashflow> replacement, BigInteger oldAllowance) {
