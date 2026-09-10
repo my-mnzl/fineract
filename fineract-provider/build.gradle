@@ -239,7 +239,9 @@ def customRuntimeFiles = files(customRuntimeJarTasks.collect { it.flatMap { task
 
 tasks.named('bootRun') {
     dependsOn customRuntimeJarTasks
-    classpath += customRuntimeFiles
+    // bootRun already includes this project's classes/resources. Its transitive
+    // JAR would duplicate Liquibase changelogs on the launch classpath.
+    classpath += customRuntimeFiles.filter { it != tasks.named('jar').get().archiveFile.get().asFile }
 }
 
 springBoot {
