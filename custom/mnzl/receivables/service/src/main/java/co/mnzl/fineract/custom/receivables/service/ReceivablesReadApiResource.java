@@ -88,25 +88,25 @@ public class ReceivablesReadApiResource {
     @GET
     @Path("/accounts/{id}/position")
     public String position(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
-            @QueryParam("boundarySide") String side) {
+            @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum) {
         JsonNode scope = scope(headers);
-        return json.write(reads.position(scope, id, boundary(scope, date, side, null)));
+        return json.write(reads.position(scope, id, boundary(scope, date, side, maximum)));
     }
 
     @GET
     @Path("/accounts/{id}/measurement")
     public String measurement(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
-            @QueryParam("boundarySide") String side) {
+            @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum) {
         JsonNode scope = scope(headers);
-        return json.write(reads.measurement(scope, id, boundary(scope, date, side, null)));
+        return json.write(reads.measurement(scope, id, boundary(scope, date, side, maximum)));
     }
 
     @GET
     @Path("/accounts/{id}/schedule")
     public String schedule(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
-            @QueryParam("boundarySide") String side) {
+            @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum) {
         JsonNode scope = scope(headers);
-        return json.write(reads.schedule(scope, id, boundary(scope, date, side, null)));
+        return json.write(reads.schedule(scope, id, boundary(scope, date, side, maximum)));
     }
 
     @GET
