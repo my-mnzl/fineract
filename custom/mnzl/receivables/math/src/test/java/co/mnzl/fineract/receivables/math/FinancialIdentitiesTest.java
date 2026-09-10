@@ -24,6 +24,7 @@ import static co.mnzl.fineract.receivables.math.CreditAndFunding.Scenario;
 import static co.mnzl.fineract.receivables.math.CreditAndFunding.funding;
 import static co.mnzl.fineract.receivables.math.CreditAndFunding.impairment;
 import static co.mnzl.fineract.receivables.math.CreditAndFunding.stage;
+import static co.mnzl.fineract.receivables.math.CreditAndFunding.stage3Unwind;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.Modification;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.Reset;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.Settlement;
@@ -56,6 +57,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import co.mnzl.fineract.receivables.math.CreditAndFunding.Payer;
+import co.mnzl.fineract.receivables.math.CreditAndFunding.Recovery;
+import co.mnzl.fineract.receivables.math.CreditAndFunding.Stage3Unwind;
+import co.mnzl.fineract.receivables.math.ReceivableEvents.PartialSettlement;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.MeasurementState;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
@@ -176,7 +182,8 @@ class FinancialIdentitiesTest {
         assertEquals(before, position(p.segment(), date, Map.of("a", BigInteger.valueOf(4000000))));
         assertEquals(paid.pastDueMinor(),
                 position(p.segment(), date.plusDays(10), Map.of("a", BigInteger.valueOf(3000000))).pastDueMinor());
-        Settlement selected = settlePortions(paid, Map.of("c", BigInteger.valueOf(3000000)), BigInteger.valueOf(3000000), BigInteger.ZERO);
+        Settlement selected = settlePortions(paid, Map.of("c", BigInteger.valueOf(3000000)), BigInteger.valueOf(3000000), BigInteger.ZERO)
+                .settlement();
         assertEquals(BigInteger.valueOf(3000000), selected.faceExtinguishedMinor());
         assertEquals(paid.grossPurchaseBasisMinor(), allocateGross(paid).values().stream().reduce(BigInteger.ZERO, BigInteger::add));
         assertEquals(paid.amortizedCostMinor(), allocateNet(paid).values().stream().reduce(BigInteger.ZERO, BigInteger::add));
@@ -242,6 +249,68 @@ class FinancialIdentitiesTest {
                 .divide(epsilon.multiply(new BigDecimal("2")), MC);
         near(derivative, finiteDifference);
         assertTrue(derivative.signum() < 0);
+    }
+
+    @Test
+    void partialSettlementPersistsExactRetainedTargetsThroughSameDayEventsAndMaturity() {
+        Purchase p = purchase();
+        LocalDate date = START.plusDays(30);
+        Position before = position(p.segment(), date, Map.of());
+        PartialSettlement first = settlePortions(before, Map.of("c", BigInteger.valueOf(100028)), BigInteger.valueOf(100028),
+                BigInteger.ZERO);
+        MeasurementState state = first.remainingMeasurement(p.segment());
+        Position retained = position(state, date);
+        assertEquals(BigInteger.valueOf(9617242), before.amortizedCostMinor());
+        assertEquals(BigInteger.valueOf(78743), first.settlement().amortizedCostMinor());
+        assertEquals(BigInteger.valueOf(9538499), retained.amortizedCostMinor());
+        assertEquals(before.amortizedCostMinor(), first.settlement().amortizedCostMinor().add(retained.amortizedCostMinor()));
+        assertEquals(BigInteger.ZERO, income(retained, position(state, date), BigInteger.ZERO).interestIncomeMinor());
+        Reset immediateReset = reset(state, date, new BigDecimal("0.20"));
+        assertEquals(retained.amortizedCostMinor(), immediateReset.oldNetMinor());
+        assertEquals(retained.deferredIntegralFeeMinor(),
+                immediateReset.futureSegment().grossBasisMinor().subtract(immediateReset.futureSegment().netBasisMinor()));
+        PartialSettlement second = settlePortions(retained, Map.of("c", BigInteger.valueOf(100028)), BigInteger.valueOf(100028),
+                BigInteger.ZERO);
+        MeasurementState afterSecond = second.remainingMeasurement(p.segment());
+        assertEquals(retained.amortizedCostMinor(),
+                second.settlement().amortizedCostMinor().add(position(afterSecond, date).amortizedCostMinor()));
+        assertEquals(p.segment().grossYield(), afterSecond.segment().grossYield());
+        assertEquals(p.segment().netEir(), afterSecond.segment().netEir());
+        Position maturity = position(afterSecond, START.plusDays(365));
+        assertEquals(BigInteger.ZERO, maturity.deferredDiscountMinor());
+        assertEquals(BigInteger.ZERO, maturity.deferredIntegralFeeMinor());
+        PartialSettlement terminal = settlePortions(maturity, second.remainingFaceMinor(), maturity.contractualOutstandingMinor(),
+                BigInteger.ZERO);
+        assertEquals(BigInteger.ZERO, terminal.retainedPosition().contractualOutstandingMinor());
+        assertEquals(BigInteger.ZERO, terminal.retainedPosition().grossPurchaseBasisMinor());
+        assertEquals(BigInteger.ZERO, terminal.retainedPosition().amortizedCostMinor());
+    }
+
+    @Test
+    void stage3RequiresConditionalObservedDefaultAndUnwindsUnmaturedRecoveries() {
+        List<Cashflow> cashflows = List.of(new Cashflow("stage3", START.plusDays(365), BigInteger.valueOf(1000000)));
+        Purchase p = price(START, cashflows, RATE, new BigDecimal("0.01"));
+        Position opening = position(p.segment(), START, Map.of());
+        Scenario noDefault = new Scenario("no-default", new BigDecimal("0.9"), null,
+                List.of(new Recovery("stage3", Payer.BORROWER, START.plusDays(365), BigInteger.valueOf(1000000))));
+        Scenario observed = new Scenario("observed", new BigDecimal("0.1"), START, List.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> impairment(opening, p.segment().netEir().rate(), 3, List.of(noDefault, observed)));
+        Scenario future = new Scenario("future-default", BigDecimal.ONE, START.plusDays(1), List.of());
+        assertThrows(IllegalArgumentException.class, () -> impairment(opening, p.segment().netEir().rate(), 3, List.of(future)));
+        assertEquals(opening.amortizedCostMinor(),
+                impairment(opening, p.segment().netEir().rate(), 3, List.of(new Scenario("conditional", BigDecimal.ONE, START, List.of())))
+                        .lossAllowanceMinor());
+        List<Scenario> forecast = List.of(new Scenario("conditional-recovery", BigDecimal.ONE, START,
+                List.of(new Recovery("stage3", Payer.BORROWER, START.plusDays(365), BigInteger.valueOf(300000)))));
+        Stage3Unwind unwind = stage3Unwind(p.segment(), START, START.plusDays(1), Map.of(), forecast);
+        Position closing = position(p.segment(), START.plusDays(1), Map.of());
+        BigInteger openingNet = opening.amortizedCostMinor().subtract(unwind.openingAllowanceMinor());
+        BigInteger closingNet = closing.amortizedCostMinor().subtract(unwind.closingAllowanceMinor());
+        assertEquals(closingNet.subtract(openingNet), unwind.interestIncomeMinor());
+        assertTrue(unwind.interestIncomeMinor().signum() > 0);
+        assertTrue(unwind.interestIncomeMinor().compareTo(unwind.scheduledEirIncomeMinor()) < 0);
+        assertEquals(opening.contractualOutstandingMinor(), closing.contractualOutstandingMinor());
     }
 
 }

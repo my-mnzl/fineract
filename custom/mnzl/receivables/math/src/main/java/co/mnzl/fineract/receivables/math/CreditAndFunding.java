@@ -91,6 +91,10 @@ public final class CreditAndFunding {
         LocalDate date = position.businessDate();
         for (Scenario scenario : scenarios) {
             require(scenario.id() != null && ids.add(scenario.id()) && scenario.weight().signum() >= 0, "Invalid scenario");
+            if (stage == 3 && scenario.weight().signum() > 0) {
+                require(scenario.defaultDate() != null && !scenario.defaultDate().isAfter(date),
+                        "Stage 3 forecast must be conditioned on observed default");
+            }
             weights = weights.add(scenario.weight());
             Map<String, BigInteger> recovered = new LinkedHashMap<>();
             Map<String, BigDecimal> recoveriesPv = new LinkedHashMap<>();

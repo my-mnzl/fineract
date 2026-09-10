@@ -65,6 +65,22 @@ public final class ReceivablesMath {
         }
     }
 
+    /** Persist the reconciled event-boundary targets alongside unchanged analytical yields/remaining face. */
+    public record MeasurementState(Segment segment, Position boundaryPosition, Map<String, BigInteger> outstandingMinor) {
+
+        public MeasurementState {
+            outstandingMinor = Map.copyOf(outstandingMinor);
+        }
+    }
+
+    public static Position position(MeasurementState state, LocalDate date) {
+        days(state.boundaryPosition().businessDate(), date);
+        if (date.equals(state.boundaryPosition().businessDate())) {
+            return state.boundaryPosition();
+        }
+        return position(state.segment(), date, state.outstandingMinor());
+    }
+
     public record Purchase(BigDecimal quotedRate, BigDecimal feeRate, BigDecimal unroundedGrossPrice, BigInteger contractualFaceMinor,
             BigInteger grossPurchasePriceMinor, BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor, Segment segment) {
     }
