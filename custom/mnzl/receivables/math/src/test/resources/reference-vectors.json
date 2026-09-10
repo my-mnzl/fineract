@@ -1,0 +1,596 @@
+{
+  "schemaVersion": 1,
+  "calculationVersion": "EG_RECEIVABLES_ACT360_DAILY_V1",
+  "currency": "EGP",
+  "moneyEncoding": "integer-minor-unit-decimal-string",
+  "unroundedEncoding": "major-unit-decimal-string",
+  "rounding": "HALF_UP",
+  "rateEncoding": "nominal-annual-decimal",
+  "arithmeticPrecisionDigits": 50,
+  "rateAbsoluteTolerance": "0.00000000000000005",
+  "unroundedAbsoluteToleranceMajor": "0.0000000001",
+  "postedMoneyToleranceMinor": "0",
+  "vectors": [
+    {
+      "id": "daily-leap",
+      "operation": "dailyGrowth",
+      "input": {
+        "fromDate": "2028-02-28",
+        "toDate": "2028-03-01",
+        "nominalAnnualRate": "0.36",
+        "openingMinor": "10000000"
+      },
+      "expected": {
+        "days": 2,
+        "factor": "1.002001000000000000",
+        "closingMinor": "10020010",
+        "incomeMinor": "20010",
+        "firstDayIncomeMinor": "10000",
+        "secondDayIncomeMinor": "10010"
+      }
+    },
+    {
+      "id": "zero-rate",
+      "operation": "price",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0",
+        "feeRate": "0",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-04-01",
+            "amountMinor": "4000000"
+          },
+          {
+            "id": "cf-02",
+            "dueDate": "2030-07-30",
+            "amountMinor": "5000000"
+          },
+          {
+            "id": "cf-03",
+            "dueDate": "2031-01-26",
+            "amountMinor": "6000000"
+          }
+        ]
+      },
+      "expected": {
+        "grossPriceMinor": "15000000",
+        "feeMinor": "0",
+        "netPurchaseCashMinor": "15000000",
+        "grossYield": "0",
+        "netEir": "0"
+      }
+    },
+    {
+      "id": "irregular-integral-fee",
+      "operation": "price",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0.24",
+        "feeRate": "0.01",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-04-01",
+            "amountMinor": "4000000"
+          },
+          {
+            "id": "cf-02",
+            "dueDate": "2030-07-30",
+            "amountMinor": "5000000"
+          },
+          {
+            "id": "cf-03",
+            "dueDate": "2031-01-26",
+            "amountMinor": "6000000"
+          }
+        ]
+      },
+      "expected": {
+        "unroundedGrossPrice": "127408.376855474932960524",
+        "contractualFaceMinor": "15000000",
+        "grossPriceMinor": "12740838",
+        "feeMinor": "127408",
+        "netPurchaseCashMinor": "12613430",
+        "deferredDiscountMinor": "2259162",
+        "grossYield": "0.239999962936445851",
+        "netEir": "0.255113051099557374",
+        "grossPvResidual": "0.000000000000000000",
+        "netPvResidual": "0.000000000000000000",
+        "lifetimeGrossIncomeMinor": "2259162",
+        "lifetimeFeeIncomeMinor": "127408",
+        "lifetimeTotalIncomeMinor": "2386570"
+      }
+    },
+    {
+      "id": "no-cheque-month",
+      "operation": "position",
+      "input": {
+        "acquisitionVector": "irregular-integral-fee",
+        "boundaryDate": "2030-02-01",
+        "boundarySide": "BEFORE_EVENTS",
+        "collections": []
+      },
+      "expected": {
+        "days": 31,
+        "grossBasisMinor": "13006799",
+        "amortizedCostMinor": "12893488",
+        "deferredFeeMinor": "113311",
+        "grossIncomeMinor": "265961",
+        "feeIncomeMinor": "14097",
+        "totalIncomeMinor": "280058",
+        "contractualOutstandingMinor": "15000000"
+      }
+    },
+    {
+      "id": "small-cheque",
+      "operation": "price",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0.24",
+        "feeRate": "0",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-03-02",
+            "amountMinor": "100"
+          },
+          {
+            "id": "cf-02",
+            "dueDate": "2031-01-01",
+            "amountMinor": "10000000"
+          }
+        ]
+      },
+      "expected": {
+        "grossPriceMinor": "7840833",
+        "firstIntervalIncomeMinor": "319882",
+        "firstChequeMinor": "100",
+        "firstIntervalIncomeExceedsCheque": true,
+        "nativePrincipalFirstChequeMinor": "100",
+        "mustBookWithoutPriceRedistribution": true
+      }
+    },
+    {
+      "id": "reset-fall",
+      "operation": "reset",
+      "input": {
+        "acquisitionVector": "irregular-integral-fee",
+        "resetDate": "2030-05-01",
+        "collectedCashflowIds": ["cf-01"],
+        "newNominalAnnualRate": "0.20"
+      },
+      "expected": {
+        "oldPvSameDate": "97208.388274907707554201",
+        "newPvSameDate": "99206.761164673610037894",
+        "oldGrossBasisMinor": "9720839",
+        "oldAmortizedCostMinor": "9646643",
+        "newGrossBasisMinor": "9920676",
+        "newAmortizedCostMinor": "9846480",
+        "deferredFeeBeforeAndAfterMinor": "74196",
+        "developerAdjustmentMinor": "199837",
+        "developerDirection": "PAYABLE",
+        "nextContractualChequeDate": "2030-07-30",
+        "adjustmentDays": 90,
+        "adjustmentSettlementMinor": "210080",
+        "adjustmentUnwindMinor": "10243",
+        "newGrossYield": "0.200000023019132076",
+        "newNetEir": "0.214733130907348137",
+        "customerFaceBeforeAndAfterMinor": "11000000",
+        "immediateIncomeMinor": "0"
+      }
+    },
+    {
+      "id": "reset-rise",
+      "operation": "reset",
+      "input": {
+        "acquisitionVector": "irregular-integral-fee",
+        "resetDate": "2030-05-01",
+        "collectedCashflowIds": ["cf-01"],
+        "newNominalAnnualRate": "0.28"
+      },
+      "expected": {
+        "oldPvSameDate": "97208.388274907707554201",
+        "newPvSameDate": "95259.984171231191363314",
+        "oldGrossBasisMinor": "9720839",
+        "oldAmortizedCostMinor": "9646643",
+        "newGrossBasisMinor": "9525998",
+        "newAmortizedCostMinor": "9451802",
+        "deferredFeeBeforeAndAfterMinor": "74196",
+        "developerAdjustmentMinor": "-194841",
+        "developerDirection": "RECEIVABLE",
+        "nextContractualChequeDate": "2030-07-30",
+        "adjustmentDays": 90,
+        "adjustmentSettlementMinor": "208963",
+        "adjustmentUnwindMinor": "14122",
+        "newGrossYield": "0.280000086725215129",
+        "newNetEir": "0.295501948698179993",
+        "customerFaceBeforeAndAfterMinor": "11000000",
+        "immediateIncomeMinor": "0"
+      }
+    },
+    {
+      "id": "early-settlement",
+      "operation": "settle",
+      "input": {
+        "acquisitionVector": "irregular-integral-fee",
+        "settlementDate": "2030-05-01",
+        "collectedCashflowIds": ["cf-01"],
+        "agreedPayoffMinor": "11000000",
+        "developerSurplusShare": "0.5",
+        "lossAllowanceMinor": "0",
+        "existingDeveloperAdjustments": [],
+        "payoffSource": "HEL_SETTLEMENT"
+      },
+      "expected": {
+        "faceExtinguishedMinor": "11000000",
+        "grossBasisMinor": "9720839",
+        "amortizedCostMinor": "9646643",
+        "deferredDiscountMinor": "1279161",
+        "deferredFeeMinor": "74196",
+        "developerShareMinor": "639581",
+        "financierIncomeMinor": "713776",
+        "closingFaceMinor": "0",
+        "closingGrossBasisMinor": "0",
+        "closingAmortizedCostMinor": "0",
+        "journal": [
+          {
+            "account": "helSettlementClearing",
+            "side": "DEBIT",
+            "amountMinor": "11000000"
+          },
+          {
+            "account": "deferredDiscount",
+            "side": "DEBIT",
+            "amountMinor": "1279161"
+          },
+          {
+            "account": "deferredIntegralFee",
+            "side": "DEBIT",
+            "amountMinor": "74196"
+          },
+          {
+            "account": "contractualReceivable",
+            "side": "CREDIT",
+            "amountMinor": "11000000"
+          },
+          {
+            "account": "developerPayable",
+            "side": "CREDIT",
+            "amountMinor": "639581"
+          },
+          {
+            "account": "portfolioInterestIncome",
+            "side": "CREDIT",
+            "amountMinor": "713776"
+          }
+        ]
+      }
+    },
+    {
+      "id": "late-partial",
+      "operation": "lateCollectionPosition",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0.24",
+        "feeRate": "0.01",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-01-31",
+            "amountMinor": "1100000"
+          }
+        ],
+        "dueDateCollectionMinor": "400000",
+        "asOfDate": "2030-02-15",
+        "expectedRemainingRecoveryDate": "2030-03-17",
+        "expectedRemainingRecoveryMinor": "700000"
+      },
+      "expected": {
+        "grossPriceMinor": "1078226",
+        "feeMinor": "10782",
+        "netPurchaseCashMinor": "1067444",
+        "netEir": "0.360698667649397053",
+        "dueDateBeforeCollectionFaceMinor": "1100000",
+        "dueDateBeforeCollectionAmortizedCostMinor": "1100000",
+        "dueDateDeferredFeeMinor": "0",
+        "asOfContractualOutstandingMinor": "700000",
+        "asOfAmortizedCostMinor": "700000",
+        "dpd": 15,
+        "postDueContractualInterestMinor": "0",
+        "recoveryDiscountDays": 30,
+        "expectedRecoveryPvMinor": "679283",
+        "lossAllowanceMinor": "20717"
+      }
+    },
+    {
+      "id": "ecl-horizons",
+      "operation": "ecl",
+      "input": {
+        "asOfDate": "2030-01-01",
+        "grossYield": "0.36",
+        "netEir": "0.36",
+        "contractualCashflows": [
+          {
+            "id": "ecl-cf-01",
+            "dueDate": "2031-12-22",
+            "amountMinor": "10000"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "no-default",
+            "weight": "0.95",
+            "defaultDate": null,
+            "recoveries": [
+              {
+                "payer": "BORROWER",
+                "date": "2031-12-22",
+                "amountMinor": "10000",
+                "cashflowId": "ecl-cf-01"
+              }
+            ]
+          },
+          {
+            "id": "default-within-12m",
+            "weight": "0.02",
+            "defaultDate": "2030-06-30",
+            "recoveries": [
+              {
+                "payer": "BORROWER",
+                "date": "2031-12-22",
+                "amountMinor": "4000",
+                "cashflowId": "ecl-cf-01"
+              },
+              {
+                "payer": "DEVELOPER",
+                "date": "2031-12-22",
+                "amountMinor": "3000",
+                "cashflowId": "ecl-cf-01"
+              }
+            ]
+          },
+          {
+            "id": "default-after-12m",
+            "weight": "0.03",
+            "defaultDate": "2031-06-30",
+            "recoveries": [
+              {
+                "payer": "BORROWER",
+                "date": "2032-06-19",
+                "amountMinor": "4000",
+                "cashflowId": "ecl-cf-01"
+              },
+              {
+                "payer": "DEVELOPER",
+                "date": "2032-06-19",
+                "amountMinor": "3000",
+                "cashflowId": "ecl-cf-01"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "unroundedAmortizedCost": "48.692740154243525270",
+        "amortizedCostMinor": "4869",
+        "stage1LossAllowanceMinor": "29",
+        "stage2LossAllowanceMinor": "90",
+        "stage1UnroundedLoss": "0.292156440925461152",
+        "stage2UnroundedLoss": "0.898758321371310203",
+        "stage1IncludesRecoveriesBeyond12Months": true
+      }
+    },
+    {
+      "id": "bank-funding",
+      "operation": "fundingAccrual",
+      "input": {
+        "fromDate": "2030-01-01",
+        "toDate": "2030-02-01",
+        "principalMinor": "10000000",
+        "nominalAnnualRate": "0.18"
+      },
+      "expected": {
+        "days": 31,
+        "interestMinor": "155000",
+        "principalMinor": "10000000",
+        "capitalizedInterestMinor": "0"
+      }
+    },
+    {
+      "id": "rounding-aggregation",
+      "operation": "roundPortfolio",
+      "input": {
+        "accountGrossPvMajor": ["10.005", "20.005", "30.005"],
+        "feeRate": "0.01"
+      },
+      "expected": {
+        "grossPriceByAccountMinor": ["1001", "2001", "3001"],
+        "feeByAccountMinor": ["10", "20", "30"],
+        "netCashByAccountMinor": ["991", "1981", "2971"],
+        "portfolioGrossPriceMinor": "6003",
+        "portfolioFeeMinor": "60",
+        "portfolioNetCashMinor": "5943",
+        "forbiddenRoundSummedGrossMinor": "6002"
+      }
+    },
+    {
+      "id": "sum-two-accounts",
+      "operation": "aggregate",
+      "input": {
+        "firstAccountVector": "irregular-integral-fee",
+        "secondAccount": {
+          "settlementDate": "2030-01-01",
+          "nominalAnnualRate": "0.18",
+          "feeRate": "0.015",
+          "cashflows": [
+            {
+              "id": "cf-01",
+              "dueDate": "2030-02-15",
+              "amountMinor": "2500000"
+            },
+            {
+              "id": "cf-02",
+              "dueDate": "2030-09-28",
+              "amountMinor": "4000000"
+            }
+          ]
+        },
+        "boundaryDate": "2030-02-01"
+      },
+      "expected": {
+        "secondGrossPriceMinor": "5939373",
+        "secondFeeMinor": "89091",
+        "secondNetPurchaseCashMinor": "5850282",
+        "secondGrossYield": "0.180000136447915121",
+        "secondNetEir": "0.210778259264193409",
+        "portfolioGrossPriceMinor": "18680211",
+        "portfolioFeeMinor": "216499",
+        "portfolioNetPurchaseCashMinor": "18463712",
+        "boundaryGrossBasisMinor": "19038926",
+        "boundaryAmortizedCostMinor": "18850893",
+        "periodGrossIncomeMinor": "358715",
+        "periodTotalIncomeMinor": "387181"
+      }
+    },
+    {
+      "id": "signed-fee-movement",
+      "operation": "priceAndAccrue",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0.24",
+        "feeRate": "0.01",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2035-12-31",
+            "amountMinor": "100000000"
+          }
+        ],
+        "boundaryDate": "2030-02-01"
+      },
+      "expected": {
+        "grossPriceMinor": "23234927",
+        "feeMinor": "232349",
+        "netPurchaseCashMinor": "23002578",
+        "grossYield": "0.240000002590186095",
+        "netEir": "0.241653215862843277",
+        "grossIncomeMinor": "485021",
+        "netEirIncomeMinor": "483512",
+        "feeIncomeMinor": "-1509",
+        "closingDeferredFeeMinor": "233858",
+        "feeMovementMustNotBeClamped": true
+      }
+    },
+    {
+      "id": "cashless-substitution",
+      "operation": "substitute",
+      "input": {
+        "acquisitionVector": "irregular-integral-fee",
+        "effectiveDate": "2030-05-01",
+        "collectedCashflowIds": ["cf-01"],
+        "replacementCashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-10-01",
+            "amountMinor": "6000000"
+          },
+          {
+            "id": "cf-02",
+            "dueDate": "2031-07-01",
+            "amountMinor": "6000000"
+          }
+        ],
+        "lossAllowanceBeforeAndAfterMinor": "0",
+        "existingDeveloperAdjustments": []
+      },
+      "expected": {
+        "oldFaceMinor": "11000000",
+        "replacementFaceMinor": "12000000",
+        "transferredGrossBasisMinor": "9720839",
+        "transferredAmortizedCostMinor": "9646643",
+        "transferredDeferredFeeMinor": "74196",
+        "replacementDeferredDiscountMinor": "2279161",
+        "replacementGrossYield": "0.268455469453965858",
+        "replacementNetEir": "0.278478621202008363",
+        "bankCashMinor": "0",
+        "newFeeMinor": "0",
+        "incomeMinor": "0",
+        "journal": [
+          {
+            "account": "contractualReceivable",
+            "subject": "new",
+            "side": "DEBIT",
+            "amountMinor": "12000000"
+          },
+          {
+            "account": "deferredDiscount",
+            "subject": "old",
+            "side": "DEBIT",
+            "amountMinor": "1279161"
+          },
+          {
+            "account": "deferredIntegralFee",
+            "subject": "old",
+            "side": "DEBIT",
+            "amountMinor": "74196"
+          },
+          {
+            "account": "contractualReceivable",
+            "subject": "old",
+            "side": "CREDIT",
+            "amountMinor": "11000000"
+          },
+          {
+            "account": "deferredDiscount",
+            "subject": "new",
+            "side": "CREDIT",
+            "amountMinor": "2279161"
+          },
+          {
+            "account": "deferredIntegralFee",
+            "subject": "new",
+            "side": "CREDIT",
+            "amountMinor": "74196"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stage3-overdue-unwind",
+      "operation": "impairmentUnwind",
+      "input": {
+        "sourceVector": "late-partial",
+        "stage": 3,
+        "qualitativeDefault": true,
+        "fromDate": "2030-02-15",
+        "toDate": "2030-02-16",
+        "recoveryDate": "2030-03-17",
+        "borrowerRecoveryMinor": "280000",
+        "developerRecoveryMinor": "210000",
+        "scenarioWeight": "1"
+      },
+      "expected": {
+        "faceBeforeAndAfterMinor": "700000",
+        "amortizedCostBeforeAndAfterMinor": "700000",
+        "openingAllowanceMinor": "224502",
+        "closingAllowanceMinor": "224026",
+        "interestIncomeMinor": "476",
+        "contractualInterestMinor": "0",
+        "journal": [
+          {
+            "account": "lossAllowance",
+            "side": "DEBIT",
+            "amountMinor": "476"
+          },
+          {
+            "account": "portfolioInterestIncome",
+            "side": "CREDIT",
+            "amountMinor": "476"
+          }
+        ]
+      }
+    }
+  ]
+}
