@@ -18,12 +18,7 @@
  */
 package co.mnzl.fineract.receivables.math;
 
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Cashflow;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Leg;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.MC;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.MeasurementState;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Position;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.Segment;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.allocate;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.days;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.face;
@@ -36,6 +31,11 @@ import static co.mnzl.fineract.receivables.math.ReceivablesMath.require;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.segment;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.validateIds;
 
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Cashflow;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Leg;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.MeasurementState;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Position;
+import co.mnzl.fineract.receivables.math.ReceivablesMath.Segment;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.LocalDate;
