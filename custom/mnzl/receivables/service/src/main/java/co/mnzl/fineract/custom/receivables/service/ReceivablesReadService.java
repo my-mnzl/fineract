@@ -552,10 +552,48 @@ public class ReceivablesReadService {
                 }
             }
         }
+        // Reconcile monetary positions independently of the journal mirror.
+        Map<String, BigInteger> positionControls = new HashMap<>();
+        for (String control : List.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredIntegralFee",
+                "lossAllowance", "developerPayable", "developerReceivable", "developerReceivableAllowance")) {
+            positionControls.put(control, BigInteger.ZERO);
+        }
+        for (var account : accounts) {
+            JsonNode position = positions.get(string(account, "external_id"));
+            positionControls.merge("contractualReceivable", new BigInteger(text(position, "notYetDueMinor")), BigInteger::add);
+            positionControls.merge("installmentDues", new BigInteger(text(position, "pastDueMinor")), BigInteger::add);
+            positionControls.merge("deferredDiscount", new BigInteger(text(position, "deferredDiscountMinor")).negate(), BigInteger::add);
+            positionControls.merge("deferredIntegralFee", new BigInteger(text(position, "deferredIntegralFeeMinor")).negate(),
+                    BigInteger::add);
+            positionControls.merge("lossAllowance", new BigInteger(text(position, "lossAllowanceMinor")).negate(), BigInteger::add);
+        }
+        for (var snapshot : snapshotRows(scope, boundary, "LOT")) {
+            JsonNode lot = json.read(string(snapshot, "snapshot_json"));
+            if ((accountId == null || accountId.equals(text(lot, "accountId"))) && (dealId == null || dealId.equals(text(lot, "dealId")))) {
+                boolean payable = text(lot, "direction").equals("PAYABLE");
+                BigInteger outstanding = new BigInteger(text(lot, "outstandingMinor"));
+                positionControls.merge(payable ? "developerPayable" : "developerReceivable", payable ? outstanding.negate() : outstanding,
+                        BigInteger::add);
+                positionControls.merge("developerReceivableAllowance", new BigInteger(text(lot, "allowanceMinor")).negate(),
+                        BigInteger::add);
+            }
+        }
+        if (accountId == null && dealId == null) {
+            positionControls.put("fundingPrincipal", BigInteger.ZERO);
+            positionControls.put("fundingInterestPayable", BigInteger.ZERO);
+            for (var snapshot : snapshotRows(scope, boundary, "FUNDING")) {
+                JsonNode facility = json.read(string(snapshot, "snapshot_json"));
+                positionControls.merge("fundingPrincipal", new BigInteger(text(facility, "principalMinor")).negate(), BigInteger::add);
+                positionControls.merge("fundingInterestPayable", new BigInteger(text(facility, "interestPayableMinor")).negate(),
+                        BigInteger::add);
+            }
+        }
         List<JsonNode> balances = new ArrayList<>();
         for (String semantic : ReceivablesConfiguration.ACCOUNTS.stream().sorted().toList()) {
-            BigInteger expected = sub.getOrDefault(semantic, BigInteger.ZERO);
+            BigInteger mirrored = sub.getOrDefault(semantic, BigInteger.ZERO);
             BigInteger observed = actual.getOrDefault(semantic, BigInteger.ZERO);
+            require(mirrored.equals(observed), "JOURNAL_MISMATCH");
+            BigInteger expected = positionControls.getOrDefault(semantic, mirrored);
             ObjectNode balance = json.object();
             balance.put("accountKey", semantic);
             balance.put("currency", "EGP");

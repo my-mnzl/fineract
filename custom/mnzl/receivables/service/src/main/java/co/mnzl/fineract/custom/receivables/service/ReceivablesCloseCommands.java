@@ -23,6 +23,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.number;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Map;
@@ -62,6 +63,15 @@ public class ReceivablesCloseCommands {
             return;
         }
         require(existing == null, "PERIOD_CLOSED");
+        require(!boundary.isAfter(org.apache.fineract.infrastructure.core.service.DateUtils.getBusinessLocalDate()),
+                "APPROVAL_SCOPE_CHANGED");
+        if (!text(e.command, "executionMode").equals("CURRENT")) {
+            JsonNode authorization = e.command.get("executionAuthorization");
+            var recorded = store.require("authorization",
+                    ReceivablesStore.key(e.scope, "authorization", text(authorization, "authorizationId")));
+            require(!boundary.isBefore(LocalDate.parse(string(recorded, "effective_from")))
+                    && !boundary.isAfter(LocalDate.parse(string(recorded, "effective_through"))), "APPROVAL_SCOPE_CHANGED");
+        }
         require(Long.parseLong(text(e.command, "eventWatermark")) == reads.watermark(e.command.get("scope")), "SOURCE_CHANGED");
         e.date = boundary;
         e.postingDate = boundary.minusDays(1);
@@ -168,7 +178,7 @@ public class ReceivablesCloseCommands {
         e.command = reverse;
         e.originalValueDate = LocalDate.parse(text(correction, "originalValueDate"));
         try {
-            accounts.reverse(e);
+            accounts.reverse(e, false);
             var account = store.require("account", e.accountKey(e.subjectId()));
             ReceivablesLedger.pair(e.lines, "impairmentExpense", "lossAllowance", allowance, e.subjectId(), string(account, "deal_id"),
                     "IMPAIRMENT");

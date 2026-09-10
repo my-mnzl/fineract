@@ -502,6 +502,10 @@ public class ReceivablesAccountCommands {
     }
 
     public void reverse(ReceivablesExecution e) {
+        reverse(e, true);
+    }
+
+    public void reverse(ReceivablesExecution e, boolean remeasureAllowance) {
         var account = account(e);
         String key = string(account, "record_key");
         String id = string(account, "external_id");
@@ -549,6 +553,12 @@ public class ReceivablesAccountCommands {
         update.put("net_minor", restored.amortizedCostMinor().toString());
         update.put("status", "ACTIVE");
         update.put("closure_reason", null);
+        if (remeasureAllowance) {
+            BigInteger allowance = measurement.allowance(restored, state.segment(), latestForecast(key));
+            pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")), id, deal,
+                    "IMPAIRMENT");
+            update.put("allowance_minor", allowance.toString());
+        }
         store.update("account", key, update);
         pair(e.lines, "installmentDues", "cashUnapplied", total, id, deal, "CASH");
         e.reversalOf = ReceivablesStore.key(e.scope, "event", original);
@@ -616,6 +626,13 @@ public class ReceivablesAccountCommands {
             if (accrued.add(accountKey)) {
                 var account = store.require("account", accountKey);
                 require(json.read(string(account, "scope_json")).equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
+                if (text(e.command, "executionMode").equals("RECONSTRUCTION")) {
+                    long current = store.jdbc().queryForObject(
+                            "select count(*) from m_mnzl_r_command where subject_key=? and request_json like ? and record_key<>?",
+                            Long.class, ReceivablesStore.key(e.scope, "RECEIVABLE", string(account, "external_id")),
+                            "%\"executionMode\":\"CURRENT\"%", e.operationKey);
+                    require(current == 0, "APPROVAL_SCOPE_CHANGED");
+                }
                 accrue(e, account);
             }
         }

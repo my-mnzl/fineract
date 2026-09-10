@@ -26,9 +26,11 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.strin
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.springframework.stereotype.Service;
@@ -106,12 +108,32 @@ public class ReceivablesCommandService {
             case "CORRECT_EVENT" -> close.correct(execution);
             default -> throw new ReceivablesException("INVALID_DATA");
         }
+        if (!text(command, "subjectKind").equals("PERIOD")) {
+            Set<String> covered = new HashSet<>();
+            command.get("affectedAccountVersions").forEach(v -> covered.add(text(v, "accountId")));
+            if (text(command, "subjectKind").equals("RECEIVABLE") && !type.equals("RECORD_CASH_MOVEMENT")) {
+                covered.add(execution.subjectId());
+            }
+            for (String accountKey : execution.accountKeys) {
+                var touched = store.require("account", accountKey);
+                require(number(touched, "version") == 0 || covered.contains(string(touched, "external_id")), "ACCOUNT_VERSION_CHANGED");
+            }
+        }
         return finish(execution, payloadHash, now);
     }
 
     private void validateVersions(ReceivablesExecution e) {
         JsonNode c = e.command;
         String kind = text(c, "subjectKind");
+        String commandType = text(c, "commandType");
+        Set<String> allowed = switch (commandType) {
+            case "RECORD_CASH_MOVEMENT", "SETTLE_DEVELOPER_ADJUSTMENT" -> Set.of("RECEIVABLE", "DEAL");
+            case "RECORD_FUNDING_EVENT" -> Set.of("FUNDING_FACILITY");
+            case "CLOSE_PERIOD" -> Set.of("PERIOD");
+            case "FUND_HEL_TO_SETTLEMENT_CLEARING", "ALLOCATE_HEL_DEVELOPER_ADVANCE" -> Set.of("HEL_LOAN");
+            default -> Set.of("RECEIVABLE");
+        };
+        require(allowed.contains(kind), "INVALID_DATA");
         long expected = Long.parseLong(text(c, "expectedVersion"));
         if (text(c, "commandType").equals("RECORD_CASH_MOVEMENT")) {
             require(expected == 0, "ACCOUNT_VERSION_CHANGED");

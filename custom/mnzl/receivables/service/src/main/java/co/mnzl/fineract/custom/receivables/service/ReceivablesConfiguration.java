@@ -143,6 +143,7 @@ public class ReceivablesConfiguration {
         var product = products.findById(id).orElseThrow(() -> new ReceivablesException("FINERACT_CAPABILITY_MISSING"));
         var strategy = strategies.findOne(id);
         try {
+            require("MNZL_PURCHASED_RECEIVABLE".equals(strategy.getInstrumentCode()), "FINERACT_CAPABILITY_MISSING");
             co.mnzl.fineract.custom.loan.instrument.PurchasedReceivableProductValidator.validateStrategies(strategy.getInstrumentCode(),
                     strategy.getScheduleStrategyCode(), strategy.getChargeStrategyCode(), strategy.getCobStrategyCode());
             co.mnzl.fineract.custom.loan.instrument.PurchasedReceivableProductValidator.validate(product);
@@ -199,8 +200,8 @@ public class ReceivablesConfiguration {
         validateProduct(number(config, "product_id"));
         LocalDate date = LocalDate.parse(text(command, "businessDate"));
         require(store.jdbc().queryForObject(
-                "select count(*) from m_mnzl_r_period where scope_key=? and status='CLOSED' and boundary_date>?", Long.class, scope,
-                date) == 0, "PERIOD_CLOSED");
+                "select count(*) from m_mnzl_r_period where scope_key=? and status in ('CLOSED','PREPARING') and boundary_date>?",
+                Long.class, scope, date) == 0, "PERIOD_CLOSED");
         String mode = text(command, "executionMode");
         if ("CURRENT".equals(mode)) {
             require(date.equals(DateUtils.getBusinessLocalDate()) && command.get("executionAuthorization").isNull(),
