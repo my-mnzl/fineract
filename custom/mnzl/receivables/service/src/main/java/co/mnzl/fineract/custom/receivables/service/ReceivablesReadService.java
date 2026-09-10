@@ -282,7 +282,7 @@ public class ReceivablesReadService {
                 row.set("businessDate", event.get("businessDate"));
                 row.put("amountMinor", tx.amountMinor().toString());
                 row.put("currency", "EGP");
-                boolean reversal = event.hasNonNull("reversalOfEventId");
+                boolean reversal = reversedSourceIds(event).contains(Long.parseLong(txId.asText()));
                 row.put("type", reversal ? "REVERSAL" : switch (tx.type()) {
                     case "PURCHASED_RECEIVABLE_ACTIVATION" -> "PURCHASE";
                     case "REPAYMENT" -> "COLLECTION";
@@ -632,6 +632,17 @@ public class ReceivablesReadService {
         return latest;
     }
 
+    private Set<Long> reversedSourceIds(JsonNode event) {
+        if (!event.hasNonNull("reversalOfEventId")) {
+            return Set.of();
+        }
+        var original = store.require("event", text(event, "reversalOfEventId"));
+        require(string(original, "scope_key").equals(key(event.get("scope"))), "OWNERSHIP_CONFLICT");
+        Set<Long> ids = new HashSet<>();
+        json.read(string(original, "event_json")).path("sourceTransactionIds").forEach(id -> ids.add(Long.parseLong(id.asText())));
+        return ids;
+    }
+
     private NativeReceivableBridge.NativeState nativeState(JsonNode scope, Map<String, Object> account, Boundary boundary) {
         Set<Long> transactions = new HashSet<>();
         Set<Long> reversals = new HashSet<>();
@@ -639,7 +650,7 @@ public class ReceivablesReadService {
             JsonNode event = json.read(string(row, "event_json"));
             for (JsonNode id : event.path("sourceTransactionIds")) {
                 transactions.add(Long.parseLong(id.asText()));
-                if (string(row, "command_type").equals("REVERSE_COLLECTION")) {
+                if (reversedSourceIds(event).contains(Long.parseLong(id.asText()))) {
                     reversals.add(Long.parseLong(id.asText()));
                 }
             }

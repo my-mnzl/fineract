@@ -67,6 +67,7 @@ public class ReceivablesAccountCommands {
     private final ReceivablesMeasurement measurement;
     private final NativeReceivableBridge nativeBridge;
     private final ReceivablesCashCommands cash;
+    private final ReceivablesConfiguration configuration;
 
     public void book(ReceivablesExecution e) {
         String id = text(e.command, "accountId");
@@ -261,7 +262,7 @@ public class ReceivablesAccountCommands {
             fields.put("operation_key", e.operationKey);
             fields.put("native_transaction_id", effect.transactionId());
             fields.put("amount_minor", amount.toString());
-            fields.put("value_date", e.date);
+            fields.put("value_date", e.originalValueDate == null ? e.date : e.originalValueDate);
             fields.put("reversed_by", null);
             fields.put("payer", developer ? "DEVELOPER" : "BORROWER");
             store.insert("collection", ReceivablesStore.key(e.scope, "collection", text(allocation, "allocationId")), fields);
@@ -570,9 +571,12 @@ public class ReceivablesAccountCommands {
             payoff = payoff.add(minor(allocation, "amountMinor"));
             e.allocationIds.add(text(allocation, "allocationId"));
         }
-        require(payoff.compareTo(position.grossPurchaseBasisMinor()) >= 0, "APPROVAL_SCOPE_CHANGED");
+        boolean approved = payoff.compareTo(position.grossPurchaseBasisMinor()) < 0;
+        if (approved) {
+            configuration.requireWorkout(e, "BUYBACK", payoff);
+        }
         var result = ReceivableEvents.settleBuyback(position.contractualOutstandingMinor(), position.grossPurchaseBasisMinor(),
-                position.amortizedCostMinor(), payoff, amount(account, "allowance_minor"), false);
+                position.amortizedCostMinor(), payoff, amount(account, "allowance_minor"), approved);
         cash.consumeReceipt(e, text(e.command, "cashMovementId"), payoff, deal);
         var assignments = new ArrayList<Allocation>();
         for (var leg : store.children("leg", "account_key", key)) {
@@ -717,6 +721,10 @@ public class ReceivablesAccountCommands {
             closeAccountState(e, account, "WRITTEN_OFF", "WRITE_OFF");
             return;
         }
+        if (classification.equals("DERECOGNITION")) {
+            derecognize(e, account, before, oldAllocations);
+            return;
+        }
         require(classification.equals("MODIFICATION"), "RECOVERY_REQUIRED");
         var oldState = measurement.state(account);
         List<Cashflow> flows = measurement.flows(e.command.get("modifiedCashflows"));
@@ -749,4 +757,86 @@ public class ReceivablesAccountCommands {
                         allowance.toString()));
         saveForecast(e, key, e.command.get("riskForecast"), allowance);
     }
+
+    private void derecognize(ReceivablesExecution e, Map<String, Object> account, Position before, List<Allocation> assignments) {
+        JsonNode outcome = e.command.get("legalOutcome");
+        require(outcome != null, "APPROVAL_SCOPE_CHANGED");
+        String kind = text(outcome, "kind");
+        BigInteger consideration = minor(e.command, "approvedConsiderationMinor");
+        configuration.requireWorkout(e, kind, consideration);
+        String key = string(account, "record_key");
+        String id = string(account, "external_id");
+        String deal = string(account, "deal_id");
+        e.nativeTransactions.add(Long.toString(nativeBridge.adjustFace(number(account, "native_loan_id"), e.date,
+                AdjustmentType.ASSIGNMENT_OUT, assignments, "R" + e.operationKey + ":old").transactionId()));
+        pair(e.lines, "lossAllowance", "impairmentExpense", amount(account, "allowance_minor"), id, deal, "IMPAIRMENT");
+        line(e.lines, "modificationGainLoss", "CREDIT", consideration.subtract(before.amortizedCostMinor()), id, deal, "MODIFICATION");
+        closeAccountState(e, account, "ASSIGNED_OUT", "WORKOUT");
+        if (kind.equals("RELEASE")) {
+            require(e.command.get("modifiedCashflows").isEmpty(), "SOURCE_CHANGED");
+            JsonNode source = outcome.get("consideration");
+            if (text(source, "kind").equals("NONE")) {
+                require(consideration.signum() == 0, "BANK_PROOF_MISMATCH");
+            } else {
+                require(consideration.equals(minor(source, "amountMinor")), "BANK_PROOF_MISMATCH");
+                cash.consumeAllocations(e, json.value(List.of(text(source, "bankAllocationId"))), consideration, "RECEIPT_UNAPPLIED", deal);
+                line(e.lines, "cashUnapplied", "DEBIT", consideration, id, deal, "MODIFICATION");
+            }
+            return;
+        }
+        String newId = text(outcome, "replacementAccountId");
+        String newKey = e.accountKey(newId);
+        require(store.find("account", newKey) == null && consideration.signum() > 0, "OWNERSHIP_CONFLICT");
+        var flows = measurement.flows(e.command.get("modifiedCashflows"));
+        for (JsonNode flow : e.command.get("modifiedCashflows")) {
+            require(text(flow, "receivableId").equals(newId)
+                    && text(flow, "scheduleVersionId").equals(text(outcome, "replacementScheduleVersionId")), "SOURCE_CHANGED");
+        }
+        Segment segment = ReceivablesMath.segment(e.date, flows, consideration, consideration);
+        Map<String, BigInteger> outstanding = new LinkedHashMap<>();
+        flows.forEach(flow -> outstanding.put(flow.cashflowId(), flow.amountMinor()));
+        Position position = ReceivablesMath.position(segment, e.date, outstanding);
+        BigInteger allowance = measurement.allowance(position, segment, e.command.get("riskForecast"));
+        Booking booking = nativeBridge.bookExactFace(number(account, "native_client_id"), number(e.configuration, "product_id"),
+                "R" + newKey, e.date,
+                flows.stream().map(flow -> new FaceLeg(flow.cashflowId(), flow.dueDate(), flow.amountMinor())).toList());
+        e.nativeTransactions.add(Long.toString(booking.activationTransactionId()));
+        var row = new LinkedHashMap<String, Object>(account);
+        row.remove("record_key");
+        row.put("external_id", newId);
+        row.put("native_loan_id", booking.loanId());
+        row.put("activation_date", e.date);
+        row.put("last_effective_date", e.date);
+        row.put("version", 0L);
+        row.put("status", "ACTIVE");
+        row.put("closure_reason", null);
+        row.put("last_event_key", null);
+        row.put("face_minor", position.contractualOutstandingMinor().toString());
+        row.put("gross_minor", consideration.toString());
+        row.put("net_minor", consideration.toString());
+        row.put("allowance_minor", allowance.toString());
+        row.put("stage", text(e.command.get("riskForecast"), "stage"));
+        row.put("source_hash", text(outcome, "replacementSourceHash"));
+        row.put("basis_hash", text(outcome, "replacementSourceHash"));
+        row.put("active_segment_key", ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + newKey));
+        row.put("created_at", java.sql.Timestamp.from(java.time.Instant.now()));
+        var terms = (ObjectNode) json.read(string(account, "terms_json"));
+        terms.set("cashflows", e.command.get("modifiedCashflows"));
+        terms.put("settlementDate", e.date.toString());
+        terms.put("sourceHash", text(outcome, "replacementSourceHash"));
+        terms.set("acceptedAccountPrices", json.value(List.of(Map.of("accountId", newId, "grossPurchasePriceMinor",
+                consideration.toString(), "integralFeeMinor", "0", "netPurchaseCashMinor", consideration.toString()))));
+        row.put("terms_json", json.write(terms));
+        measurement.saveState(e.scope, newKey, e.operationKey, new MeasurementState(segment, position, outstanding),
+                string(e.configuration, "calculator_build"));
+        store.insert("account", newKey, row);
+        saveLegs(e, newKey, e.command.get("modifiedCashflows"), booking.sourcePeriodIds());
+        saveForecast(e, newKey, e.command.get("riskForecast"), allowance);
+        line(e.lines, "contractualReceivable", "DEBIT", position.contractualOutstandingMinor(), newId, deal, "FACE");
+        line(e.lines, "deferredDiscount", "CREDIT", position.deferredDiscountMinor(), newId, deal, "DISCOUNT");
+        pair(e.lines, "impairmentExpense", "lossAllowance", allowance, newId, deal, "IMPAIRMENT");
+        e.accountKeys.add(newKey);
+        reconcileNative(store.require("account", newKey), position, e.date);
+    }
+
 }

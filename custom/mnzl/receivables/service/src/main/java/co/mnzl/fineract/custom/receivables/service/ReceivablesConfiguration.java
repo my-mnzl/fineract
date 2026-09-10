@@ -217,4 +217,56 @@ public class ReceivablesConfiguration {
         }
         return input;
     }
+
+    @Transactional
+    public JsonNode authorizeWorkout(String request) {
+        security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
+        JsonNode input = json.validate("nativeWorkoutAuthorization", request);
+        String scope = scopeKey(input.get("scope"));
+        var config = store.lockConfiguration(scope);
+        require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString())
+                && number(config, "integration_user_id") != security.authenticatedUser().getId(), "APPROVAL_SCOPE_CHANGED");
+        var account = store.require("account", ReceivablesStore.key(scope, "account", text(input, "accountId")));
+        require(json.read(string(account, "scope_json")).equals(input.get("scope")), "OWNERSHIP_CONFLICT");
+        String key = ReceivablesStore.key(scope, "authorization", text(input, "approvedWorkoutCaseId"));
+        var previous = store.find("authorization", key);
+        String hash = json.hash(input);
+        if (previous != null) {
+            require(hash.equals(string(previous, "scope_hash")), "IDEMPOTENCY_CONFLICT");
+            return input;
+        }
+        LocalDate date = LocalDate.parse(text(input, "businessDate"));
+        store.insert("authorization", key,
+                Map.of("scope_key", scope, "authorization_id", text(input, "approvedWorkoutCaseId"), "scope_hash", hash, "approved_by",
+                        text(input, "approvedBy"), "effective_from", date, "effective_through", date, "mode", "WORKOUT", "revoked", false,
+                        "payload_json", json.write(input)));
+        return input;
+    }
+
+    public void requireWorkout(ReceivablesExecution e, String classification, java.math.BigInteger consideration) {
+        var authorization = store.require("authorization",
+                ReceivablesStore.key(e.scope, "authorization", text(e.command, "approvedWorkoutCaseId")));
+        require(string(authorization, "mode").equals("WORKOUT") && !Boolean.parseBoolean(string(authorization, "revoked")),
+                "APPROVAL_SCOPE_CHANGED");
+        JsonNode approved = json.read(string(authorization, "payload_json"));
+        require(approved.get("scope").equals(e.command.get("scope")) && text(approved, "accountId").equals(e.subjectId())
+                && text(approved, "classification").equals(classification) && text(approved, "businessDate").equals(e.date.toString())
+                && ReceivablesJson.minor(approved, "approvedConsiderationMinor").equals(consideration), "APPROVAL_SCOPE_CHANGED");
+        Set<String> evidence = new HashSet<>();
+        e.command.get("legalEvidenceIds").forEach(v -> evidence.add(v.asText()));
+        Set<String> recorded = new HashSet<>();
+        approved.get("legalEvidenceIds").forEach(v -> recorded.add(v.asText()));
+        require(evidence.equals(recorded), "APPROVAL_SCOPE_CHANGED");
+        if (classification.equals("EXCHANGE")) {
+            JsonNode outcome = e.command.get("legalOutcome");
+            require(approved.get("replacementAccountId").equals(outcome.get("replacementAccountId"))
+                    && approved.get("replacementSourceHash").equals(outcome.get("replacementSourceHash")), "SOURCE_CHANGED");
+            var basis = json.object();
+            basis.set("cashflows", e.command.get("modifiedCashflows"));
+            basis.set("riskForecast", e.command.get("riskForecast"));
+            basis.put("approvedConsiderationMinor", consideration.toString());
+            require(json.hash(basis).equals(text(outcome, "replacementSourceHash")), "SOURCE_CHANGED");
+        }
+    }
+
 }

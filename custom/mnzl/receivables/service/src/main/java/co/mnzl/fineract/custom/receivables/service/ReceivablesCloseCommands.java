@@ -92,9 +92,72 @@ public class ReceivablesCloseCommands {
     }
 
     public void correct(ReceivablesExecution e) {
-        require(text(e.command, "executionMode").equals("CORRECTION"), "APPROVAL_SCOPE_CHANGED");
-        // A correction must be tied to a supported native reversal and replacement; arbitrary GL edits are never
-        // accepted.
-        throw new ReceivablesException("RECOVERY_REQUIRED");
+        com.fasterxml.jackson.databind.node.ObjectNode correction = (com.fasterxml.jackson.databind.node.ObjectNode) e.command;
+        require(text(correction, "executionMode").equals("CORRECTION"), "APPROVAL_SCOPE_CHANGED");
+        var originalRow = store.require("event", text(correction, "originalEventId"));
+        require(e.scope.equals(string(originalRow, "scope_key")), "OWNERSHIP_CONFLICT");
+        var original = json.read(string(originalRow, "event_json"));
+        var originalCommand = json.read(string(store.require("command", string(originalRow, "operation_key")), "request_json"));
+        String family = text(originalCommand, "commandType");
+        require(family.equals("COLLECT")
+                || (family.equals("RECOURSE_RECOVERY") && text(originalCommand, "recoveryKind").equals("DUE_REIMBURSEMENT")),
+                "RECOVERY_REQUIRED");
+        require(text(originalCommand, "subjectId").equals(e.subjectId()) && originalCommand.get("scope").equals(correction.get("scope")),
+                "OWNERSHIP_CONFLICT");
+        require(text(original, "businessDate").equals(text(correction, "originalValueDate")), "SOURCE_CHANGED");
+        Set<String> selected = new HashSet<>();
+        correction.get("sourceLineIds").forEach(id -> selected.add(id.asText()));
+        Set<String> eligible = new HashSet<>();
+        java.math.BigInteger allowance = java.math.BigInteger.ZERO;
+        for (var line : original.get("journalLines")) {
+            String account = text(line, "accountKey");
+            String side = text(line, "side");
+            if (text(line, "component").equals("CASH") || (account.equals("lossAllowance") && side.equals("DEBIT"))
+                    || (account.equals("impairmentExpense") && side.equals("CREDIT"))) {
+                eligible.add(text(line, "sourceLineId"));
+            }
+            if (account.equals("lossAllowance") && side.equals("DEBIT")) {
+                allowance = allowance.add(ReceivablesJson.minor(line, "amountMinor"));
+            }
+        }
+        require(!eligible.isEmpty() && selected.equals(eligible) && selected.size() == correction.get("sourceLineIds").size(),
+                "SOURCE_CHANGED");
+        var replacement = correction.get("replacementCommand");
+        require(text(replacement, "commandType").equals(family) && text(replacement, "subjectId").equals(e.subjectId())
+                && replacement.get("scope").equals(correction.get("scope"))
+                && text(replacement, "businessDate").equals(text(correction, "businessDate"))
+                && text(replacement, "operationId").equals(text(correction, "replacementCommandOperationId"))
+                && text(replacement, "operationId").equals(text(correction, "operationId") + ":replacement")
+                && replacement.get("affectedAccountVersions").equals(correction.get("affectedAccountVersions"))
+                && text(replacement, "expectedVersion").equals(text(correction, "expectedVersion"))
+                && replacement.get("approverIds").equals(correction.get("approverIds"))
+                && text(replacement, "actorId").equals(text(correction, "actorId")), "APPROVAL_SCOPE_CHANGED");
+        require(family.equals("COLLECT") || text(replacement, "recoveryKind").equals("DUE_REIMBURSEMENT"), "RECOVERY_REQUIRED");
+        require(replacement.has("riskForecastAfter"), "EVIDENCE_EXPIRED");
+        require(store.find("command", ReceivablesStore.key(e.scope, "operation", text(replacement, "operationId"))) == null,
+                "IDEMPOTENCY_CONFLICT");
+        var reverse = correction.deepCopy();
+        reverse.put("commandType", "REVERSE_COLLECTION");
+        reverse.put("originalOperationId", text(originalCommand, "operationId"));
+        require(original.get("sourceTransactionIds").size() == 1, "RECOVERY_REQUIRED");
+        reverse.put("nativeTransactionId", original.get("sourceTransactionIds").get(0).asText());
+        var ids = json.object().putArray("ids");
+        originalCommand.get("allocations").forEach(a -> ids.add(text(a, "allocationId")));
+        reverse.set("allocationIds", ids);
+        e.command = reverse;
+        e.originalValueDate = LocalDate.parse(text(correction, "originalValueDate"));
+        try {
+            accounts.reverse(e);
+            var account = store.require("account", e.accountKey(e.subjectId()));
+            ReceivablesLedger.pair(e.lines, "impairmentExpense", "lossAllowance", allowance, e.subjectId(), string(account, "deal_id"),
+                    "IMPAIRMENT");
+            store.update("account", e.accountKey(e.subjectId()),
+                    Map.of("allowance_minor", ReceivablesMeasurement.amount(account, "allowance_minor").add(allowance).toString()));
+            e.command = replacement;
+            accounts.collect(e, family.equals("RECOURSE_RECOVERY"));
+        } finally {
+            e.command = correction;
+        }
+        e.correctionOf = text(correction, "originalEventId");
     }
 }

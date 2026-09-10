@@ -75,7 +75,9 @@ public class ReceivablesMeasurement {
     public Purchase purchase(JsonNode basis, String accountId) {
         List<JsonNode> accepted = new ArrayList<>();
         basis.get("acceptedAccountPrices").forEach(accepted::add);
-        Purchase purchase = ReceivablesMath.price(date(basis, "settlementDate"), flows(basis.get("cashflows")),
+        Purchase purchase = ReceivablesMath.price(date(basis, "settlementDate"),
+                flows(json.value(java.util.stream.StreamSupport.stream(basis.get("cashflows").spliterator(), false)
+                        .filter(flow -> text(flow, "receivableId").equals(accountId)).toList())),
                 decimal(basis, "corridorRate").add(decimal(basis, "spread")), decimal(basis, "feeRate"));
         if (!accepted.isEmpty()) {
             JsonNode price = accepted.stream().filter(p -> text(p, "accountId").equals(accountId)).findFirst()
@@ -116,13 +118,21 @@ public class ReceivablesMeasurement {
             store.update("segment", string(previous, "active_segment_key"),
                     Map.of("effective_through", state.boundaryPosition().businessDate()));
         }
-        store.insert("segment", segmentKey, fields);
+        if (store.find("segment", segmentKey) == null) {
+            store.insert("segment", segmentKey, fields);
+        } else {
+            store.update("segment", segmentKey, fields);
+        }
         for (Leg leg : state.boundaryPosition().legs()) {
             String legKey = ReceivablesStore.key(scope, "leg", accountKey + ":" + leg.cashflow().cashflowId());
-            store.insert("segment_leg", ReceivablesStore.key(scope, "segment-leg", segmentKey + ":" + leg.cashflow().cashflowId()),
-                    Map.of("scope_key", scope, "segment_key", segmentKey, "leg_key", legKey, "gross_basis",
-                            leg.grossBasis().toPlainString(), "net_basis", leg.netBasis().toPlainString(), "snapshot_json",
-                            json.write(leg)));
+            String rowKey = ReceivablesStore.key(scope, "segment-leg", segmentKey + ":" + leg.cashflow().cashflowId());
+            var legFields = Map.of("scope_key", scope, "segment_key", segmentKey, "leg_key", legKey, "gross_basis",
+                    leg.grossBasis().toPlainString(), "net_basis", leg.netBasis().toPlainString(), "snapshot_json", json.write(leg));
+            if (store.find("segment_leg", rowKey) == null) {
+                store.insert("segment_leg", rowKey, legFields);
+            } else {
+                store.update("segment_leg", rowKey, legFields);
+            }
         }
         if (previous != null) {
             store.update("account", accountKey, Map.of("active_segment_key", segmentKey));

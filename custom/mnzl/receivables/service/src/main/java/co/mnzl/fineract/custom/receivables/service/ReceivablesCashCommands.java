@@ -166,7 +166,8 @@ public class ReceivablesCashCommands {
     public void consumeReceipt(ReceivablesExecution e, String movementId, BigInteger amount, String deal) {
         String sourceKey = ReceivablesStore.key(e.scope, "cash", movementId);
         var source = store.require("cash_source", sourceKey);
-        require("INCOMING".equals(string(source, "direction")) && e.date.equals(LocalDate.parse(string(source, "value_date"))),
+        require("INCOMING".equals(string(source, "direction"))
+                && (e.originalValueDate == null ? e.date : e.originalValueDate).equals(LocalDate.parse(string(source, "value_date"))),
                 "BANK_PROOF_MISMATCH");
         BigInteger remaining = amount;
         for (var allocation : store.children("cash_allocation", "source_key", sourceKey)) {

@@ -28,12 +28,13 @@ import java.util.Set;
 
 public final class ReceivablesExecution {
 
-    public final JsonNode command;
+    public JsonNode command;
     public final String scope;
     public final String operationKey;
     public final String eventKey;
     public LocalDate date;
     public LocalDate postingDate;
+    public LocalDate originalValueDate;
     public String boundarySide = "AFTER_EVENTS";
     public final Map<String, Object> configuration;
     public final List<ReceivablesLedger.Line> lines = new ArrayList<>();

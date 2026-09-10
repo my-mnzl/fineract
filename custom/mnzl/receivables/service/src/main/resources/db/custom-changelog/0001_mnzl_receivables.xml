@@ -95,10 +95,10 @@
 <column name="account_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
 <column name="effective_from" type="DATE"><constraints nullable="false"/></column>
 <column name="effective_through" type="DATE"><constraints nullable="true"/></column>
-<column name="gross_basis" type="VARCHAR(4096)"><constraints nullable="false"/></column>
-<column name="net_basis" type="VARCHAR(4096)"><constraints nullable="false"/></column>
-<column name="gross_yield" type="VARCHAR(4096)"><constraints nullable="false"/></column>
-<column name="net_eir" type="VARCHAR(4096)"><constraints nullable="false"/></column>
+<column name="gross_basis" type="CLOB"><constraints nullable="false"/></column>
+<column name="net_basis" type="CLOB"><constraints nullable="false"/></column>
+<column name="gross_yield" type="CLOB"><constraints nullable="false"/></column>
+<column name="net_eir" type="CLOB"><constraints nullable="false"/></column>
 <column name="calculator_version" type="VARCHAR(100)"><constraints nullable="false"/></column>
 <column name="calculator_build" type="VARCHAR(200)"><constraints nullable="false"/></column>
 <column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
@@ -110,8 +110,8 @@
 <column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
 <column name="segment_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
 <column name="leg_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
-<column name="gross_basis" type="VARCHAR(4096)"><constraints nullable="false"/></column>
-<column name="net_basis" type="VARCHAR(4096)"><constraints nullable="false"/></column>
+<column name="gross_basis" type="CLOB"><constraints nullable="false"/></column>
+<column name="net_basis" type="CLOB"><constraints nullable="false"/></column>
 <column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
 <createIndex tableName="m_mnzl_r_segment_leg" indexName="ix_r_segment_leg_scope"><column name="scope_key"/></createIndex>
@@ -218,7 +218,7 @@
 <column name="carrying_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
 <column name="settled_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
 <column name="allowance_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
-<column name="rate" type="VARCHAR(4096)"><constraints nullable="false"/></column>
+<column name="rate" type="CLOB"><constraints nullable="false"/></column>
 <column name="watermark" type="DATE"><constraints nullable="false"/></column>
 <column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
@@ -241,7 +241,7 @@
 <column name="version" type="BIGINT"><constraints nullable="false"/></column>
 <column name="principal_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
 <column name="interest_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
-<column name="rate" type="VARCHAR(4096)"><constraints nullable="false"/></column>
+<column name="rate" type="CLOB"><constraints nullable="false"/></column>
 <column name="watermark" type="DATE"><constraints nullable="false"/></column>
 <column name="terms_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
@@ -254,7 +254,7 @@
 <column name="business_date" type="DATE"><constraints nullable="false"/></column>
 <column name="kind" type="VARCHAR(32)"><constraints nullable="false"/></column>
 <column name="principal_delta_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
-<column name="rate" type="VARCHAR(4096)"><constraints nullable="false"/></column>
+<column name="rate" type="CLOB"><constraints nullable="false"/></column>
 <column name="snapshot_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
 <createIndex tableName="m_mnzl_r_funding_event" indexName="ix_r_funding_event_scope"><column name="scope_key"/></createIndex>
@@ -333,5 +333,6 @@
 <addColumn tableName="m_mnzl_r_account"><column name="last_boundary_side" type="VARCHAR(20)" defaultValue="AFTER_EVENTS"><constraints nullable="false"/></column></addColumn>
 <addColumn tableName="m_mnzl_r_hel_funding"><column name="used_minor" type="VARCHAR(100)" defaultValue="0"><constraints nullable="false"/></column></addColumn>
 <addColumn tableName="m_mnzl_r_configuration"><column name="hel_product_id" type="BIGINT"/></addColumn>
+<addColumn tableName="m_mnzl_r_authorization"><column name="payload_json" type="CLOB"/></addColumn>
 </changeSet>
 </databaseChangeLog>

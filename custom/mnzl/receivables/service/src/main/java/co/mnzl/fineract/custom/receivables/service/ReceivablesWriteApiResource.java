@@ -114,4 +114,13 @@ public class ReceivablesWriteApiResource {
                 "OWNERSHIP_CONFLICT");
         return json.write(configuration.authorizeHistory(request));
     }
+
+    @POST
+    @Path("/workout-authorizations")
+    public String authorizeWorkout(@Context HttpHeaders headers, String request) {
+        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
+                "OWNERSHIP_CONFLICT");
+        return json.write(configuration.authorizeWorkout(request));
+    }
+
 }
