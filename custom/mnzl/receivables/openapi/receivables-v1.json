@@ -177,6 +177,68 @@
         }
       }
     },
+    "/hel-loans/{externalId}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/helReportingSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/hel-terms/{externalId}": {
       "get": {
         "parameters": [
@@ -11109,6 +11171,232 @@
           "eventWatermark",
           "lines",
           "nativeTransactionIds"
+        ],
+        "additionalProperties": false
+      },
+      "helReportingSnapshot": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/id"
+          },
+          "externalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "clientId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "loanProductId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "EGP"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "principal": {
+            "type": "string",
+            "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "closedObligationsMet": {
+                "type": "boolean"
+              },
+              "closedWrittenOff": {
+                "type": "boolean"
+              },
+              "closedRescheduled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "active",
+              "closedObligationsMet",
+              "closedWrittenOff",
+              "closedRescheduled"
+            ],
+            "additionalProperties": false
+          },
+          "timeline": {
+            "type": "object",
+            "properties": {
+              "actualDisbursementDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "expectedMaturityDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "closedOnDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "writtenOffOnDate": {
+                "$ref": "#/components/schemas/financialDate"
+              }
+            },
+            "required": [
+              "actualDisbursementDate",
+              "expectedMaturityDate"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "totalOutstanding": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+              },
+              "totalOverdue": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+              },
+              "totalWrittenOff": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+              }
+            },
+            "required": [
+              "totalOutstanding",
+              "totalOverdue",
+              "totalWrittenOff"
+            ],
+            "additionalProperties": false
+          },
+          "repaymentSchedule": {
+            "type": "object",
+            "properties": {
+              "periods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "period": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "dueDate": {
+                      "$ref": "#/components/schemas/financialDate"
+                    },
+                    "totalOutstandingForPeriod": {
+                      "type": "string",
+                      "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                    },
+                    "totalDueForPeriod": {
+                      "type": "string",
+                      "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                    },
+                    "totalPaidForPeriod": {
+                      "type": "string",
+                      "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                    }
+                  },
+                  "required": [
+                    "period",
+                    "dueDate",
+                    "totalOutstandingForPeriod",
+                    "totalDueForPeriod",
+                    "totalPaidForPeriod"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "periods"
+            ],
+            "additionalProperties": false
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "date": {
+                  "$ref": "#/components/schemas/financialDate"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                },
+                "reversed": {
+                  "type": "boolean"
+                },
+                "type": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repayment": {
+                      "type": "boolean"
+                    },
+                    "writeOff": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "repayment",
+                    "writeOff"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "date",
+                "amount",
+                "reversed",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "snapshotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "snapshotBusinessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "asOfDate": {
+            "$ref": "#/components/schemas/financialDate"
+          }
+        },
+        "required": [
+          "id",
+          "externalId",
+          "clientId",
+          "loanProductId",
+          "currency",
+          "principal",
+          "status",
+          "timeline",
+          "summary",
+          "repaymentSchedule",
+          "transactions",
+          "snapshotId",
+          "snapshotBusinessDate",
+          "asOfDate"
         ],
         "additionalProperties": false
       },
