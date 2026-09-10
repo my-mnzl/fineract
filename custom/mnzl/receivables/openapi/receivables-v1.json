@@ -15,6 +15,100 @@
     }
   ],
   "paths": {
+    "/accounts": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "asOfDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "periodStartDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          },
+          {
+            "name": "financierOrganizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/accountsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/capabilities": {
       "get": {
         "parameters": [
@@ -730,6 +824,50 @@
         "format": "date",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
       },
+      "financialScope": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/financialScope",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/scope"
+          },
+          {
+            "$ref": "#/components/schemas/financierScope"
+          }
+        ]
+      },
+      "financierScope": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/financierScope",
+        "type": "object",
+        "properties": {
+          "platformId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "financierOrganizationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "local",
+              "test",
+              "staging",
+              "production"
+            ]
+          },
+          "ledgerEpoch": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "platformId",
+          "financierOrganizationId",
+          "environment",
+          "ledgerEpoch"
+        ],
+        "additionalProperties": false
+      },
       "id": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/id",
@@ -772,9 +910,6 @@
           "financierOrganizationId": {
             "$ref": "#/components/schemas/id"
           },
-          "developerOrganizationId": {
-            "$ref": "#/components/schemas/id"
-          },
           "environment": {
             "type": "string",
             "enum": [
@@ -786,14 +921,17 @@
           },
           "ledgerEpoch": {
             "$ref": "#/components/schemas/id"
+          },
+          "developerOrganizationId": {
+            "$ref": "#/components/schemas/id"
           }
         },
         "required": [
           "platformId",
           "financierOrganizationId",
-          "developerOrganizationId",
           "environment",
-          "ledgerEpoch"
+          "ledgerEpoch",
+          "developerOrganizationId"
         ],
         "additionalProperties": false
       },
@@ -2294,19 +2432,14 @@
                 "$ref": "#/components/schemas/sha256"
               },
               "scope": {
-                "$ref": "#/components/schemas/scope"
+                "$ref": "#/components/schemas/financialScope"
               },
               "subjectId": {
                 "$ref": "#/components/schemas/id"
               },
               "subjectKind": {
                 "type": "string",
-                "enum": [
-                  "RECEIVABLE",
-                  "DEAL",
-                  "FUNDING_FACILITY",
-                  "PERIOD"
-                ]
+                "const": "FUNDING_FACILITY"
               },
               "affectedAccountVersions": {
                 "type": "array",
@@ -4011,19 +4144,14 @@
                 "$ref": "#/components/schemas/sha256"
               },
               "scope": {
-                "$ref": "#/components/schemas/scope"
+                "$ref": "#/components/schemas/financialScope"
               },
               "subjectId": {
                 "$ref": "#/components/schemas/id"
               },
               "subjectKind": {
                 "type": "string",
-                "enum": [
-                  "RECEIVABLE",
-                  "DEAL",
-                  "FUNDING_FACILITY",
-                  "PERIOD"
-                ]
+                "const": "PERIOD"
               },
               "affectedAccountVersions": {
                 "type": "array",
@@ -4273,7 +4401,7 @@
                 "const": "DRAW"
               },
               "cashSource": {
-                "$ref": "#/components/schemas/verifiedCashSource"
+                "$ref": "#/components/schemas/verifiedFundingCashSource"
               },
               "principalMinor": {
                 "$ref": "#/components/schemas/positiveMinorUnits"
@@ -4294,7 +4422,7 @@
                 "const": "REPAYMENT"
               },
               "cashSource": {
-                "$ref": "#/components/schemas/verifiedCashSource"
+                "$ref": "#/components/schemas/verifiedFundingCashSource"
               },
               "principalMinor": {
                 "$ref": "#/components/schemas/positiveMinorUnits"
@@ -4332,7 +4460,7 @@
                 "const": "INTEREST_SETTLEMENT"
               },
               "cashSource": {
-                "$ref": "#/components/schemas/verifiedCashSource"
+                "$ref": "#/components/schemas/verifiedFundingCashSource"
               },
               "interestMinor": {
                 "$ref": "#/components/schemas/positiveMinorUnits"
@@ -4391,6 +4519,49 @@
           "amountMinor",
           "direction",
           "allocations"
+        ],
+        "additionalProperties": false
+      },
+      "verifiedFundingCashSource": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/verifiedFundingCashSource",
+        "type": "object",
+        "properties": {
+          "bankSourceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "verificationEvidenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "valueDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/positiveMinorUnits"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "INCOMING",
+              "OUTGOING"
+            ]
+          },
+          "facilityId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "bankSourceId",
+          "verificationEvidenceId",
+          "valueDate",
+          "currency",
+          "amountMinor",
+          "direction",
+          "facilityId"
         ],
         "additionalProperties": false
       },
@@ -4507,7 +4678,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financialScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -4594,7 +4765,6 @@
           "eventId",
           "scope",
           "tenantId",
-          "dealId",
           "allocationIds",
           "operationId",
           "causationId",
@@ -4668,7 +4838,6 @@
           "side",
           "amountMinor",
           "currency",
-          "dealId",
           "component"
         ],
         "additionalProperties": false
@@ -4696,6 +4865,116 @@
           "nativeLoanId",
           "position",
           "schedule"
+        ],
+        "additionalProperties": false
+      },
+      "accountSummary": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/accountSummary",
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeLoanId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "CLOSED",
+              "WRITTEN_OFF",
+              "ASSIGNED_OUT"
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/utcInstant"
+          },
+          "accountVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "lastFinancialEventId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastMovementDate": {
+            "$ref": "#/components/schemas/financialDate"
+          }
+        },
+        "required": [
+          "externalId",
+          "nativeLoanId",
+          "scope",
+          "dealId",
+          "status",
+          "createdAt",
+          "accountVersion",
+          "lastFinancialEventId",
+          "lastMovementDate"
+        ],
+        "additionalProperties": false
+      },
+      "accountsPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/accountsPage",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "productCode": {
+            "type": "string",
+            "const": "MNZL_PURCHASED_RECEIVABLE"
+          },
+          "asOfDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "includesClosedPeriodMovements": {
+            "type": "boolean",
+            "const": true
+          },
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/accountSummary"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "productCode",
+          "asOfDate",
+          "eventWatermark",
+          "includesClosedPeriodMovements",
+          "items",
+          "nextCursor"
         ],
         "additionalProperties": false
       },
@@ -4881,7 +5160,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financialScope"
           },
           "dealId": {
             "$ref": "#/components/schemas/id"
@@ -4979,7 +5258,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financialScope"
           },
           "businessDate": {
             "$ref": "#/components/schemas/financialDate"
