@@ -70,7 +70,33 @@ public final class ReceivablesMath {
 
         public MeasurementState {
             outstandingMinor = Map.copyOf(outstandingMinor);
+            validateMeasurementState(segment, boundaryPosition, outstandingMinor);
         }
+    }
+
+    private static void validateMeasurementState(Segment segment, Position boundary, Map<String, BigInteger> outstanding) {
+        Map<String, Leg> storedLegs = new LinkedHashMap<>();
+        for (Leg leg : boundary.legs()) {
+            require(storedLegs.put(leg.cashflow().cashflowId(), leg) == null, "Duplicate measurement cashflow");
+        }
+        require(outstanding.keySet().equals(storedLegs.keySet()), "Measurement requires complete remaining face");
+        Position analytical = position(segment, boundary.businessDate(), outstanding);
+        require(analytical.legs().size() == storedLegs.size(), "Measurement segment cashflows changed");
+        for (Leg measured : analytical.legs()) {
+            Leg stored = storedLegs.get(measured.cashflow().cashflowId());
+            require(stored != null && measured.cashflow().equals(stored.cashflow())
+                    && measured.outstandingMinor().equals(stored.outstandingMinor()) && measured.discountDays() == stored.discountDays(),
+                    "Measurement segment cashflows or remaining face changed");
+            require(measured.grossBasis().subtract(stored.grossBasis()).abs().compareTo(RESIDUAL) <= 0
+                    && measured.netBasis().subtract(stored.netBasis()).abs().compareTo(RESIDUAL) <= 0,
+                    "Measurement segment yields changed");
+        }
+        require(analytical.contractualOutstandingMinor().equals(boundary.contractualOutstandingMinor())
+                && analytical.notYetDueMinor().equals(boundary.notYetDueMinor())
+                && analytical.pastDueMinor().equals(boundary.pastDueMinor())
+                && analytical.analyticalGrossBasis().subtract(boundary.analyticalGrossBasis()).abs().compareTo(RESIDUAL) <= 0
+                && analytical.analyticalNetBasis().subtract(boundary.analyticalNetBasis()).abs().compareTo(RESIDUAL) <= 0,
+                "Measurement boundary does not match segment");
     }
 
     public static Position position(MeasurementState state, LocalDate date) {
