@@ -109,6 +109,195 @@
         }
       }
     },
+    "/journals": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "operationIds",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/id"
+              },
+              "minItems": 1
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeJournalReadback"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/hel-terms/{externalId}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/helTerms"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/accounts/{externalId}/measurement": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "boundarySide",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/boundarySide"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/accountMeasurement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/hel-journals": {
       "get": {
         "parameters": [
@@ -1066,6 +1255,13 @@
               "maximum": 200,
               "default": 100
             }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
           }
         ],
         "responses": {
@@ -1075,6 +1271,178 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/financialEventsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/developer-lots": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "boundarySide",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/boundarySide"
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/developerLotsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/funding-facilities": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "boundarySide",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/boundarySide"
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/fundingFacilitiesPage"
                 }
               }
             }
@@ -1414,6 +1782,70 @@
           "grossPurchasePriceMinor",
           "integralFeeMinor",
           "netPurchaseCashMinor"
+        ],
+        "additionalProperties": false
+      },
+      "analyticalPosition": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/analyticalPosition",
+        "type": "object",
+        "properties": {
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "contractualOutstandingMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "notYetDueMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "pastDueMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossPurchaseBasisMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "deferredDiscountMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "deferredIntegralFeeMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "amortizedCostMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossYield": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "netEir": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "daysPastDue": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "businessDate",
+          "boundarySide",
+          "contractualOutstandingMinor",
+          "notYetDueMinor",
+          "pastDueMinor",
+          "grossPurchaseBasisMinor",
+          "deferredDiscountMinor",
+          "deferredIntegralFeeMinor",
+          "amortizedCostMinor",
+          "grossYield",
+          "netEir",
+          "daysPastDue",
+          "accountId"
         ],
         "additionalProperties": false
       },
@@ -1813,7 +2245,7 @@
           "positions": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/position"
+              "$ref": "#/components/schemas/analyticalPosition"
             }
           },
           "monthlyIncome": {
@@ -1943,6 +2375,9 @@
           "asOfDate": {
             "$ref": "#/components/schemas/financialDate"
           },
+          "validThroughDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
           "stage": {
             "type": "string",
             "enum": [
@@ -1997,6 +2432,7 @@
           "forecastId",
           "forecastVersion",
           "asOfDate",
+          "validThroughDate",
           "stage",
           "scenarios",
           "contentHash"
@@ -2257,6 +2693,13 @@
                 "type": "string",
                 "const": "RESET"
               },
+              "measurementLegs": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/measurementLeg"
+                }
+              },
               "position": {
                 "$ref": "#/components/schemas/position"
               },
@@ -2290,6 +2733,7 @@
               "calculatorBuild",
               "basisHash",
               "calculationType",
+              "measurementLegs",
               "position",
               "remainingCashflows",
               "effectiveDate",
@@ -2327,6 +2771,9 @@
               "calculationType": {
                 "type": "string",
                 "const": "SETTLEMENT"
+              },
+              "currentForecast": {
+                "$ref": "#/components/schemas/riskForecast"
               },
               "measurementLegs": {
                 "minItems": 1,
@@ -2396,6 +2843,13 @@
                 "type": "string",
                 "const": "IMPAIRMENT"
               },
+              "measurementLegs": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/measurementLeg"
+                }
+              },
               "position": {
                 "$ref": "#/components/schemas/position"
               },
@@ -2417,6 +2871,7 @@
               "calculatorBuild",
               "basisHash",
               "calculationType",
+              "measurementLegs",
               "position",
               "cashflows",
               "forecast"
@@ -3265,6 +3720,9 @@
                 "type": "string",
                 "const": "COLLECT"
               },
+              "riskForecastAfter": {
+                "$ref": "#/components/schemas/riskForecast"
+              },
               "allocations": {
                 "minItems": 1,
                 "type": "array",
@@ -3868,6 +4326,9 @@
                 "type": "string",
                 "const": "SETTLE_RECEIVABLE"
               },
+              "riskForecastAfter": {
+                "$ref": "#/components/schemas/riskForecast"
+              },
               "settlementSource": {
                 "$ref": "#/components/schemas/settlementSource"
               },
@@ -4030,6 +4491,9 @@
               "commandType": {
                 "type": "string",
                 "const": "RECOURSE_RECOVERY"
+              },
+              "riskForecastAfter": {
+                "$ref": "#/components/schemas/riskForecast"
               },
               "developerOrganizationId": {
                 "$ref": "#/components/schemas/id"
@@ -4679,6 +5143,13 @@
                 "type": "string",
                 "const": "CLOSE_PERIOD"
               },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "PREPARE",
+                  "FINALIZE"
+                ]
+              },
               "periodId": {
                 "$ref": "#/components/schemas/id"
               },
@@ -4719,12 +5190,12 @@
               "approverIds",
               "approvalEvidenceIds",
               "commandType",
+              "phase",
               "periodId",
               "boundaryDate",
               "eventWatermark",
               "sourceCutoffHash",
-              "forecastIds",
-              "reconciliationId"
+              "forecastIds"
             ],
             "additionalProperties": false
           },
@@ -5029,6 +5500,9 @@
           "bankSourceId": {
             "$ref": "#/components/schemas/id"
           },
+          "bankAccountReference": {
+            "$ref": "#/components/schemas/id"
+          },
           "verificationEvidenceId": {
             "$ref": "#/components/schemas/id"
           },
@@ -5059,6 +5533,7 @@
         },
         "required": [
           "bankSourceId",
+          "bankAccountReference",
           "verificationEvidenceId",
           "valueDate",
           "currency",
@@ -5074,6 +5549,9 @@
         "type": "object",
         "properties": {
           "bankSourceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "bankAccountReference": {
             "$ref": "#/components/schemas/id"
           },
           "verificationEvidenceId": {
@@ -5102,6 +5580,7 @@
         },
         "required": [
           "bankSourceId",
+          "bankAccountReference",
           "verificationEvidenceId",
           "valueDate",
           "currency",
@@ -5177,6 +5656,9 @@
                 "bankSourceId": {
                   "$ref": "#/components/schemas/id"
                 },
+                "bankAccountReference": {
+                  "$ref": "#/components/schemas/id"
+                },
                 "verificationEvidenceId": {
                   "$ref": "#/components/schemas/id"
                 },
@@ -5206,6 +5688,7 @@
               "required": [
                 "cashMovementId",
                 "bankSourceId",
+                "bankAccountReference",
                 "verificationEvidenceId",
                 "valueDate",
                 "direction",
@@ -5219,6 +5702,16 @@
           "eventType": {
             "type": "string",
             "const": "flex.receivables.financial-event.v1"
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "RECEIVABLE",
+              "HEL",
+              "FUNDING",
+              "CASH",
+              "CLOSE"
+            ]
           },
           "eventId": {
             "$ref": "#/components/schemas/id"
@@ -5308,6 +5801,7 @@
           "accountMappingRevisionId",
           "bankMovements",
           "eventType",
+          "sourceKind",
           "eventId",
           "scope",
           "tenantId",
@@ -5388,11 +5882,54 @@
         ],
         "additionalProperties": false
       },
+      "accountMeasurement": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/accountMeasurement",
+        "type": "object",
+        "properties": {
+          "position": {
+            "$ref": "#/components/schemas/position"
+          },
+          "measurementLegs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/measurementLeg"
+            }
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "position",
+          "measurementLegs",
+          "eventWatermark"
+        ],
+        "additionalProperties": false
+      },
       "accountRead": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/accountRead",
         "type": "object",
         "properties": {
+          "closureReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "VOLUNTARY_SETTLEMENT",
+                  "CONVERTED_TO_HEL",
+                  "ASSIGNED_OUT",
+                  "WRITE_OFF",
+                  "WORKOUT",
+                  "PAID_IN_FULL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "externalId": {
             "$ref": "#/components/schemas/id"
           },
@@ -5407,6 +5944,7 @@
           }
         },
         "required": [
+          "closureReason",
           "externalId",
           "nativeLoanId",
           "position",
@@ -5573,6 +6111,9 @@
           "calculatorBuild": {
             "$ref": "#/components/schemas/id"
           },
+          "currentEventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
           "eventVersion": {
             "type": "string",
             "const": "flex.receivables.financial-event.v1"
@@ -5629,6 +6170,7 @@
           "schemaVersion",
           "policyRevisionId",
           "calculatorBuild",
+          "currentEventWatermark",
           "eventVersion",
           "productCode",
           "scheduleCode",
@@ -5770,6 +6312,140 @@
           "nativeContractualOutstandingMinor",
           "subledgerContractualOutstandingMinor",
           "snapshotHash"
+        ],
+        "additionalProperties": false
+      },
+      "developerLotRead": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/developerLotRead",
+        "type": "object",
+        "properties": {
+          "lotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "sourceEventId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "effectiveDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "dueDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "PAYABLE",
+              "RECEIVABLE"
+            ]
+          },
+          "originalAmountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "accruedUnwindMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "settledMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "outstandingMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "allowanceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "annualNominalRate": {
+            "$ref": "#/components/schemas/decimal"
+          }
+        },
+        "required": [
+          "lotId",
+          "accountId",
+          "dealId",
+          "sourceEventId",
+          "effectiveDate",
+          "dueDate",
+          "direction",
+          "originalAmountMinor",
+          "accruedUnwindMinor",
+          "settledMinor",
+          "outstandingMinor",
+          "allowanceMinor",
+          "annualNominalRate"
+        ],
+        "additionalProperties": false
+      },
+      "developerLotsPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/developerLotsPage",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/developerLotRead"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "businessDate",
+          "boundarySide",
+          "eventWatermark",
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "eventsQuery": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/eventsQuery",
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/id"
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "limit"
         ],
         "additionalProperties": false
       },
@@ -5937,6 +6613,196 @@
           "error",
           "createdAt",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "fundingFacilitiesPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/fundingFacilitiesPage",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/fundingFacilityRead"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "businessDate",
+          "boundarySide",
+          "eventWatermark",
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "fundingFacilityRead": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/fundingFacilityRead",
+        "type": "object",
+        "properties": {
+          "facilityId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "principalMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "interestPayableMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "accruedExpenseMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "accruedThroughDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "annualNominalRate": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "sourceEventIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "facilityId",
+          "principalMinor",
+          "interestPayableMinor",
+          "accruedExpenseMinor",
+          "accruedThroughDate",
+          "annualNominalRate",
+          "sourceEventIds"
+        ],
+        "additionalProperties": false
+      },
+      "measurementReadQuery": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/measurementReadQuery",
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/id"
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "limit",
+          "businessDate",
+          "boundarySide",
+          "eventWatermark"
+        ],
+        "additionalProperties": false
+      },
+      "nativeJournalReadback": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/nativeJournalReadback",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "nativeJournalId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "sourceLineId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "nativeGlAccountId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "accountKey": {
+                  "$ref": "#/components/schemas/accountKey"
+                },
+                "side": {
+                  "type": "string",
+                  "enum": [
+                    "DEBIT",
+                    "CREDIT"
+                  ]
+                },
+                "amountMinor": {
+                  "$ref": "#/components/schemas/version"
+                },
+                "currency": {
+                  "$ref": "#/components/schemas/currency"
+                },
+                "operationId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "accountId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "dealId": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "required": [
+                "nativeJournalId",
+                "sourceLineId",
+                "nativeGlAccountId",
+                "accountKey",
+                "side",
+                "amountMinor",
+                "currency",
+                "operationId"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "scope",
+          "eventWatermark",
+          "lines"
         ],
         "additionalProperties": false
       },
@@ -6155,7 +7021,7 @@
               "positions": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/position"
+                  "$ref": "#/components/schemas/analyticalPosition"
                 }
               },
               "monthlyIncome": {
@@ -7296,6 +8162,112 @@
         ],
         "additionalProperties": false
       },
+      "helTerms": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/helTerms",
+        "type": "object",
+        "properties": {
+          "nativeLoanId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeClientId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/currency"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "ACTIVE",
+              "CLOSED"
+            ]
+          },
+          "principalMinor": {
+            "$ref": "#/components/schemas/positiveMinorUnits"
+          },
+          "annualNominalRate": {
+            "$ref": "#/components/schemas/rate"
+          },
+          "tenureMonths": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "financedFees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "nativeChargeId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "componentId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "amountMinor": {
+                  "$ref": "#/components/schemas/version"
+                }
+              },
+              "required": [
+                "nativeChargeId",
+                "componentId",
+                "amountMinor"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "repaymentSchedule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dueDate": {
+                  "$ref": "#/components/schemas/financialDate"
+                },
+                "principalMinor": {
+                  "$ref": "#/components/schemas/version"
+                },
+                "interestMinor": {
+                  "$ref": "#/components/schemas/version"
+                },
+                "feesMinor": {
+                  "$ref": "#/components/schemas/version"
+                },
+                "totalMinor": {
+                  "$ref": "#/components/schemas/version"
+                }
+              },
+              "required": [
+                "dueDate",
+                "principalMinor",
+                "interestMinor",
+                "feesMinor",
+                "totalMinor"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "nativeLoanId",
+          "nativeClientId",
+          "currency",
+          "status",
+          "principalMinor",
+          "annualNominalRate",
+          "tenureMonths",
+          "businessDate",
+          "financedFees",
+          "repaymentSchedule"
+        ],
+        "additionalProperties": false
+      },
       "boundaryQuery": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "#/components/schemas/boundaryQuery",
@@ -7362,6 +8334,9 @@
               }
             ]
           },
+          "bankAccountReference": {
+            "$ref": "#/components/schemas/id"
+          },
           "accountMap": {
             "minItems": 22,
             "maxItems": 22,
@@ -7396,6 +8371,7 @@
           "officeId",
           "integrationUserId",
           "helPaymentTypeId",
+          "bankAccountReference",
           "accountMap"
         ],
         "additionalProperties": false
