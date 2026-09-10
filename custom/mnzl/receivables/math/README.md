@@ -46,7 +46,10 @@ The caller owns currency/tenant/version validation, reconciled source cutoffs,
 authorization, scenario/forecast evidence and freshness, event sequencing,
 posting, netting approval and legal derecognition. No method performs cash or
 journal side effects. `settlePortions` returns a `PartialSettlement` containing selected and retained
-allocations. Persist its `remainingMeasurement(segment)` state. Use
+allocations. Persist its `remainingMeasurement(segment)` state.
+The state constructor verifies the complete remaining-face map, original cashflow
+content and analytical contributions against its segment yields; mismatched
+segments fail before any later measurement. Use
 `position(state, date)` and `reset(state, date, rate)` thereafter so another event
 on that boundary consumes the exact retained targets. Later boundaries evaluate
 unchanged analytical yields and recognize signed rounding in target differences;

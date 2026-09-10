@@ -18,6 +18,7 @@
  */
 package co.mnzl.fineract.receivables.math;
 
+import static co.mnzl.fineract.receivables.math.CreditAndFunding.annualizedMargin;
 import static co.mnzl.fineract.receivables.math.CreditAndFunding.funding;
 import static co.mnzl.fineract.receivables.math.CreditAndFunding.impairment;
 import static co.mnzl.fineract.receivables.math.CreditAndFunding.stage;
@@ -335,6 +336,41 @@ class FinancialIdentitiesTest {
         assertEquals(BigInteger.ZERO, workout.developerShareMinor());
         assertEquals(allowance, workout.allowanceReleasedMinor());
         assertThrows(IllegalArgumentException.class, () -> settleBuyback(face, gross, net, BigInteger.valueOf(-1), allowance, true));
+    }
+
+    @Test
+    void retainedMeasurementRejectsChangedCashflowsYieldsAndIncompleteFaceImmediately() {
+        Purchase original = purchase();
+        LocalDate date = START.plusDays(30);
+        Position before = position(original.segment(), date, Map.of());
+        PartialSettlement partial = settlePortions(before, Map.of("c", BigInteger.valueOf(100028)), BigInteger.valueOf(100028),
+                BigInteger.ZERO);
+        List<Cashflow> extra = new java.util.ArrayList<>(flows());
+        extra.add(new Cashflow("extra", START.plusDays(365), BigInteger.valueOf(100000)));
+        Segment differentFlows = price(START, extra, RATE, new BigDecimal("0.01")).segment();
+        assertThrows(IllegalArgumentException.class, () -> partial.remainingMeasurement(differentFlows));
+        Segment differentYield = price(START, flows(), new BigDecimal("0.30"), new BigDecimal("0.01")).segment();
+        assertThrows(IllegalArgumentException.class, () -> partial.remainingMeasurement(differentYield));
+        List<Cashflow> changedAmount = List.of(new Cashflow("a", START.plusDays(60), BigInteger.valueOf(4000001)), flows().get(1),
+                flows().get(2));
+        Segment differentAmount = price(START, changedAmount, RATE, new BigDecimal("0.01")).segment();
+        assertThrows(IllegalArgumentException.class, () -> partial.remainingMeasurement(differentAmount));
+        assertThrows(IllegalArgumentException.class,
+                () -> new MeasurementState(original.segment(), partial.retainedPosition(), Map.of("c", BigInteger.valueOf(5899972))));
+        MeasurementState valid = partial.remainingMeasurement(original.segment());
+        assertEquals(BigInteger.valueOf(9538499), position(valid, date).amortizedCostMinor());
+        assertEquals(before.contractualOutstandingMinor().subtract(BigInteger.valueOf(100028)),
+                position(valid, date.plusDays(1)).contractualOutstandingMinor());
+    }
+
+    @Test
+    void annualizedMarginUsesMajorEgpAssetDaysAndDisclosedAnnualization() {
+        // EGP 1,000 net income over 30 days on EGP 100,000 average earning assets.
+        BigDecimal income = new BigDecimal("1000");
+        BigDecimal weightedAssetDays = new BigDecimal("3000000");
+        assertEquals(0, new BigDecimal("0.12").compareTo(annualizedMargin(income, weightedAssetDays, 360)));
+        near(new BigDecimal("0.12166666666666666666666666666666666666666666666667"), annualizedMargin(income, weightedAssetDays, 365));
+        assertThrows(IllegalArgumentException.class, () -> annualizedMargin(income, BigDecimal.ZERO, 360));
     }
 
 }
