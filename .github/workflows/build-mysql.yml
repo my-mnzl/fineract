@@ -22,7 +22,8 @@ jobs:
           - 3306:3306
         env:
           MYSQL_ROOT_PASSWORD: mysql
-        options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+        # Initialization starts a temporary socket-only server before the final TCP listener.
+        options: --health-cmd="mysqladmin ping --host=127.0.0.1 --silent" --health-start-period=60s --health-interval=5s --health-timeout=2s --health-retries=3
 
       mock-oauth2-server:
         image: ghcr.io/navikt/mock-oauth2-server:3.0.1
