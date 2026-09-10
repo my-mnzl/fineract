@@ -348,4 +348,13 @@
 </createTable>
 <createIndex tableName="m_mnzl_r_hel_snapshot" indexName="ix_r_hel_snapshot"><column name="scope_key"/><column name="loan_id"/><column name="business_date"/></createIndex>
 </changeSet>
+<changeSet author="mnzl" id="receivables-scoped-maintenance-1">
+<addColumn tableName="m_mnzl_r_configuration">
+<column name="maintenance_request_hash" type="VARCHAR(64)"/>
+<column name="retired" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+<column name="reset_plan_hash" type="VARCHAR(64)"/>
+<column name="reset_result_json" type="CLOB"/>
+</addColumn>
+<insert tableName="m_permission"><column name="grouping" value="special"/><column name="code" value="MAINTAIN_MNZL_RECEIVABLES"/><column name="entity_name" value="MNZL_RECEIVABLES"/><column name="action_name" value="MAINTAIN"/><column name="can_maker_checker" valueBoolean="false"/></insert>
+</changeSet>
 </databaseChangeLog>

@@ -18,6 +18,171 @@
     }
   ],
   "paths": {
+    "/maintenance/windows": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeResetRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/maintenance/reset/plan": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeResetPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/maintenance/reset/apply": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeResetApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeResetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/accounts": {
       "get": {
         "parameters": [
@@ -11833,6 +11998,250 @@
           "replacementAccountId",
           "replacementSourceHash",
           "approvedBy"
+        ],
+        "additionalProperties": false
+      },
+      "nativeResetApplyRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/nativeResetRequest"
+          },
+          "planHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "request",
+          "planHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeResetPlan": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nextLedgerEpoch": {
+            "$ref": "#/components/schemas/id"
+          },
+          "maintenanceWindowId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "developerOrganizationIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "accountIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "nativeLoanIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "productIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "sourceIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "journalIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "planHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "table": {
+                  "type": "string",
+                  "pattern": "^[a-z_]+$"
+                },
+                "ids": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/id"
+                  }
+                },
+                "contentHash": {
+                  "$ref": "#/components/schemas/sha256"
+                }
+              },
+              "required": [
+                "table",
+                "ids",
+                "contentHash"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "scope",
+          "tenantId",
+          "nextLedgerEpoch",
+          "maintenanceWindowId",
+          "developerOrganizationIds",
+          "accountIds",
+          "nativeLoanIds",
+          "productIds",
+          "sourceIds",
+          "journalIds",
+          "planHash",
+          "rows"
+        ],
+        "additionalProperties": false
+      },
+      "nativeResetRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nextLedgerEpoch": {
+            "$ref": "#/components/schemas/id"
+          },
+          "maintenanceWindowId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "developerOrganizationIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "accountIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "nativeLoanIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "productIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "sourceIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "journalIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "scope",
+          "tenantId",
+          "nextLedgerEpoch",
+          "maintenanceWindowId",
+          "developerOrganizationIds",
+          "accountIds",
+          "nativeLoanIds",
+          "productIds",
+          "sourceIds",
+          "journalIds"
+        ],
+        "additionalProperties": false
+      },
+      "nativeResetResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nextLedgerEpoch": {
+            "$ref": "#/components/schemas/id"
+          },
+          "maintenanceWindowId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "planHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "removedCounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "table": {
+                  "type": "string",
+                  "pattern": "^[a-z_]+$"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "table",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "retired": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "scope",
+          "tenantId",
+          "nextLedgerEpoch",
+          "maintenanceWindowId",
+          "planHash",
+          "removedCounts",
+          "retired"
         ],
         "additionalProperties": false
       }

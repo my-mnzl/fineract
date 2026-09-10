@@ -91,6 +91,7 @@ public class ReceivablesConfiguration {
         Map<String, Object> config = lock ? store.lockConfiguration(key) : store.require("configuration", key);
         require(number(config, "integration_user_id") == security.authenticatedUser().getId(), "FINERACT_CAPABILITY_MISSING");
         require(string(config, "epoch").equals(text(scope, "ledgerEpoch")), "FINERACT_CAPABILITY_MISSING");
+        requireMutable(config);
         return config;
     }
 
@@ -111,6 +112,7 @@ public class ReceivablesConfiguration {
         require(keys.equals(ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
         Map<String, Object> existing = store.find("configuration", scope);
         if (existing != null) {
+            requireMutable(existing);
             require(json.hash(json.read(string(existing, "config_json"))).equals(json.hash(input)), "FINERACT_CAPABILITY_MISSING");
             return capabilities(input.get("scope"), false);
         }
@@ -178,6 +180,10 @@ public class ReceivablesConfiguration {
         }
         require(mappings.size() == ACCOUNTS.size(), "FINERACT_CAPABILITY_MISSING");
         return result;
+    }
+
+    static void requireMutable(Map<String, Object> config) {
+        require(config.get("maintenance_request_hash") == null && !ReceivablesMaintenance.retired(config), "FINERACT_CAPABILITY_MISSING");
     }
 
     public void validateProduct(long id) {
@@ -273,7 +279,7 @@ public class ReceivablesConfiguration {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
         JsonNode input = json.validate("nativeHistoricalAuthorization", request);
         String scope = scopeKey(input.get("scope"));
-        store.lockConfiguration(scope);
+        requireMutable(store.lockConfiguration(scope));
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString()), "APPROVAL_SCOPE_CHANGED");
         LocalDate from = LocalDate.parse(text(input, "effectiveFrom"));
         LocalDate through = LocalDate.parse(text(input, "effectiveThrough"));
@@ -297,6 +303,7 @@ public class ReceivablesConfiguration {
         JsonNode input = json.validate("nativeWorkoutAuthorization", request);
         String scope = scopeKey(input.get("scope"));
         var config = store.lockConfiguration(scope);
+        requireMutable(config);
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString())
                 && number(config, "integration_user_id") != security.authenticatedUser().getId(), "APPROVAL_SCOPE_CHANGED");
         var account = store.require("account", ReceivablesStore.key(scope, "account", text(input, "accountId")));

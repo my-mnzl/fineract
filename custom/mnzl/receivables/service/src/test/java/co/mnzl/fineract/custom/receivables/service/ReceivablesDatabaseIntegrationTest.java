@@ -67,6 +67,7 @@ class ReceivablesDatabaseIntegrationTest {
     private String storeUrl;
     private String activeTenant = "default";
     private String activeFinancier = "financier";
+    private String activeEpoch = "epoch";
     String authentication = "mifos:password";
     private String databaseUser;
     private String databasePassword;
@@ -106,7 +107,8 @@ class ReceivablesDatabaseIntegrationTest {
                     "--fineract.tenant.password=" + container.getPassword(), "--fineract.tenant.name=fineract_default",
                     "--fineract.tenant.timezone=UTC", "--fineract.mode.batch-worker-enabled=false",
                     "--fineract.mode.batch-manager-enabled=false", "--fineract.job.loan-cob-enabled=false",
-                    "--spring.quartz.auto-startup=false", "--fineract.events.external.enabled=false", "--logging.level.root=WARN"));
+                    "--mnzl.receivables.maintenance.enabled=true", "--spring.quartz.auto-startup=false",
+                    "--fineract.events.external.enabled=false", "--logging.level.root=WARN"));
             try (var application = new SpringApplicationBuilder(Application.class).run(args.toArray(String[]::new))) {
                 base = "http://127.0.0.1:" + application.getEnvironment().getProperty("local.server.port") + "/fineract-provider/api/v1";
                 JsonNode currencies = request("GET", "/currencies", null, 200);
@@ -120,6 +122,7 @@ class ReceivablesDatabaseIntegrationTest {
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
                 verifyTenantIsolation(application);
+                verifyScopedMaintenanceReset();
                 boolean journalsMatched = queryLong(
                         "select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100") == 0;
                 assertThat(journalsMatched).isTrue();
@@ -136,9 +139,10 @@ class ReceivablesDatabaseIntegrationTest {
                         "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
                         "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
                         "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
-                        "canonical-borrower-without-financial-effects", "partial-and-full-settlement", "developer-cash-settlement",
-                        "cashless-substitution-carries-basis", "substitution-transfers-lot-controls", "forecast-stage-transitions",
-                        "impaired-reversal-restores-allowance", "independent-controls-detect-mirrored-corruption", "future-close-rejected",
+                        "scoped-reset-epoch-retirement-and-reentry", "canonical-borrower-without-financial-effects",
+                        "partial-and-full-settlement", "developer-cash-settlement", "cashless-substitution-carries-basis",
+                        "substitution-transfers-lot-controls", "forecast-stage-transitions", "impaired-reversal-restores-allowance",
+                        "independent-controls-detect-mirrored-corruption", "future-close-rejected",
                         "preparing-close-blocks-historical-posting", "developer-payment-crosses-receivable-due-date",
                         "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
                         "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees",
@@ -170,7 +174,7 @@ class ReceivablesDatabaseIntegrationTest {
                         "Basic " + Base64.getEncoder().encodeToString(authentication.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .header("Fineract-Platform-TenantId", activeTenant).header("Content-Type", "application/json")
                 .header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", activeFinancier).header("X-MNZL-Environment", "test")
-                .header("X-MNZL-Ledger-Epoch", "epoch").header("X-MNZL-Account-Mapping", "mapping-1");
+                .header("X-MNZL-Ledger-Epoch", activeEpoch).header("X-MNZL-Account-Mapping", "mapping-1");
         var response = http.send(builder
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))
@@ -182,9 +186,9 @@ class ReceivablesDatabaseIntegrationTest {
     ObjectNode scope(boolean developer) {
         ObjectNode scope = json.object();
         scope.put("platformId", "mnzl");
-        scope.put("financierOrganizationId", "financier");
+        scope.put("financierOrganizationId", activeFinancier);
         scope.put("environment", "test");
-        scope.put("ledgerEpoch", "epoch");
+        scope.put("ledgerEpoch", activeEpoch);
         if (developer) {
             scope.put("developerOrganizationId", "developer");
         }
@@ -677,6 +681,74 @@ class ReceivablesDatabaseIntegrationTest {
             assertThat(tx.path("type").path("repayment").asBoolean()).isTrue();
             assertThat(new java.math.BigDecimal(tx.path("amount").asText())).isEqualByComparingTo("100");
         });
+    }
+
+    private void verifyScopedMaintenanceReset() throws Exception {
+        ObjectNode configuration = (ObjectNode) request("GET", PREFIX + "/configuration", null, 200);
+        JsonNode unaffected = request("GET", PREFIX + "/accounts/account-1", null, 200);
+        long unaffectedLoans = queryLong("select count(*) from m_loan");
+        long unaffectedJournals = queryLong("select count(*) from acc_gl_journal_entry");
+        activeFinancier = "isolated-reset-financier";
+        try {
+            configuration.set("scope", scope(false));
+            request("POST", PREFIX + "/configuration", configuration, 200);
+            purchase("reset-source");
+            long clients = queryLong("select count(*) from m_client");
+            ObjectNode original = bookingCommands.get("reset-source").deepCopy();
+            String loanId = request("GET", PREFIX + "/accounts/reset-source", null, 200).path("nativeLoanId").asText();
+            ObjectNode reset = json.object();
+            reset.set("scope", scope(false));
+            reset.put("tenantId", "default");
+            reset.put("maintenanceWindowId", "isolated-maintenance");
+            reset.put("nextLedgerEpoch", "reentered-epoch");
+            reset.set("developerOrganizationIds", json.value(List.of("developer")));
+            reset.set("accountIds", json.value(List.of("reset-source")));
+            reset.set("nativeLoanIds", json.value(List.of(loanId)));
+            reset.set("productIds", json.value(List.of(configuration.path("productId").asText())));
+            var sources = reset.putArray("sourceIds");
+            var journals = reset.putArray("journalIds");
+            for (JsonNode event : request("GET", PREFIX + "/events", null, 200).path("items")) {
+                sources.add(event.path("eventId").asText());
+                for (JsonNode journal : event.path("journalLines"))
+                    journals.add(journal.path("journalId").asText());
+            }
+            ObjectNode wrongTenant = reset.deepCopy().put("tenantId", "other");
+            assertThat(request("POST", PREFIX + "/maintenance/windows", wrongTenant, 409).path("code").asText())
+                    .isEqualTo("OWNERSHIP_CONFLICT");
+            ObjectNode wrongLoan = reset.deepCopy();
+            wrongLoan.set("nativeLoanIds", json.value(List.of("99999999")));
+            assertThat(request("POST", PREFIX + "/maintenance/windows", wrongLoan, 409).path("code").asText())
+                    .isEqualTo("OWNERSHIP_CONFLICT");
+            request("POST", PREFIX + "/maintenance/windows", reset, 200);
+            JsonNode plan = request("POST", PREFIX + "/maintenance/reset/plan", reset, 200);
+            assertThat(request("POST", PREFIX + "/commands", original, 409).path("code").asText()).isEqualTo("FINERACT_CAPABILITY_MISSING");
+            ObjectNode apply = json.object();
+            apply.set("request", reset);
+            apply.put("planHash", "0".repeat(64));
+            assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 409).path("code").asText()).isEqualTo("SOURCE_CHANGED");
+            assertThat(request("POST", PREFIX + "/maintenance/reset/plan", reset, 200)).isEqualTo(plan);
+            apply.put("planHash", plan.path("planHash").asText());
+            JsonNode result = request("POST", PREFIX + "/maintenance/reset/apply", apply, 200);
+            assertThat(result.path("retired").asBoolean()).isTrue();
+            assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 200)).isEqualTo(result);
+            assertThat(queryLong("select count(*) from m_loan")).isEqualTo(unaffectedLoans);
+            assertThat(queryLong("select count(*) from acc_gl_journal_entry")).isEqualTo(unaffectedJournals);
+            assertThat(queryLong("select count(*) from m_client")).isEqualTo(clients);
+            request("GET", "/loans/" + loanId, null, 404);
+            assertThat(request("POST", PREFIX + "/configuration", configuration, 409).path("code").asText())
+                    .isEqualTo("FINERACT_CAPABILITY_MISSING");
+            activeEpoch = "reentered-epoch";
+            configuration.set("scope", scope(false));
+            request("POST", PREFIX + "/configuration", configuration, 200);
+            purchase("reset-reentered");
+            assertThat(request("GET", PREFIX + "/accounts/reset-reentered", null, 200).path("nativeLoanId").asText()).isNotEqualTo(loanId);
+            activeEpoch = "epoch";
+            assertThat(request("POST", PREFIX + "/commands", original, 409).path("code").asText()).isEqualTo("FINERACT_CAPABILITY_MISSING");
+        } finally {
+            activeFinancier = "financier";
+            activeEpoch = "epoch";
+        }
+        assertThat(request("GET", PREFIX + "/accounts/account-1", null, 200)).isEqualTo(unaffected);
     }
 
     private void verifyTenantIsolation(org.springframework.context.ConfigurableApplicationContext application) throws Exception {

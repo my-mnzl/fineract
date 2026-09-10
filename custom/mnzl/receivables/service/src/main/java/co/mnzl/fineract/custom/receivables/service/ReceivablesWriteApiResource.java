@@ -43,6 +43,7 @@ import org.springframework.stereotype.Component;
 public class ReceivablesWriteApiResource {
 
     private final ReceivablesCommandService commands;
+    private final ReceivablesMaintenance maintenance;
     private final ReceivablesCalculationService calculations;
     private final ReceivablesConfiguration configuration;
     private final ReceivablesJson json;
@@ -135,6 +136,31 @@ public class ReceivablesWriteApiResource {
         require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
                 "OWNERSHIP_CONFLICT");
         return json.write(configuration.authorizeWorkout(request));
+    }
+
+    private void maintenanceScope(HttpHeaders headers, JsonNode request) {
+        require(configuration.scopeKey(request.get("scope")).equals(configuration.scopeKey(scope(headers))), "OWNERSHIP_CONFLICT");
+    }
+
+    @POST
+    @Path("/maintenance/windows")
+    public String maintenanceWindow(@Context HttpHeaders headers, String request) {
+        maintenanceScope(headers, json.read(request));
+        return json.write(maintenance.begin(request));
+    }
+
+    @POST
+    @Path("/maintenance/reset/plan")
+    public String resetPlan(@Context HttpHeaders headers, String request) {
+        maintenanceScope(headers, json.read(request));
+        return json.write(maintenance.plan(request));
+    }
+
+    @POST
+    @Path("/maintenance/reset/apply")
+    public String resetApply(@Context HttpHeaders headers, String request) {
+        maintenanceScope(headers, json.read(request).get("request"));
+        return json.write(maintenance.apply(request));
     }
 
 }
