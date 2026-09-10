@@ -282,14 +282,25 @@ public class NativeReceivableBridge {
         return state(loan, date, boundarySide);
     }
 
+    @Transactional(readOnly = true)
+    public NativeState readIndependentState(long loanId, LocalDate date, String side, Set<Long> transactionIds, Set<Long> reversalIds) {
+        Loan loan = loans.findById(loanId).orElseThrow();
+        requirePurchased(loan);
+        return state(loan, date, side, transactionIds, reversalIds);
+    }
+
     private NativeState state(Loan loan, LocalDate date, String side) {
+        return state(loan, date, side, null, null);
+    }
+
+    private NativeState state(Loan loan, LocalDate date, String side, Set<Long> transactionIds, Set<Long> reversalIds) {
         if (!Set.of("BEFORE_EVENTS", "AFTER_EVENTS").contains(side)) {
             throw new IllegalArgumentException("Unknown boundary side");
         }
         Map<Long, BigInteger[]> amounts = new HashMap<>();
         List<NativeTransaction> transactions = new ArrayList<>();
         for (LoanTransaction tx : loan.getLoanTransactions()) {
-            if (!included(tx.getTransactionDate(), date, side)) {
+            if ((transactionIds != null && !transactionIds.contains(tx.getId())) || !included(tx.getTransactionDate(), date, side)) {
                 continue;
             }
             List<Allocation> allocations = tx.getLoanTransactionToRepaymentScheduleMappings().stream().map(
@@ -297,7 +308,8 @@ public class NativeReceivableBridge {
                     .toList();
             transactions.add(new NativeTransaction(tx.getId(), tx.getTypeOf().name(), tx.getTransactionDate(), minor(tx.getAmount()),
                     tx.isReversed(), tx.getReversedOnDate(), allocations));
-            if (!included(tx.getTransactionDate(), date, side) || (tx.isReversed() && included(tx.getReversedOnDate(), date, side))) {
+            if (!included(tx.getTransactionDate(), date, side) || (tx.isReversed()
+                    && (reversalIds == null || reversalIds.contains(tx.getId())) && included(tx.getReversedOnDate(), date, side))) {
                 continue;
             }
             for (Allocation allocation : allocations) {

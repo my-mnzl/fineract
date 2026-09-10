@@ -93,6 +93,8 @@ class NativeHelBridgeTest {
         MoneyHelper.initializeTenantRoundingMode("hel-test", 6);
         currency = new MonetaryCurrency("EGP", 2, 1);
         when(loan.getId()).thenReturn(1L);
+        when(loan.getTermPeriodFrequencyType()).thenReturn(org.apache.fineract.portfolio.common.domain.PeriodFrequencyType.MONTHS);
+        when(loan.getTermFrequency()).thenReturn(12);
         when(loan.getClientId()).thenReturn(2L);
         when(loan.productId()).thenReturn(3L);
         when(loan.getCurrencyCode()).thenReturn("EGP");
@@ -153,6 +155,8 @@ class NativeHelBridgeTest {
     @Test
     void ordinaryFundingUsesPaymentChannelAndActualNativeReadback() {
         complete(false);
+        assertThat(bridge.readTerms("application").status()).isEqualTo("APPROVED");
+        assertThat(bridge.readTerms("application").tenure()).isEqualTo(12);
         var result = bridge.fund("application", DATE, BigInteger.valueOf(100000), BigInteger.ZERO, List.of(), 8, 90, "hel-operation");
         assertThat(result.clearingAmountMinor()).isEqualTo(100000);
         assertThat(result.nativeTransactionIds()).containsExactly(10L);

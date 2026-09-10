@@ -157,6 +157,21 @@ class NativeReceivableBridgeTest {
     }
 
     @Test
+    void eventWatermarkExcludesLaterSameDayCashAndReversal() {
+        var booked = book();
+        var paid = bridge.collect(1, start.plusDays(28),
+                List.of(new Allocation(booked.sourcePeriodIds().get("large"), BigInteger.valueOf(8000))), "cash-1");
+        bridge.reverse(1, paid.transactionId(), start.plusDays(28));
+        long activation = saved.getLoanTransactions().getFirst().getId();
+        assertThat(bridge.readIndependentState(1, start.plusDays(28), "AFTER_EVENTS", java.util.Set.of(activation), java.util.Set.of())
+                .outstandingMinor()).isEqualTo(10000);
+        assertThat(bridge.readIndependentState(1, start.plusDays(28), "AFTER_EVENTS", java.util.Set.of(activation, paid.transactionId()),
+                java.util.Set.of()).outstandingMinor()).isEqualTo(2000);
+        assertThat(bridge.readIndependentState(1, start.plusDays(28), "AFTER_EVENTS", java.util.Set.of(activation, paid.transactionId()),
+                java.util.Set.of(paid.transactionId())).outstandingMinor()).isEqualTo(10000);
+    }
+
+    @Test
     void modificationRetainsOldPeriodsAndReconstructsOldFace() {
         book();
         bridge.replaceSchedule(1, start.plusDays(10), List.of(new FaceLeg("new", start.plusDays(80), BigInteger.valueOf(9500))), "legal-1");

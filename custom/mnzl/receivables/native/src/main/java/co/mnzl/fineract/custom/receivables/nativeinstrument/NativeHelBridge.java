@@ -245,10 +245,15 @@ public class NativeHelBridge {
                                 .plus(period.getPenaltyChargesCharged(loan.getCurrency())).getAmount()),
                         "EGP"))
                 .toList();
-        String status = loan.getStatus() == LoanStatus.ACTIVE ? "ACTIVE" : loan.isClosed() ? "CLOSED" : "PENDING";
+        if (loan.getTermPeriodFrequencyType() != org.apache.fineract.portfolio.common.domain.PeriodFrequencyType.MONTHS
+                || loan.getTermFrequency() == null || loan.getTermFrequency() <= 0) {
+            throw new IllegalArgumentException("HEL requires a positive term in months");
+        }
+        String status = loan.getStatus() == LoanStatus.ACTIVE ? "ACTIVE"
+                : loan.getStatus() == LoanStatus.APPROVED ? "APPROVED" : loan.isClosed() ? "CLOSED" : "PENDING";
         return new Terms(loan.getId(), loan.getClientId(), status, minor(loan.getPrincipal().getAmount()),
                 loan.getLoanProductRelatedDetail().getAnnualNominalInterestRate().movePointLeft(2).stripTrailingZeros().toPlainString(),
-                loan.getNumberOfRepayments(), schedule, fees, DateUtils.getBusinessLocalDate());
+                loan.getTermFrequency(), schedule, fees, DateUtils.getBusinessLocalDate());
     }
 
     private static BigInteger minor(BigDecimal amount) {
