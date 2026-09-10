@@ -582,9 +582,8 @@ public class ReceivablesAccountCommands {
                 "BANK_PROOF_MISMATCH");
         String payer = text(e.command, "payer");
         String payerReference = text(e.command, "payerReferenceId");
-        require(payerReference.equals(text(json.read(string(allocation, "allocation_json")), "beneficiaryReferenceId"))
-                && payerReference.equals(payer.equals("BORROWER") ? string(account, "customer_ref")
-                        : text(e.command.get("scope"), "developerOrganizationId")),
+        require(payerReference.equals(text(json.read(string(allocation, "allocation_json")), "payerReferenceId")) && payerReference.equals(
+                payer.equals("BORROWER") ? string(account, "customer_ref") : text(e.command.get("scope"), "developerOrganizationId")),
                 "BANK_PROOF_MISMATCH");
         cash.consumeAllocations(e, json.value(List.of(text(e.command, "bankAllocationId"))), value, "RECEIPT_UNAPPLIED",
                 string(account, "deal_id"));

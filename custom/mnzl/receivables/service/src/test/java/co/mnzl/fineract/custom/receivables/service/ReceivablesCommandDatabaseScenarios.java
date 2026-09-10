@@ -597,8 +597,10 @@ final class ReceivablesCommandDatabaseScenarios {
         harness.moveDate(harness.today.plusDays(1));
         ObjectNode cash = harness.command("RECORD_CASH_MOVEMENT", "recovery-cash", "deal", "DEAL");
         ObjectNode source = bankSource("recovery-cash", "5000", "INCOMING");
-        source.set("allocations", harness.json.value(List.of(Map.of("allocationId", "recovery-bank-allocation", "kind", "RECEIPT_UNAPPLIED",
-                "dealId", "deal", "accountId", id, "beneficiaryReferenceId", id + "-customer", "amountMinor", "5000"))));
+        source.set("allocations",
+                harness.json.value(List
+                        .of(Map.of("allocationId", "recovery-bank-allocation", "kind", "RECEIPT_UNAPPLIED", "dealId", "deal", "accountId",
+                                id, "beneficiaryReferenceId", "financier", "payerReferenceId", id + "-customer", "amountMinor", "5000"))));
         cash.set("source", source);
         execute(cash);
         ObjectNode recovery = command("RECOVER_WRITTEN_OFF", "written-off-recovery", id);
