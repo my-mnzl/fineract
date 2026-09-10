@@ -37,7 +37,6 @@ file("${rootDir}/custom").eachDir { companyDir ->
     }
 }
 def customDockerJarTasks = customDockerProjects.collect { it.tasks.named('jar') }
-def customDockerJars = files(customDockerJarTasks.collect { it.flatMap { task -> task.archiveFile } })
 
 jib {
     from {
@@ -77,7 +76,7 @@ jib {
     dependencies {
         implementation project(':fineract-core')
         implementation project(':fineract-provider')
-        implementation customDockerJars
+        customDockerProjects.each { customProject -> implementation customProject }
         // NOTE: other custom dependencies
         implementation 'org.mariadb.jdbc:mariadb-java-client'
         implementation 'com.mysql:mysql-connector-j'

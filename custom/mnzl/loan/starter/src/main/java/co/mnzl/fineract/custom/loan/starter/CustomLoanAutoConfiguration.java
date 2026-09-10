@@ -23,6 +23,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.ComponentScan;
 
 @AutoConfiguration
-@ComponentScan({"co.mnzl.fineract.custom.loan", "co.mnzl.fineract.custom.receivables"})
+@ComponentScan({ "co.mnzl.fineract.custom.loan", "co.mnzl.fineract.custom.receivables" })
 @ConditionalOnProperty(name = "mnzl.loan.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomLoanAutoConfiguration {}
