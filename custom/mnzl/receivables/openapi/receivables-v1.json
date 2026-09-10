@@ -3173,6 +3173,9 @@
           "beneficiaryReferenceId": {
             "$ref": "#/components/schemas/id"
           },
+          "payerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
           "helFundingOperationId": {
             "$ref": "#/components/schemas/id"
           },
