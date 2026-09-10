@@ -83,9 +83,9 @@ public class ReceivablesMaintenance {
             return json.read(string(config, "reset_result_json"));
         }
         for (String id : ids(input, "nativeLoanIds"))
-            store.jdbc().queryForList("select id from m_loan where id=? for update", id);
+            store.jdbc().queryForList("select id from m_loan where id=? for update", Long.parseLong(id));
         for (String id : ids(input, "journalIds"))
-            store.jdbc().queryForList("select id from acc_gl_journal_entry where id=? for update", id);
+            store.jdbc().queryForList("select id from acc_gl_journal_entry where id=? for update", Long.parseLong(id));
         ObjectNode planned = plan(input, config);
         require(text(apply, "planHash").equals(text(planned, "planHash")), "SOURCE_CHANGED");
         var rows = inventory.collect(scope, ids(input, "nativeLoanIds"), ids(input, "journalIds"));
@@ -140,12 +140,12 @@ public class ReceivablesMaintenance {
             accounts.add(string(account, "external_id"));
             String loanId = string(account, "native_loan_id");
             require(loans.add(loanId), "OWNERSHIP_CONFLICT");
-            var loan = store.jdbc().queryForMap("select * from m_loan where id=?", loanId);
+            var loan = store.jdbc().queryForMap("select * from m_loan where id=?", Long.parseLong(loanId));
             require(number(loan, "product_id") == number(config, "product_id")
                     && string(loan, "external_id").equals("R" + string(account, "record_key"))
                     && number(loan, "client_id") == number(account, "native_client_id"), "OWNERSHIP_CONFLICT");
-            require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_account where native_loan_id=?", Long.class, loanId) == 1,
-                    "OWNERSHIP_CONFLICT");
+            require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_account where native_loan_id=?", Long.class,
+                    Long.parseLong(loanId)) == 1, "OWNERSHIP_CONFLICT");
         }
         require(accounts.equals(ids(input, "accountIds")) && loans.equals(ids(input, "nativeLoanIds")), "OWNERSHIP_CONFLICT");
         for (var command : store.scoped("command", scope)) {
@@ -165,7 +165,7 @@ public class ReceivablesMaintenance {
         for (var line : store.scoped("journal_line", scope)) {
             String journalId = string(line, "native_journal_id");
             require(journals.add(journalId) && eventKeys.contains(string(line, "event_key")), "OWNERSHIP_CONFLICT");
-            var journal = store.jdbc().queryForMap("select * from acc_gl_journal_entry where id=?", journalId);
+            var journal = store.jdbc().queryForMap("select * from acc_gl_journal_entry where id=?", Long.parseLong(journalId));
             require(string(journal, "ref_num").equals(string(line, "source_line_id"))
                     && string(journal, "transaction_id").equals("R" + string(line, "event_key").substring(0, 40))
                     && number(journal, "account_id") == number(line, "native_gl_id")
@@ -175,7 +175,7 @@ public class ReceivablesMaintenance {
                     && journal.get("client_transaction_id") == null && journal.get("share_transaction_id") == null
                     && journal.get("loan_transaction_id") == null && journal.get("savings_transaction_id") == null, "OWNERSHIP_CONFLICT");
             require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_journal_line where native_journal_id=?", Long.class,
-                    journalId) == 1, "OWNERSHIP_CONFLICT");
+                    Long.parseLong(journalId)) == 1, "OWNERSHIP_CONFLICT");
         }
         require(journals.equals(ids(input, "journalIds")), "OWNERSHIP_CONFLICT");
         Set<String> sourceJournals = new TreeSet<>();

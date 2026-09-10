@@ -134,7 +134,8 @@ public class ReceivablesResetInventory {
         for (Rows rows : tables) {
             int count = 0;
             for (String id : rows.ids())
-                count += store.jdbc().update("delete from " + rows.table() + " where " + rows.primaryKey() + "=?", id);
+                count += store.jdbc().update("delete from " + rows.table() + " where " + rows.primaryKey() + "=?",
+                        rows.primaryKey().equals("record_key") ? id : Long.parseLong(id));
             require(count == rows.values().size(), "SOURCE_CHANGED");
             counts.addObject().put("table", rows.table()).put("count", count);
         }
@@ -146,7 +147,8 @@ public class ReceivablesResetInventory {
         // Bounded parameters avoid backend-specific array syntax and unbounded SQL parameter lists.
         Map<String, Map<String, Object>> found = new TreeMap<>();
         for (String id : ids) {
-            for (var row : store.jdbc().queryForList("select * from " + identifier(table) + " where " + identifier(column) + "=?", id)) {
+            for (var row : store.jdbc().queryForList("select * from " + identifier(table) + " where " + identifier(column) + "=?",
+                    Long.parseLong(id))) {
                 found.put(row.toString(), row);
             }
         }

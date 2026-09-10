@@ -50,7 +50,7 @@ class ReceivablesResetInventoryTest {
         when(keys.getString("FKCOLUMN_NAME")).thenReturn("loan_id");
         when(keys.getString("PKCOLUMN_NAME")).thenReturn("id");
         when(keys.getShort("KEY_SEQ")).thenReturn((short) 1);
-        when(jdbc.queryForList("select * from m_note where loan_id=?", "7")).thenReturn(List.of(Map.of("id", 9L, "loan_id", 7L)));
+        when(jdbc.queryForList("select * from m_note where loan_id=?", 7L)).thenReturn(List.of(Map.of("id", 9L, "loan_id", 7L)));
         when(jdbc.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Void>>any())).thenAnswer(call -> {
             ConnectionCallback<Void> callback = call.getArgument(0);
             return callback.doInConnection(connection);
