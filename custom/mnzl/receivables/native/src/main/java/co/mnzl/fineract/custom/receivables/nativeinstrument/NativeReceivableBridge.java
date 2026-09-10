@@ -222,7 +222,7 @@ public class NativeReceivableBridge {
             throw new IllegalArgumentException("Only a live identified collection can be reversed");
         }
         for (LoanTransactionToRepaymentScheduleMapping mapping : transaction.getLoanTransactionToRepaymentScheduleMappings()) {
-            LoanRepaymentScheduleInstallment period = mapping.getLoanRepaymentScheduleInstallment();
+            LoanRepaymentScheduleInstallment period = period(loan, mapping.getLoanRepaymentScheduleInstallment().getId());
             period.setPrincipalCompleted(
                     period.getPrincipalCompleted(loan.getCurrency()).getAmount().subtract(mapping.getPrincipalPortion()));
             period.updateObligationsMet(loan.getCurrency(), date);
