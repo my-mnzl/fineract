@@ -37,6 +37,9 @@ file("${rootDir}/custom").eachDir { companyDir ->
     }
 }
 def customDockerJarTasks = customDockerProjects.collect { it.tasks.named('jar') }
+// Preserve every module JAR while resolving its transitive runtime separately.
+def customDockerRuntime = files(customDockerJarTasks.collect { it.flatMap { task -> task.archiveFile } },
+        customDockerProjects.collect { it.configurations.runtimeClasspath })
 
 jib {
     from {
@@ -76,7 +79,7 @@ jib {
     dependencies {
         implementation project(':fineract-core')
         implementation project(':fineract-provider')
-        customDockerProjects.each { customProject -> implementation customProject }
+        implementation customDockerRuntime
         // NOTE: other custom dependencies
         implementation 'org.mariadb.jdbc:mariadb-java-client'
         implementation 'com.mysql:mysql-connector-j'

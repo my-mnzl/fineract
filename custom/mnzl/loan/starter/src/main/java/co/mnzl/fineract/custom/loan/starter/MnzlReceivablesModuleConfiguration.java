@@ -25,4 +25,4 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 @ComponentScan("co.mnzl.fineract.custom.receivables")
 @ConditionalOnProperty(name = "mnzl.loan.receivables.enabled", havingValue = "true", matchIfMissing = true)
-public class ReceivablesConfiguration {}
+public class MnzlReceivablesModuleConfiguration {}

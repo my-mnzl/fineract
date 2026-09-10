@@ -232,17 +232,14 @@ def customRuntimeProjects = rootProject.subprojects.findAll {
     it.path.startsWith(':custom:') && !it.path.startsWith(':custom:acme:') && it.path != ':custom:docker' && it.tasks.findByName('jar') != null
 }
 def customRuntimeJarTasks = customRuntimeProjects.collect { it.tasks.named('jar') }
-// Keep custom modules out of the provider's published runtime dependencies to avoid
-// a cycle: custom services already depend on the provider.
-def customModuleRuntime = configurations.create('customModuleRuntime') {
-    canBeConsumed = false
-    canBeResolved = true
-}
-customRuntimeProjects.each { customProject -> dependencies.add('customModuleRuntime', customProject) }
+// Resolve each module separately: modules such as the starters share Gradle
+// coordinates, so resolving them together can silently discard custom JARs.
+def customRuntimeFiles = files(customRuntimeJarTasks.collect { it.flatMap { task -> task.archiveFile } },
+        customRuntimeProjects.collect { it.configurations.runtimeClasspath })
 
 tasks.named('bootRun') {
     dependsOn customRuntimeJarTasks
-    classpath += customModuleRuntime
+    classpath += customRuntimeFiles
 }
 
 springBoot {

@@ -26,6 +26,9 @@ def customWarProjects = rootProject.subprojects.findAll {
     it.path.startsWith(':custom:') && !it.path.startsWith(':custom:acme:') && it.path != ':custom:docker' && it.tasks.findByName('jar') != null
 }
 def customWarJarTasks = customWarProjects.collect { it.tasks.named('jar') }
+// Preserve every module JAR while resolving its transitive runtime separately.
+def customWarRuntime = files(customWarJarTasks.collect { it.flatMap { task -> task.archiveFile } },
+        customWarProjects.collect { it.configurations.runtimeClasspath })
 
 war {
     description = 'Assembles a WAR archive containing the web application'
@@ -94,7 +97,7 @@ dependencies {
     implementation project(':fineract-progressive-loan')
     implementation project(':fineract-savings')
     implementation project(':fineract-provider')
-    customWarProjects.each { customProject -> runtimeOnly customProject }
+    runtimeOnly customWarRuntime
 }
 
 tasks.named('war') {
