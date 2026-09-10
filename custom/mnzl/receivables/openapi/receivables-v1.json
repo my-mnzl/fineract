@@ -8874,6 +8874,9 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "nativeClientId": {
+            "$ref": "#/components/schemas/id"
+          },
           "position": {
             "$ref": "#/components/schemas/position"
           },
@@ -8888,6 +8891,7 @@
           }
         },
         "required": [
+          "nativeClientId",
           "position",
           "measurementLegs",
           "eventWatermark"
