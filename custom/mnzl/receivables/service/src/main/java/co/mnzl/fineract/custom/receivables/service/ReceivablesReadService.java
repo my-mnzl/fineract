@@ -240,20 +240,34 @@ public class ReceivablesReadService {
             if (event.path("sourceTransactionIds").isEmpty()) {
                 String type = switch (string(eventRow, "command_type")) {
                     case "CLOSE_PERIOD" -> "ACCRUAL";
-                    case "SET_IMPAIRMENT" -> "IMPAIRMENT";
+                    case "SET_IMPAIRMENT", "SET_DEVELOPER_IMPAIRMENT" -> "IMPAIRMENT";
+                    case "RECOVER_WRITTEN_OFF" -> "RECOVERY";
                     case "CORRECT_EVENT" -> "CORRECTION";
                     case "RESET_RATE", "WORKOUT" -> "MODIFICATION";
                     default -> null;
                 };
                 if (type != null) {
                     var journals = store.jdbc().queryForList(
-                            "select j.transaction_id,j.amount,j.type_enum from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.event_key=? and l.account_key=? order by j.id",
+                            "select j.transaction_id,j.amount,j.type_enum,l.semantic_account from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.event_key=? and l.account_key=? order by j.id",
                             string(eventRow, "record_key"), string(account, "record_key"));
                     if (!journals.isEmpty()) {
                         BigInteger amount = journals.stream().filter(j -> number(j, "type_enum") == 2)
                                 .map(j -> new BigDecimal(string(j, "amount")).movePointRight(2).toBigIntegerExact())
                                 .reduce(BigInteger.ZERO, BigInteger::add);
+                        JsonNode command = json.read(string(store.require("command", string(eventRow, "operation_key")), "request_json"));
+                        if (type.equals("RECOVERY")) {
+                            amount = new BigInteger(text(command, "amountMinor"));
+                        } else if (string(eventRow, "command_type").equals("SET_DEVELOPER_IMPAIRMENT")) {
+                            amount = journals.stream().filter(j -> string(j, "semantic_account").equals("developerReceivableAllowance"))
+                                    .map(j -> new BigDecimal(string(j, "amount")).movePointRight(2).toBigIntegerExact())
+                                    .reduce(BigInteger.ZERO, BigInteger::add);
+                        }
                         ObjectNode wire = json.object();
+                        if (type.equals("RECOVERY")) {
+                            wire.set("payer", command.get("payer"));
+                            wire.set("payerReferenceId", command.get("payerReferenceId"));
+                            wire.set("originalWriteOffOperationId", command.get("originalWriteOffOperationId"));
+                        }
                         wire.put("transactionId", string(journals.getFirst(), "transaction_id"));
                         wire.put("accountId", id);
                         wire.set("operationId", event.get("operationId"));

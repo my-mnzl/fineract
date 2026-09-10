@@ -5213,6 +5213,16 @@
               "originalWriteOffOperationId": {
                 "$ref": "#/components/schemas/id"
               },
+              "payer": {
+                "type": "string",
+                "enum": [
+                  "BORROWER",
+                  "DEVELOPER"
+                ]
+              },
+              "payerReferenceId": {
+                "$ref": "#/components/schemas/id"
+              },
               "cashMovementId": {
                 "$ref": "#/components/schemas/id"
               },
@@ -5249,6 +5259,8 @@
               "approvalEvidenceIds",
               "commandType",
               "originalWriteOffOperationId",
+              "payer",
+              "payerReferenceId",
               "cashMovementId",
               "bankAllocationId",
               "amountMinor",
@@ -7734,6 +7746,16 @@
                       "originalWriteOffOperationId": {
                         "$ref": "#/components/schemas/id"
                       },
+                      "payer": {
+                        "type": "string",
+                        "enum": [
+                          "BORROWER",
+                          "DEVELOPER"
+                        ]
+                      },
+                      "payerReferenceId": {
+                        "$ref": "#/components/schemas/id"
+                      },
                       "cashMovementId": {
                         "$ref": "#/components/schemas/id"
                       },
@@ -7770,6 +7792,8 @@
                       "approvalEvidenceIds",
                       "commandType",
                       "originalWriteOffOperationId",
+                      "payer",
+                      "payerReferenceId",
                       "cashMovementId",
                       "bankAllocationId",
                       "amountMinor",
@@ -9755,6 +9779,19 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "payer": {
+            "type": "string",
+            "enum": [
+              "BORROWER",
+              "DEVELOPER"
+            ]
+          },
+          "payerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalWriteOffOperationId": {
+            "$ref": "#/components/schemas/id"
+          },
           "transactionId": {
             "$ref": "#/components/schemas/id"
           },
@@ -9789,6 +9826,7 @@
               "ASSIGNMENT_OUT",
               "MODIFICATION",
               "WRITE_OFF",
+              "RECOVERY",
               "ACCRUAL",
               "IMPAIRMENT",
               "CORRECTION"

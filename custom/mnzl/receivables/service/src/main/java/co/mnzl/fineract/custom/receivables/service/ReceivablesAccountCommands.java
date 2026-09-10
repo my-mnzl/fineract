@@ -580,6 +580,12 @@ public class ReceivablesAccountCommands {
         require(sourceKey.equals(string(allocation, "source_key")) && key.equals(string(allocation, "account_key"))
                 && "INCOMING".equals(string(source, "direction")) && e.date.equals(LocalDate.parse(string(source, "value_date"))),
                 "BANK_PROOF_MISMATCH");
+        String payer = text(e.command, "payer");
+        String payerReference = text(e.command, "payerReferenceId");
+        require(payerReference.equals(text(json.read(string(allocation, "allocation_json")), "beneficiaryReferenceId"))
+                && payerReference.equals(payer.equals("BORROWER") ? string(account, "customer_ref")
+                        : text(e.command.get("scope"), "developerOrganizationId")),
+                "BANK_PROOF_MISMATCH");
         cash.consumeAllocations(e, json.value(List.of(text(e.command, "bankAllocationId"))), value, "RECEIPT_UNAPPLIED",
                 string(account, "deal_id"));
         pair(e.lines, "cashUnapplied", "writtenOffRecoveryIncome", value, string(account, "external_id"), string(account, "deal_id"),
