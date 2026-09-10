@@ -608,6 +608,20 @@ public class ReceivablesAccountCommands {
         reconcileNative(store.require("account", key), measurement.position(store.require("account", key), e.date), e.date);
     }
 
+    public void settleDeveloper(ReceivablesExecution e) {
+        Set<String> accrued = new HashSet<>();
+        for (JsonNode requested : e.command.get("lots")) {
+            var lot = store.require("developer_lot", ReceivablesStore.key(e.scope, "lot", text(requested, "lotId")));
+            String accountKey = string(lot, "account_key");
+            if (accrued.add(accountKey)) {
+                var account = store.require("account", accountKey);
+                require(json.read(string(account, "scope_json")).equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
+                accrue(e, account);
+            }
+        }
+        cash.settleDeveloper(e);
+    }
+
     public void substitute(ReceivablesExecution e) {
         var old = account(e);
         String oldKey = string(old, "record_key");
@@ -654,6 +668,7 @@ public class ReceivablesAccountCommands {
         row.put("gross_minor", after.grossPurchaseBasisMinor().toString());
         row.put("net_minor", after.amortizedCostMinor().toString());
         row.put("allowance_minor", allowance.toString());
+        row.put("stage", text(e.command.get("replacementRiskForecast"), "stage"));
         row.put("active_segment_key", ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + newKey));
         row.put("last_event_key", null);
         row.put("created_at", java.sql.Timestamp.from(java.time.Instant.now()));
@@ -681,6 +696,13 @@ public class ReceivablesAccountCommands {
         for (JsonNode lotId : e.command.get("developerAdjustmentAllocationIds")) {
             var lot = store.require("developer_lot", ReceivablesStore.key(e.scope, "lot", lotId.asText()));
             require(oldKey.equals(string(lot, "account_key")), "OWNERSHIP_CONFLICT");
+            boolean payable = string(lot, "direction").equals("PAYABLE");
+            String accountCode = payable ? "developerPayable" : "developerReceivable";
+            BigInteger outstandingLot = amount(lot, "carrying_minor").subtract(amount(lot, "settled_minor"));
+            line(e.lines, accountCode, payable ? "DEBIT" : "CREDIT", outstandingLot, oldId, deal, "DEVELOPER_ADJUSTMENT");
+            line(e.lines, accountCode, payable ? "CREDIT" : "DEBIT", outstandingLot, newId, deal, "DEVELOPER_ADJUSTMENT");
+            line(e.lines, "developerReceivableAllowance", "DEBIT", amount(lot, "allowance_minor"), oldId, deal, "IMPAIRMENT");
+            line(e.lines, "developerReceivableAllowance", "CREDIT", amount(lot, "allowance_minor"), newId, deal, "IMPAIRMENT");
             store.update("developer_lot", string(lot, "record_key"), Map.of("account_key", newKey));
             e.lotKeys.add(string(lot, "record_key"));
         }
@@ -761,7 +783,7 @@ public class ReceivablesAccountCommands {
         store.update("account", key,
                 Map.of("face_minor", after.contractualOutstandingMinor().toString(), "gross_minor",
                         after.grossPurchaseBasisMinor().toString(), "net_minor", after.amortizedCostMinor().toString(), "allowance_minor",
-                        allowance.toString()));
+                        allowance.toString(), "stage", text(e.command.get("riskForecast"), "stage")));
         saveForecast(e, key, e.command.get("riskForecast"), allowance);
     }
 

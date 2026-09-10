@@ -96,7 +96,7 @@ public class ReceivablesCommandService {
             case "COLLECT" -> accounts.collect(execution, false);
             case "REVERSE_COLLECTION" -> accounts.reverse(execution);
             case "RESET_RATE" -> accounts.reset(execution);
-            case "SETTLE_DEVELOPER_ADJUSTMENT" -> cash.settleDeveloper(execution);
+            case "SETTLE_DEVELOPER_ADJUSTMENT" -> accounts.settleDeveloper(execution);
             case "SETTLE_RECEIVABLE" -> accounts.settle(execution, false);
             case "RECOURSE_RECOVERY" -> accounts.recourse(execution);
             case "SUBSTITUTE_RECEIVABLE" -> accounts.substitute(execution);
