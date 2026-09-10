@@ -232,11 +232,17 @@ def customRuntimeProjects = rootProject.subprojects.findAll {
     it.path.startsWith(':custom:') && !it.path.startsWith(':custom:acme:') && it.path != ':custom:docker' && it.tasks.findByName('jar') != null
 }
 def customRuntimeJarTasks = customRuntimeProjects.collect { it.tasks.named('jar') }
-def customRuntimeJars = files(customRuntimeJarTasks.collect { it.flatMap { task -> task.archiveFile } })
+// Keep custom modules out of the provider's published runtime dependencies to avoid
+// a cycle: custom services already depend on the provider.
+def customModuleRuntime = configurations.create('customModuleRuntime') {
+    canBeConsumed = false
+    canBeResolved = true
+}
+customRuntimeProjects.each { customProject -> dependencies.add('customModuleRuntime', customProject) }
 
 tasks.named('bootRun') {
     dependsOn customRuntimeJarTasks
-    classpath += customRuntimeJars
+    classpath += customModuleRuntime
 }
 
 springBoot {

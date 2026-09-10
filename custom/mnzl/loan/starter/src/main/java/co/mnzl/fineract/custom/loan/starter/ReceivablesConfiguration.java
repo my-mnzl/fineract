@@ -18,11 +18,11 @@
  */
 package co.mnzl.fineract.custom.loan.starter;
 
-import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 
-@AutoConfiguration
-@ComponentScan("co.mnzl.fineract.custom.loan")
-@ConditionalOnProperty(name = "mnzl.loan.enabled", havingValue = "true", matchIfMissing = true)
-public class CustomLoanAutoConfiguration {}
+@Configuration(proxyBeanMethods = false)
+@ComponentScan("co.mnzl.fineract.custom.receivables")
+@ConditionalOnProperty(name = "mnzl.loan.receivables.enabled", havingValue = "true", matchIfMissing = true)
+public class ReceivablesConfiguration {}

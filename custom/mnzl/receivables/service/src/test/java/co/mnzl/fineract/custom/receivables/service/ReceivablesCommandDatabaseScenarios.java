@@ -245,8 +245,8 @@ final class ReceivablesCommandDatabaseScenarios {
         List<String> lineIds = new ArrayList<>();
         for (JsonNode line : event.path("journalLines")) {
             if (line.path("component").asText().equals("CASH")
-                    || line.path("accountKey").asText().equals("lossAllowance") && line.path("side").asText().equals("DEBIT")
-                    || line.path("accountKey").asText().equals("impairmentExpense") && line.path("side").asText().equals("CREDIT")) {
+                    || (line.path("accountKey").asText().equals("lossAllowance") && line.path("side").asText().equals("DEBIT"))
+                    || (line.path("accountKey").asText().equals("impairmentExpense") && line.path("side").asText().equals("CREDIT"))) {
                 lineIds.add(line.path("sourceLineId").asText());
             }
         }
