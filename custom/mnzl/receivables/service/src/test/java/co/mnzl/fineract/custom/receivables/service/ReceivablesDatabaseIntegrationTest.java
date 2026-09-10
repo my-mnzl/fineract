@@ -61,20 +61,21 @@ class ReceivablesDatabaseIntegrationTest {
     static class Application {}
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
-    private final ReceivablesJson json = new ReceivablesJson();
+    final ReceivablesJson json = new ReceivablesJson();
     private String base;
     private String tenantUrl;
     private String storeUrl;
     private String activeTenant = "default";
+    String authentication = "mifos:password";
     private String databaseUser;
     private String databasePassword;
     private long ordinaryProductId;
     private long helPaymentTypeId;
-    private final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
-    private final Map<String, Long> accounts = new LinkedHashMap<>();
+    final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
+    final Map<String, Long> accounts = new LinkedHashMap<>();
     private final LocalDate startDate = LocalDate.now(ZoneOffset.UTC);
-    private LocalDate today = startDate;
-    private final String prefix = "/mnzl/receivables";
+    LocalDate today = startDate;
+    static final String PREFIX = "/mnzl/receivables";
 
     ReceivablesDatabaseIntegrationTest() throws Exception {}
 
@@ -116,6 +117,7 @@ class ReceivablesDatabaseIntegrationTest {
                 verifyRollback(database);
                 boolean ordinaryPassed = ordinaryRegression();
                 verifyServicingAndClose();
+                new ReceivablesCommandDatabaseScenarios(this).verify();
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
                         "select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100") == 0;
@@ -132,7 +134,10 @@ class ReceivablesDatabaseIntegrationTest {
                         "idempotent-retry", "changed-payload-conflict", "stale-version", "scope-conflict",
                         "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
                         "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
-                        "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal")));
+                        "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
+                        "canonical-borrower-without-financial-effects", "partial-and-full-settlement", "developer-cash-settlement",
+                        "cashless-substitution-carries-basis", "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
+                        "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -151,10 +156,10 @@ class ReceivablesDatabaseIntegrationTest {
         };
     }
 
-    private JsonNode request(String method, String path, JsonNode payload, int status) throws Exception {
+    JsonNode request(String method, String path, JsonNode payload, int status) throws Exception {
         var builder = HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(90))
                 .header("Authorization",
-                        "Basic " + Base64.getEncoder().encodeToString("mifos:password".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        "Basic " + Base64.getEncoder().encodeToString(authentication.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .header("Fineract-Platform-TenantId", activeTenant).header("Content-Type", "application/json")
                 .header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", "financier").header("X-MNZL-Environment", "test")
                 .header("X-MNZL-Ledger-Epoch", "epoch").header("X-MNZL-Account-Mapping", "mapping-1");
@@ -166,7 +171,7 @@ class ReceivablesDatabaseIntegrationTest {
         return json.read(response.body());
     }
 
-    private ObjectNode scope(boolean developer) {
+    ObjectNode scope(boolean developer) {
         ObjectNode scope = json.object();
         scope.put("platformId", "mnzl");
         scope.put("financierOrganizationId", "financier");
@@ -188,7 +193,7 @@ class ReceivablesDatabaseIntegrationTest {
         return value;
     }
 
-    private ObjectNode command(String type, String operation, String subject, String kind) {
+    ObjectNode command(String type, String operation, String subject, String kind) {
         ObjectNode command = json.object();
         command.put("commandType", type);
         command.put("executionMode", "CURRENT");
@@ -251,10 +256,14 @@ class ReceivablesDatabaseIntegrationTest {
             mapping.add(row);
         });
         configuration.set("accountMap", json.value(mapping));
-        assertThat(request("POST", prefix + "/configuration", configuration, 200).path("productConfigurationReady").asBoolean()).isTrue();
+        assertThat(request("POST", PREFIX + "/configuration", configuration, 200).path("productConfigurationReady").asBoolean()).isTrue();
     }
 
-    private JsonNode purchase(String id) throws Exception {
+    JsonNode purchase(String id) throws Exception {
+        return purchase(id, "1", "99999");
+    }
+
+    JsonNode purchase(String id, String first, String second) throws Exception {
         ObjectNode basis = versions();
         basis.put("settlementDate", today.toString());
         basis.put("corridorObservationId", "rate");
@@ -271,7 +280,7 @@ class ReceivablesDatabaseIntegrationTest {
             flow.put("receivableId", id);
             flow.put("installmentId", id + "-" + i);
             flow.put("dueDate", today.plusDays(i == 0 ? 45 : 90).toString());
-            flow.put("amountMinor", i == 0 ? "1" : "99999");
+            flow.put("amountMinor", i == 0 ? first : second);
             flow.put("currency", "EGP");
             flow.put("scheduleVersionId", "schedule-1");
             flows.add(flow);
@@ -281,7 +290,7 @@ class ReceivablesDatabaseIntegrationTest {
         calculate.put("calculationType", "PRICE");
         calculate.set("basis", basis);
         calculate.put("basisHash", json.hash(basis));
-        JsonNode pricing = request("POST", prefix + "/calculate", calculate, 200).path("pricing").path("accounts").get(0);
+        JsonNode pricing = request("POST", PREFIX + "/calculate", calculate, 200).path("pricing").path("accounts").get(0);
         ObjectNode accepted = json.object();
         for (String field : List.of("accountId", "grossPurchasePriceMinor", "integralFeeMinor", "netPurchaseCashMinor")) {
             accepted.set(field, pricing.get(field));
@@ -305,7 +314,7 @@ class ReceivablesDatabaseIntegrationTest {
         source.set("allocations", json.value(List.of(allocation)));
         ObjectNode cash = command("RECORD_CASH_MOVEMENT", id + "-cash", "deal", "DEAL");
         cash.set("source", source);
-        request("POST", prefix + "/commands", cash, 200);
+        request("POST", PREFIX + "/commands", cash, 200);
         ObjectNode book = command("BOOK_PURCHASE", id + "-book", id, "RECEIVABLE");
         book.put("accountId", id);
         book.put("dealId", "deal");
@@ -337,10 +346,10 @@ class ReceivablesDatabaseIntegrationTest {
         forecast.set("scenarios", json.value(List.of(scenario)));
         book.set("riskForecast", forecast);
         bookingCommands.put(id, book);
-        return request("POST", prefix + "/commands", book, 200);
+        return request("POST", PREFIX + "/commands", book, 200);
     }
 
-    private long queryLong(String sql) throws Exception {
+    long queryLong(String sql) throws Exception {
         try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
                 var statement = connection.createStatement();
                 var rows = statement.executeQuery(sql)) {
@@ -349,7 +358,16 @@ class ReceivablesDatabaseIntegrationTest {
         }
     }
 
-    private void executeSql(String sql) throws Exception {
+    String queryText(String sql) throws Exception {
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery(sql)) {
+            assertThat(rows.next()).isTrue();
+            return rows.getString(1);
+        }
+    }
+
+    void executeSql(String sql) throws Exception {
         try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
                 var statement = connection.createStatement()) {
             statement.execute(sql);
@@ -366,7 +384,7 @@ class ReceivablesDatabaseIntegrationTest {
     }
 
     private void verifyPurchaseAndIdempotency(JsonNode booked) throws Exception {
-        JsonNode account = request("GET", prefix + "/accounts/account-1", null, 200);
+        JsonNode account = request("GET", PREFIX + "/accounts/account-1", null, 200);
         long loan = Long.parseLong(account.path("nativeLoanId").asText());
         assertThat(account.path("position").path("contractualOutstandingMinor").asText()).isEqualTo("100000");
         assertThat(queryLong("select count(*) from m_loan_repayment_schedule where loan_id=" + loan + " and principal_amount=0.01"))
@@ -375,22 +393,22 @@ class ReceivablesDatabaseIntegrationTest {
         assertThat(queryLong("select count(*) from m_loan_transaction where loan_id=" + loan + " and transaction_type_enum=1")).isZero();
         Map<String, Long> before = counts();
         ObjectNode command = bookingCommands.get("account-1");
-        assertThat(request("POST", prefix + "/commands", command, 200)).isEqualTo(booked);
+        assertThat(request("POST", PREFIX + "/commands", command, 200)).isEqualTo(booked);
         assertThat(counts()).isEqualTo(before);
         ObjectNode conflict = command.deepCopy();
         conflict.put("customerReferenceId", "different-customer");
-        assertThat(request("POST", prefix + "/commands", conflict, 409).path("code").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
+        assertThat(request("POST", PREFIX + "/commands", conflict, 409).path("code").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
         ObjectNode reset = command("RESET_RATE", "stale-reset", "account-1", "RECEIVABLE");
         reset.put("corridorObservationId", "new-rate");
         reset.put("corridorRate", "0.30");
         reset.put("spread", "0");
         reset.put("developerAdjustmentDueDate", today.plusDays(45).toString());
-        assertThat(request("POST", prefix + "/commands", reset, 409).path("code").asText()).isEqualTo("ACCOUNT_VERSION_CHANGED");
+        assertThat(request("POST", PREFIX + "/commands", reset, 409).path("code").asText()).isEqualTo("ACCOUNT_VERSION_CHANGED");
         reset.put("expectedVersion", "1");
         ((ObjectNode) reset.get("scope")).put("developerOrganizationId", "other-developer");
-        assertThat(request("POST", prefix + "/commands", reset, 409).path("code").asText()).isEqualTo("OWNERSHIP_CONFLICT");
+        assertThat(request("POST", PREFIX + "/commands", reset, 409).path("code").asText()).isEqualTo("OWNERSHIP_CONFLICT");
         assertThat(counts()).isEqualTo(before);
-        JsonNode controls = request("GET", prefix + "/controls?businessDate=" + today + "&boundarySide=AFTER_EVENTS", null, 200);
+        JsonNode controls = request("GET", PREFIX + "/controls?businessDate=" + today + "&boundarySide=AFTER_EVENTS", null, 200);
         for (JsonNode balance : controls.path("balances")) {
             assertThat(balance.path("differenceMinor").asText()).isEqualTo("0");
         }
@@ -444,7 +462,7 @@ class ReceivablesDatabaseIntegrationTest {
         allocation.set("amountMinor", accepted.get("netPurchaseCashMinor"));
         source.set("allocations", json.value(List.of(allocation)));
         cash.set("source", source);
-        request("POST", prefix + "/commands", cash, 200);
+        request("POST", PREFIX + "/commands", cash, 200);
         failed.set("acquisitionClearingAllocationIds", json.value(List.of("rollback-advance")));
         Map<String, Long> before = counts();
         if (database.equals("postgresql")) {
@@ -456,7 +474,7 @@ class ReceivablesDatabaseIntegrationTest {
                     "CREATE TRIGGER flex_fail_event BEFORE INSERT ON m_mnzl_r_event FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='flex-injected-event-failure'");
         }
         try {
-            request("POST", prefix + "/commands", failed, 500);
+            request("POST", PREFIX + "/commands", failed, 500);
             assertThat(counts()).isEqualTo(before);
             assertThat(queryLong("select count(*) from m_mnzl_r_cash_allocation where allocation_id='rollback-advance' and used_minor='0'"))
                     .isEqualTo(1);
@@ -466,7 +484,7 @@ class ReceivablesDatabaseIntegrationTest {
                 executeSql("DROP FUNCTION flex_fail_event()");
             }
         }
-        JsonNode retried = request("POST", prefix + "/commands", failed, 200);
+        JsonNode retried = request("POST", PREFIX + "/commands", failed, 200);
         assertThat(retried.path("nativeTransactionIds").size()).isEqualTo(1);
         assertThat(queryLong("select count(*) from m_mnzl_r_command where operation_id='failed-book'")).isEqualTo(1);
     }
@@ -569,15 +587,41 @@ class ReceivablesDatabaseIntegrationTest {
         fund.put("expectedPrincipalMinor", "100000");
         fund.put("expectedFinancedFeesMinor", "0");
         fund.set("financedFeeIds", json.value(List.of()));
-        JsonNode funded = request("POST", prefix + "/hel-funding/commands", fund, 200);
+        JsonNode funded = request("POST", PREFIX + "/hel-funding/commands", fund, 200);
         assertThat(funded.path("clearingAmountMinor").asText()).isEqualTo("100000");
         assertThat(funded.path("nativeLoanStatus").asText()).isEqualTo("ACTIVE");
         assertThat(funded.path("nativeTransactionIds").size()).isEqualTo(1);
         assertThat(funded.path("journalIds").size()).isGreaterThanOrEqualTo(2);
-        assertThat(request("POST", prefix + "/hel-funding/commands", fund, 200)).isEqualTo(funded);
+        assertThat(request("POST", PREFIX + "/hel-funding/commands", fund, 200)).isEqualTo(funded);
         assertThat(queryLong("select sum(case when j.type_enum=2 then j.amount*100 else -j.amount*100 end) "
                 + "from acc_gl_journal_entry j join m_loan_transaction t on t.id=j.loan_transaction_id where t.loan_id=" + helLoan
                 + " and j.account_id=" + accounts.get("helSettlementClearing"))).isEqualTo(-100000);
+        for (JsonNode configuration : request("GET", "/configurations", null, 200).path("globalConfiguration")) {
+            if (configuration.path("name").asText().equals("paymenttype-applicable-for-disbursement-charges")) {
+                request("PUT", "/configurations/" + configuration.path("id").asLong(), json.read("{\"enabled\":true}"), 200);
+            }
+        }
+        ObjectNode charge = (ObjectNode) json.read(
+                "{\"name\":\"Financed origination\",\"currencyCode\":\"EGP\",\"amount\":10,\"chargeAppliesTo\":1,\"chargeTimeType\":1,\"chargeCalculationType\":1,\"chargePaymentMode\":0,\"active\":true,\"penalty\":false,\"locale\":\"en\"}");
+        long chargeId = request("POST", "/charges", charge, 200).path("resourceId").asLong();
+        loan.put("externalId", "hel-fee-loan");
+        loan.set("charges", json.value(List.of(Map.of("chargeId", chargeId, "amount", 10))));
+        long feeLoan = request("POST", "/loans", loan, 200).path("loanId").asLong();
+        request("POST", "/loans/" + feeLoan + "?command=approve", approve, 200);
+        long feeId = queryLong("select id from m_loan_charge where loan_id=" + feeLoan);
+        fund.put("operationId", "hel-fee-fund");
+        fund.put("idempotencyKey", "hel-fee-fund");
+        fund.put("subjectId", "hel-fee-loan");
+        fund.put("loanExternalId", "hel-fee-loan");
+        fund.put("expectedFinancedFeesMinor", "1000");
+        fund.set("financedFeeIds", json.value(List.of(Long.toString(feeId))));
+        JsonNode feeFunding = request("POST", PREFIX + "/hel-funding/commands", fund, 200);
+        assertThat(feeFunding.path("clearingAmountMinor").asText()).isEqualTo("99000");
+        assertThat(feeFunding.path("nativeTransactionIds").size()).isEqualTo(2);
+        assertThat(request("POST", PREFIX + "/hel-funding/commands", fund, 200)).isEqualTo(feeFunding);
+        assertThat(queryLong("select sum(case when j.type_enum=2 then j.amount*100 else -j.amount*100 end) "
+                + "from acc_gl_journal_entry j join m_loan_transaction t on t.id=j.loan_transaction_id where t.loan_id=" + feeLoan
+                + " and j.account_id=" + accounts.get("helSettlementClearing"))).isEqualTo(-99000);
         return valid;
     }
 
@@ -590,18 +634,20 @@ class ReceivablesDatabaseIntegrationTest {
         }
         application.getBean(org.apache.fineract.infrastructure.core.service.migration.TenantDatabaseUpgradeService.class)
                 .afterPropertiesSet();
-        long firstLoan = Long.parseLong(request("GET", prefix + "/accounts/account-1", null, 200).path("nativeLoanId").asText());
+        long firstLoan = Long.parseLong(request("GET", PREFIX + "/accounts/account-1", null, 200).path("nativeLoanId").asText());
         activeTenant = "other";
         try {
             assertThat(request("GET", "/currencies", null, 200).path("selectedCurrencyOptions").isArray()).isTrue();
             request("GET", "/loans/" + firstLoan, null, 404);
-            assertThat(request("GET", prefix + "/accounts/account-1", null, 409).path("code").asText()).isEqualTo("RECOVERY_REQUIRED");
+            assertThat(request("GET", PREFIX + "/accounts/account-1", null, 409).path("code").asText()).isEqualTo("RECOVERY_REQUIRED");
         } finally {
             activeTenant = "default";
         }
     }
 
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING", justification = "Only fixed test tenant tables and JDBC metadata supply identifiers; all copied values are bound parameters")
     private void cloneTenantRow(java.sql.Connection connection, String table, Map<String, Object> overrides) throws Exception {
+        assertThat(table).isIn("tenant_server_connections", "tenants");
         try (var select = connection.createStatement(); var row = select.executeQuery("select * from " + table + " where id=1")) {
             assertThat(row.next()).isTrue();
             var metadata = row.getMetaData();
@@ -622,11 +668,11 @@ class ReceivablesDatabaseIntegrationTest {
         }
     }
 
-    private String version(String id) throws Exception {
-        return request("GET", prefix + "/accounts/" + id, null, 200).path("position").path("accountVersion").asText();
+    String version(String id) throws Exception {
+        return request("GET", PREFIX + "/accounts/" + id, null, 200).path("position").path("accountVersion").asText();
     }
 
-    private void moveDate(LocalDate date) throws Exception {
+    void moveDate(LocalDate date) throws Exception {
         JsonNode configurations = request("GET", "/configurations", null, 200);
         for (JsonNode configuration : configurations.path("globalConfiguration")) {
             if (configuration.path("name").asText().equals("enable-business-date")) {
@@ -649,15 +695,15 @@ class ReceivablesDatabaseIntegrationTest {
         reset.put("corridorRate", "0.30");
         reset.put("spread", "0");
         reset.put("developerAdjustmentDueDate", startDate.plusDays(45).toString());
-        request("POST", prefix + "/commands", reset, 200);
-        JsonNode lots = request("GET", prefix + "/developer-lots?businessDate=" + today + "&boundarySide=AFTER_EVENTS", null, 200);
+        request("POST", PREFIX + "/commands", reset, 200);
+        JsonNode lots = request("GET", PREFIX + "/developer-lots?businessDate=" + today + "&boundarySide=AFTER_EVENTS", null, 200);
         assertThat(lots.path("items").size()).isEqualTo(1);
         ObjectNode impairment = command("SET_IMPAIRMENT", "impair", "account-1", "RECEIVABLE");
         impairment.put("expectedVersion", version("account-1"));
         impairment.set("forecast", bookingCommands.get("account-1").get("riskForecast"));
         impairment.set("qualitativeFindingIds", json.value(List.of()));
         impairment.set("cureEvidenceIds", json.value(List.of()));
-        request("POST", prefix + "/commands", impairment, 200);
+        request("POST", PREFIX + "/commands", impairment, 200);
         LocalDate boundary = startDate.withDayOfMonth(1).plusMonths(1);
         moveDate(boundary);
         String period = boundary.minusDays(1).toString().substring(0, 7);
@@ -666,13 +712,13 @@ class ReceivablesDatabaseIntegrationTest {
         close.put("phase", "PREPARE");
         close.put("periodId", period);
         close.put("boundaryDate", boundary.toString());
-        close.put("eventWatermark", request("GET", prefix + "/capabilities", null, 200).path("currentEventWatermark").asText());
+        close.put("eventWatermark", request("GET", PREFIX + "/capabilities", null, 200).path("currentEventWatermark").asText());
         close.put("sourceCutoffHash", "0".repeat(64));
         close.set("forecastIds", json.value(List.of("account-1-forecast", "rollback-forecast")));
-        JsonNode prepared = request("POST", prefix + "/commands", close, 200);
+        JsonNode prepared = request("POST", PREFIX + "/commands", close, 200);
         String watermark = prepared.path("eventWatermark").asText();
         JsonNode frozen = request("GET",
-                prefix + "/controls?businessDate=" + boundary + "&boundarySide=BEFORE_EVENTS&eventWatermark=" + watermark, null, 200);
+                PREFIX + "/controls?businessDate=" + boundary + "&boundarySide=BEFORE_EVENTS&eventWatermark=" + watermark, null, 200);
         for (JsonNode balance : frozen.path("balances")) {
             assertThat(balance.path("differenceMinor").asText()).isEqualTo("0");
         }
@@ -684,7 +730,7 @@ class ReceivablesDatabaseIntegrationTest {
         finalize.put("phase", "FINALIZE");
         finalize.put("eventWatermark", watermark);
         finalize.put("reconciliationId", "independent-test-reconciliation");
-        request("POST", prefix + "/commands", finalize, 200);
+        request("POST", PREFIX + "/commands", finalize, 200);
         ObjectNode blocked = command("RESET_RATE", "closed-reset", "account-1", "RECEIVABLE");
         blocked.put("expectedVersion", version("account-1"));
         blocked.put("businessDate", boundary.minusDays(1).toString());
@@ -692,7 +738,7 @@ class ReceivablesDatabaseIntegrationTest {
         blocked.put("corridorRate", "0.30");
         blocked.put("spread", "0");
         blocked.put("developerAdjustmentDueDate", startDate.plusDays(45).toString());
-        assertThat(request("POST", prefix + "/commands", blocked, 409).path("code").asText()).isEqualTo("PERIOD_CLOSED");
+        assertThat(request("POST", PREFIX + "/commands", blocked, 409).path("code").asText()).isEqualTo("PERIOD_CLOSED");
         moveDate(startDate.plusDays(45));
         recordReceipt("due-receipt", "account-1", "1");
         ObjectNode collect = command("COLLECT", "collect-one", "account-1", "RECEIVABLE");
@@ -705,8 +751,8 @@ class ReceivablesDatabaseIntegrationTest {
         allocation.put("instrumentId", "cheque-1");
         allocation.put("amountMinor", "1");
         collect.set("allocations", json.value(List.of(allocation)));
-        JsonNode collected = request("POST", prefix + "/commands", collect, 200);
-        assertThat(request("GET", prefix + "/accounts/account-1", null, 200).path("position").path("contractualOutstandingMinor").asText())
+        JsonNode collected = request("POST", PREFIX + "/commands", collect, 200);
+        assertThat(request("GET", PREFIX + "/accounts/account-1", null, 200).path("position").path("contractualOutstandingMinor").asText())
                 .isEqualTo("99999");
         ObjectNode reverse = command("REVERSE_COLLECTION", "reverse-one", "account-1", "RECEIVABLE");
         reverse.put("expectedVersion", version("account-1"));
@@ -714,14 +760,14 @@ class ReceivablesDatabaseIntegrationTest {
         reverse.set("nativeTransactionId", collected.path("nativeTransactionIds").get(0));
         reverse.set("allocationIds", json.value(List.of("collected-one")));
         reverse.put("reasonCode", "bank-return");
-        request("POST", prefix + "/commands", reverse, 200);
-        assertThat(request("GET", prefix + "/accounts/account-1", null, 200).path("position").path("contractualOutstandingMinor").asText())
+        request("POST", PREFIX + "/commands", reverse, 200);
+        assertThat(request("GET", PREFIX + "/accounts/account-1", null, 200).path("position").path("contractualOutstandingMinor").asText())
                 .isEqualTo("100000");
-        assertThat(request("GET", prefix + "/controls?businessDate=" + boundary + "&boundarySide=BEFORE_EVENTS&eventWatermark=" + watermark,
+        assertThat(request("GET", PREFIX + "/controls?businessDate=" + boundary + "&boundarySide=BEFORE_EVENTS&eventWatermark=" + watermark,
                 null, 200)).isEqualTo(frozen);
     }
 
-    private void recordReceipt(String operation, String account, String amount) throws Exception {
+    void recordReceipt(String operation, String account, String amount) throws Exception {
         ObjectNode cash = command("RECORD_CASH_MOVEMENT", operation, "deal", "DEAL");
         ObjectNode source = json.object();
         source.put("bankSourceId", operation + "-bank");
@@ -740,6 +786,6 @@ class ReceivablesDatabaseIntegrationTest {
         allocation.put("amountMinor", amount);
         source.set("allocations", json.value(List.of(allocation)));
         cash.set("source", source);
-        request("POST", prefix + "/commands", cash, 200);
+        request("POST", PREFIX + "/commands", cash, 200);
     }
 }
