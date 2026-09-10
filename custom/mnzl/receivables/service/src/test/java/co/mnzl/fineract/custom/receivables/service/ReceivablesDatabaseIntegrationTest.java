@@ -130,14 +130,16 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));
                 evidence.put("nativeGlEntries", queryLong("select count(*) from acc_gl_journal_entry"));
                 evidence.put("pendingOutboxEvents", queryLong("select count(*) from m_mnzl_r_event where delivered_at is null"));
-                evidence.set("assertions", json.value(List.of("exact-face-and-small-cheque", "actual-native-journal-readback",
-                        "idempotent-retry", "changed-payload-conflict", "stale-version", "scope-conflict",
-                        "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
-                        "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
-                        "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
-                        "canonical-borrower-without-financial-effects", "partial-and-full-settlement", "developer-cash-settlement",
-                        "cashless-substitution-carries-basis", "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
-                        "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees")));
+                evidence.set("assertions",
+                        json.value(List.of("exact-face-and-small-cheque", "actual-native-journal-readback", "idempotent-retry",
+                                "changed-payload-conflict", "stale-version", "scope-conflict",
+                                "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
+                                "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing",
+                                "separate-tenant-database-isolation", "rate-reset", "impairment", "frozen-period-close",
+                                "closed-period-rejection", "due-collection-reversal", "canonical-borrower-without-financial-effects",
+                                "partial-and-full-settlement", "developer-cash-settlement", "cashless-substitution-carries-basis",
+                                "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
+                                "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
