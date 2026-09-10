@@ -104,12 +104,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Build and push exact tested source
-        env:
-          REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+      - name: Build exact tested source
         run: |
           ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild \
             -Djib.to.image=flex-receivables-build -x test -x cucumber
+      - name: Require actual image startup before publication
+        env:
+          IMAGE_NAME: flex-receivables-build
+          COMPOSE_PROJECT_NAME: flex-paired-image
+        run: |
+          trap 'docker compose -f docker-compose.yml logs --no-color; docker compose -f docker-compose.yml down -v' EXIT
+          docker compose -f docker-compose.yml up -d
+          curl --fail --silent --show-error --insecure --retry 60 --retry-all-errors \
+            --connect-timeout 5 --max-time 10 --retry-delay 5 \
+            https://localhost:8443/fineract-provider/actuator/health > /tmp/flex-image-health.json
+          python3 -c 'import json; assert json.load(open("/tmp/flex-image-health.json"))["status"] == "UP"'
+      - name: Publish boot-verified immutable image
+        env:
+          REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+        run: |
           native_commit="$(git rev-parse HEAD)"
           docker tag flex-receivables-build "$REGISTRY_IMAGE:$native_commit"
           docker push "$REGISTRY_IMAGE:$native_commit"
