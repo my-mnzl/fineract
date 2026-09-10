@@ -229,6 +229,8 @@ public class ReceivablesAccountCommands {
         BigInteger total = BigInteger.ZERO;
         for (JsonNode allocation : allocations) {
             require(ids.add(text(allocation, "allocationId")), "INVALID_DATA");
+            require(store.find("collection", ReceivablesStore.key(e.scope, "collection", text(allocation, "allocationId"))) == null,
+                    "IDEMPOTENCY_CONFLICT");
             String legKey = ReceivablesStore.key(e.scope, "leg", key + ":" + text(allocation, "cashflowId"));
             var leg = store.require("leg", legKey);
             require(text(allocation, "installmentId").equals(string(leg, "installment_id"))
@@ -248,6 +250,9 @@ public class ReceivablesAccountCommands {
         BigInteger released = allocateAllowance(account, p, selected);
         var partial = ReceivableEvents.settlePortions(p, selected, total, released);
         applyRemaining(e, account, partial.remainingMeasurement(measurement.state(account).segment()), released);
+        if (partial.retainedPosition().contractualOutstandingMinor().signum() == 0) {
+            store.update("account", key, Map.of("closure_reason", "PAID_IN_FULL"));
+        }
         for (JsonNode allocation : allocations) {
             String legKey = ReceivablesStore.key(e.scope, "leg", key + ":" + text(allocation, "cashflowId"));
             var leg = store.require("leg", legKey);
@@ -501,7 +506,9 @@ public class ReceivablesAccountCommands {
         String key = string(account, "record_key");
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
-        require(!Set.of("ASSIGNED_OUT", "WRITTEN_OFF").contains(string(account, "status")), "RECOVERY_REQUIRED");
+        require(!Set.of("ASSIGNED_OUT", "WRITTEN_OFF").contains(string(account, "status"))
+                && (account.get("closure_reason") == null || string(account, "closure_reason").equals("PAID_IN_FULL")),
+                "RECOVERY_REQUIRED");
         String original = ReceivablesStore.key(e.scope, "operation", text(e.command, "originalOperationId"));
         var rows = store.children("collection", "operation_key", original);
         require(!rows.isEmpty(), "SOURCE_CHANGED");

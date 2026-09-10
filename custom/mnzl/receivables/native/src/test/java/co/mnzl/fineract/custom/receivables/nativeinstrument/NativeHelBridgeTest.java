@@ -170,6 +170,9 @@ class NativeHelBridgeTest {
     void financedFeeIsWithheldFromClearingUsingNativeFeeJournal() {
         LoanCharge fee = mock(LoanCharge.class);
         when(fee.getId()).thenReturn(4L);
+        var definition = mock(org.apache.fineract.portfolio.charge.domain.Charge.class);
+        when(definition.getId()).thenReturn(14L);
+        when(fee.getCharge()).thenReturn(definition);
         when(fee.isDueAtDisbursement()).thenReturn(true);
         when(fee.amount()).thenReturn(new BigDecimal("10"));
         when(fee.getChargePaymentMode()).thenReturn(ChargePaymentMode.REGULAR);

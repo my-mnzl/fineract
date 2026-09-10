@@ -64,7 +64,7 @@ public class NativeHelBridge {
     private final EntityManager entityManager;
     private final JdbcTemplate jdbc;
 
-    public record Fee(long feeId, BigInteger amountMinor, String currency) {
+    public record Fee(long feeId, long definitionId, BigInteger amountMinor, String currency) {
     }
 
     public record ScheduleRow(int installmentNumber, LocalDate dueDate, BigInteger principalMinor, BigInteger interestMinor,
@@ -232,8 +232,8 @@ public class NativeHelBridge {
         List<Fee> fees = loan.getActiveCharges().stream()
                 .filter(charge -> charge.isDueAtDisbursement() && !charge.isWaived()
                         && (!charge.isFullyPaid() || financedPaid.contains(charge.getId())))
-                .map(charge -> new Fee(charge.getId(), minor(charge.amount()), "EGP")).sorted(Comparator.comparingLong(Fee::feeId))
-                .toList();
+                .map(charge -> new Fee(charge.getId(), charge.getCharge().getId(), minor(charge.amount()), "EGP"))
+                .sorted(Comparator.comparingLong(Fee::feeId)).toList();
         List<ScheduleRow> schedule = loan.getRepaymentScheduleInstallments().stream()
                 .map(period -> new ScheduleRow(period.getInstallmentNumber(), period.getDueDate(),
                         minor(period.getPrincipal(loan.getCurrency()).getAmount()),

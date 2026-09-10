@@ -405,7 +405,7 @@ public class ReceivablesReadService {
         List<JsonNode> fees = terms.financedFees().stream().map(fee -> {
             ObjectNode node = json.object();
             node.put("nativeChargeId", Long.toString(fee.feeId()));
-            node.put("componentId", Long.toString(fee.feeId()));
+            node.put("componentId", Long.toString(fee.definitionId()));
             node.put("amountMinor", fee.amountMinor().toString());
             return (JsonNode) node;
         }).toList();

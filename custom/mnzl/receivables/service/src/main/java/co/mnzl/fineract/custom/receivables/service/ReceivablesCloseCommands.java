@@ -145,6 +145,15 @@ public class ReceivablesCloseCommands {
                 && replacement.get("approverIds").equals(correction.get("approverIds"))
                 && text(replacement, "actorId").equals(text(correction, "actorId")), "APPROVAL_SCOPE_CHANGED");
         require(family.equals("COLLECT") || text(replacement, "recoveryKind").equals("DUE_REIMBURSEMENT"), "RECOVERY_REQUIRED");
+        Set<String> originalMovements = new HashSet<>();
+        originalCommand.get("allocations").forEach(a -> originalMovements.add(text(a, "cashMovementId")));
+        for (var allocation : replacement.get("allocations")) {
+            require(originalMovements.contains(text(allocation, "cashMovementId")), "BANK_PROOF_MISMATCH");
+        }
+        if (family.equals("RECOURSE_RECOVERY")) {
+            require(replacement.get("developerOrganizationId").equals(originalCommand.get("developerOrganizationId")),
+                    "OWNERSHIP_CONFLICT");
+        }
         require(replacement.has("riskForecastAfter"), "EVIDENCE_EXPIRED");
         require(store.find("command", ReceivablesStore.key(e.scope, "operation", text(replacement, "operationId"))) == null,
                 "IDEMPOTENCY_CONFLICT");
