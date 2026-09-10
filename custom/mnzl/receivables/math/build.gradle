@@ -29,3 +29,10 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
     testImplementation 'com.fasterxml.jackson.core:jackson-databind'
 }
+
+// Canonical JSON is copied byte-for-byte from MNZL; adding a comment header would
+// invalidate both JSON and the paired-build fixture hash. Java/Gradle sources
+// retain their Apache headers; RAT already excludes JSON data repository-wide.
+license {
+    excludes(['**/reference-vectors.json'])
+}
