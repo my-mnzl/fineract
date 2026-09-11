@@ -43,7 +43,7 @@ class ReceivablesPricingApiTest {
     private final PlatformSecurityContext security = mock(PlatformSecurityContext.class);
     private final AppUser user = mock(AppUser.class);
     private final HttpHeaders headers = mock(HttpHeaders.class);
-    private final ReceivablesWriteApiResource api = new ReceivablesWriteApiResource(commands,
+    private final ReceivablesWriteApiResource api = new ReceivablesWriteApiResource(commands, mock(ReceivablesMaintenance.class),
             new ReceivablesCalculationService(json, new ReceivablesMeasurement(null, json, null)), configuration, json, security);
 
     ReceivablesPricingApiTest() throws Exception {}
