@@ -709,8 +709,9 @@ class ReceivablesDatabaseIntegrationTest {
             var journals = reset.putArray("journalIds");
             for (JsonNode event : request("GET", PREFIX + "/events", null, 200).path("items")) {
                 sources.add(event.path("eventId").asText());
-                for (JsonNode journal : event.path("journalLines"))
+                for (JsonNode journal : event.path("journalLines")) {
                     journals.add(journal.path("journalId").asText());
+                }
             }
             ObjectNode wrongTenant = reset.deepCopy().put("tenantId", "other");
             assertThat(request("POST", PREFIX + "/maintenance/windows", wrongTenant, 409).path("code").asText())
