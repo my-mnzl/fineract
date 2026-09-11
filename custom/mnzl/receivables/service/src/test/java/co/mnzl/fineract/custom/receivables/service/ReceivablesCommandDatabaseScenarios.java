@@ -57,11 +57,81 @@ final class ReceivablesCommandDatabaseScenarios {
         writtenOffRecovery();
         developerImpairmentAfterDue();
         rateCorrection();
+        impairmentForecastTransitions();
         assertThat(harness
                 .queryLong("select count(*) from m_mnzl_r_journal_line l left join acc_gl_journal_entry j on j.id=l.native_journal_id "
                         + "where j.id is null or l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100 "
                         + "or j.type_enum<>case when l.side='DEBIT' then 2 else 1 end or j.currency_code<>'EGP'"))
                 .isZero();
+    }
+
+    private void impairmentForecastTransitions() throws Exception {
+        String id = "impairment-transition-account";
+        harness.purchase(id, "50000", "50000");
+        var acquisition = harness.today;
+        // Both original installments remain unpaid; the first is now 50 DPD.
+        harness.moveDate(acquisition.plusDays(95));
+        ObjectNode risk = harness.bookingCommands.get(id).path("riskForecast").deepCopy();
+        risk.put("forecastId", "transition-stage-two");
+        risk.put("forecastVersion", "2");
+        risk.put("asOfDate", harness.today.toString());
+        risk.put("validThroughDate", harness.today.plusDays(1).toString());
+        ((ObjectNode) risk.path("scenarios").get(0)).put("defaultDate", acquisition.plusDays(45).toString());
+        ((ObjectNode) risk.path("scenarios").get(0)).set("recoveries", harness.json.value(List.of()));
+        ObjectNode impairment = command("SET_IMPAIRMENT", "transition-stage-two", id);
+        impairment.set("forecast", risk);
+        impairment.set("qualitativeFindingIds", harness.json.value(List.of()));
+        impairment.set("cureEvidenceIds", harness.json.value(List.of()));
+        String originalVersion = harness.version(id);
+        long journals = harness.queryLong("select count(*) from acc_gl_journal_entry");
+        long events = harness.queryLong("select count(*) from m_mnzl_r_event");
+        // An incoming Stage 1 forecast must still fail the current delinquency floor.
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", impairment, 409).path("code").asText())
+                .isEqualTo("SOURCE_CHANGED");
+        assertThat(harness.version(id)).isEqualTo(originalVersion);
+        assertThat(harness.queryLong("select count(*) from acc_gl_journal_entry")).isEqualTo(journals);
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_event")).isEqualTo(events);
+        risk.put("stage", "STAGE_2");
+        execute(impairment);
+        assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("100000");
+        assertThat(balance(controls(id), "lossAllowance")).isEqualTo(-100000);
+
+        harness.moveDate(acquisition.plusDays(97));
+        impairment = command("SET_IMPAIRMENT", "transition-expired-renewal", id);
+        impairment.set("forecast", risk);
+        impairment.set("qualitativeFindingIds", harness.json.value(List.of()));
+        impairment.set("cureEvidenceIds", harness.json.value(List.of()));
+        originalVersion = harness.version(id);
+        // The replacement itself cannot be expired, even though an expired old forecast can be renewed.
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", impairment, 409).path("code").asText())
+                .isEqualTo("SOURCE_CHANGED");
+        assertThat(harness.version(id)).isEqualTo(originalVersion);
+        risk.put("forecastId", "transition-stage-three");
+        risk.put("forecastVersion", "3");
+        risk.put("asOfDate", harness.today.toString());
+        risk.put("validThroughDate", harness.today.plusDays(1).toString());
+        risk.put("stage", "STAGE_3");
+        impairment.set("qualitativeFindingIds", harness.json.value(List.of("approved-unlikeliness-to-pay")));
+        execute(impairment);
+
+        harness.moveDate(acquisition.plusDays(99));
+        risk.put("forecastId", "transition-stage-three-renewed");
+        risk.put("forecastVersion", "4");
+        risk.put("asOfDate", harness.today.toString());
+        risk.put("validThroughDate", harness.today.plusDays(365).toString());
+        ((ObjectNode) risk.path("scenarios").get(0)).set("recoveries", harness.json.value(List.of(Map.of("sourceCashflowId", id + "-0",
+                "date", harness.today.plusDays(30).toString(), "amountMinor", "25000", "payer", "BORROWER"))));
+        impairment = command("SET_IMPAIRMENT", "transition-stage-three-renewed", id);
+        impairment.set("forecast", risk);
+        impairment.set("qualitativeFindingIds", harness.json.value(List.of("approved-unlikeliness-to-pay")));
+        impairment.set("cureEvidenceIds", harness.json.value(List.of()));
+        execute(impairment);
+        // Matured face has no scheduled income; the previous zero-recovery forecast also has no time-value unwind.
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_journal_line l join m_mnzl_r_event e on e.record_key=l.event_key "
+                + "join m_mnzl_r_command c on c.record_key=e.operation_key where c.operation_id='transition-stage-three-renewed' "
+                + "and l.semantic_account='portfolioInterestIncome'")).isZero();
+        assertThat(account(id).path("position").path("lossAllowanceMinor").asLong()).isBetween(75000L, 100000L);
+        assertThat(balance(controls(id), "lossAllowance")).isEqualTo(-account(id).path("position").path("lossAllowanceMinor").asLong());
     }
 
     @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE", justification = "Isolated test queries interpolate only native SHA-256 event IDs")

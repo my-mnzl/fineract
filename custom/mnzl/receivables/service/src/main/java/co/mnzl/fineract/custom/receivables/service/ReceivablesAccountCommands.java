@@ -170,7 +170,10 @@ public class ReceivablesAccountCommands {
         require(!e.date.isBefore(previous), "PERIOD_CLOSED");
         Position p = measurement.position(account, e.date);
         if (e.date.isAfter(previous) && p.contractualOutstandingMinor().signum() > 0) {
-            measurement.allowance(p, measurement.state(account).segment(), latestForecast(key));
+            // Validate the approved replacement at this boundary; Stage 3 time passage below still uses the old
+            // forecast.
+            JsonNode forecast = "SET_IMPAIRMENT".equals(text(e.command, "commandType")) ? e.command.get("forecast") : latestForecast(key);
+            measurement.allowance(p, measurement.state(account).segment(), forecast);
         }
         BigInteger grossIncome = p.grossPurchaseBasisMinor().subtract(amount(account, "gross_minor"));
         BigInteger netIncome = p.amortizedCostMinor().subtract(amount(account, "net_minor"));
