@@ -32,6 +32,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +41,7 @@ import org.springframework.stereotype.Component;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @RequiredArgsConstructor
+@Slf4j
 public class ReceivablesWriteApiResource {
 
     private final ReceivablesCommandService commands;
@@ -71,8 +73,23 @@ public class ReceivablesWriteApiResource {
     @POST
     @Path("/commands")
     public String execute(@Context HttpHeaders headers, String request) {
-        authorizeRequest(headers, request);
-        return json.write(commands.execute(request));
+        long started = System.nanoTime();
+        JsonNode input = json.read(request);
+        String result = "FAILED";
+        try {
+            authorizeRequest(headers, request);
+            String response = json.write(commands.execute(request));
+            result = "COMPLETED";
+            return response;
+        } catch (ReceivablesException exception) {
+            result = exception.code();
+            throw exception;
+        } finally {
+            log.info("MNZL receivables command type={} operationId={} scope={} subject={} result={} latencyMs={}",
+                    input.path("commandType").asText(), input.path("operationId").asText(),
+                    ReceivablesJson.hashText(input.path("scope").toString()), ReceivablesJson.hashText(input.path("subjectId").asText()),
+                    result, (System.nanoTime() - started) / 1_000_000);
+        }
     }
 
     @POST

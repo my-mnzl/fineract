@@ -427,7 +427,7 @@ class ReceivablesDatabaseIntegrationTest {
         assertThat(request("POST", PREFIX + "/commands", reset, 409).path("code").asText()).isEqualTo("ACCOUNT_VERSION_CHANGED");
         reset.put("expectedVersion", "1");
         ((ObjectNode) reset.get("scope")).put("developerOrganizationId", "other-developer");
-        assertThat(request("POST", PREFIX + "/commands", reset, 409).path("code").asText()).isEqualTo("OWNERSHIP_CONFLICT");
+        assertThat(request("POST", PREFIX + "/commands", reset, 403).path("code").asText()).isEqualTo("OWNERSHIP_CONFLICT");
         assertThat(counts()).isEqualTo(before);
         JsonNode controls = request("GET", PREFIX + "/controls?businessDate=" + today + "&boundarySide=AFTER_EVENTS", null, 200);
         for (JsonNode balance : controls.path("balances")) {
