@@ -118,7 +118,9 @@ public class ReceivablesWriteApiResource {
         return json.write(calculations.calculate(request));
     }
 
-    /** Stateless product pricing preserves the caller's policy provenance, independently of the managed ledger's policy. */
+    /**
+     * Stateless product pricing preserves the caller's policy provenance, independently of the managed ledger's policy.
+     */
     @POST
     @Path("/pricing-calculations")
     public String calculatePricing(@Context HttpHeaders headers, String request) {
