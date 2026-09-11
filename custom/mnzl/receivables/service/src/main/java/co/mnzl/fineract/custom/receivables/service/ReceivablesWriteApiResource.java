@@ -31,7 +31,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import java.time.Instant;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +43,7 @@ import org.springframework.stereotype.Component;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 @RequiredArgsConstructor
+@Slf4j
 public class ReceivablesWriteApiResource {
 
     private final ReceivablesCommandService commands;
@@ -145,22 +149,42 @@ public class ReceivablesWriteApiResource {
     @POST
     @Path("/maintenance/windows")
     public String maintenanceWindow(@Context HttpHeaders headers, String request) {
-        maintenanceScope(headers, json.read(request));
-        return json.write(maintenance.begin(request));
+        return maintenanceAction(headers, request, "BEGIN", maintenance::begin);
     }
 
     @POST
     @Path("/maintenance/reset/plan")
     public String resetPlan(@Context HttpHeaders headers, String request) {
-        maintenanceScope(headers, json.read(request));
-        return json.write(maintenance.plan(request));
+        return maintenanceAction(headers, request, "PLAN", maintenance::plan);
     }
 
     @POST
     @Path("/maintenance/reset/apply")
     public String resetApply(@Context HttpHeaders headers, String request) {
-        maintenanceScope(headers, json.read(request).get("request"));
-        return json.write(maintenance.apply(request));
+        return maintenanceAction(headers, request, "APPLY", maintenance::apply);
+    }
+
+    private String maintenanceAction(HttpHeaders headers, String request, String operation, Function<String, JsonNode> action) {
+        JsonNode envelope = json.read(request);
+        JsonNode input = operation.equals("APPLY") ? envelope.path("request") : envelope;
+        Long actor = security.authenticatedUser().getId();
+        JsonNode result = json.object();
+        String outcome = "FAILED";
+        try {
+            maintenanceScope(headers, input);
+            result = action.apply(request);
+            outcome = "COMMITTED";
+            return json.write(result);
+        } catch (ReceivablesException exception) {
+            outcome = exception.code();
+            throw exception;
+        } finally {
+            log.info(
+                    "MNZL receivables maintenance actor={} operation={} scope={} window={} planHash={} removedCounts={} outcome={} timestamp={}",
+                    actor, operation, ReceivablesJson.hashText(input.path("scope").toString()), input.path("maintenanceWindowId").asText(),
+                    envelope.path("planHash").asText(result.path("planHash").asText()), result.path("removedCounts"), outcome,
+                    Instant.now());
+        }
     }
 
 }

@@ -729,6 +729,20 @@ class ReceivablesDatabaseIntegrationTest {
             assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 409).path("code").asText()).isEqualTo("SOURCE_CHANGED");
             assertThat(request("POST", PREFIX + "/maintenance/reset/plan", reset, 200)).isEqualTo(plan);
             apply.put("planHash", plan.path("planHash").asText());
+            long trialId = queryLong("select coalesce(max(id),0)+1 from m_trial_balance");
+            long journalId = Long.parseLong(journals.get(0).asText());
+            long beforeRejectedReset = queryLong("select count(*) from acc_gl_journal_entry");
+            executeSql("insert into m_trial_balance (id, office_id, account_id, amount, entry_date, created_date, closing_balance) "
+                    + "select " + trialId
+                    + ", office_id, account_id, amount, entry_date, entry_date, amount from acc_gl_journal_entry where id=" + journalId);
+            try {
+                assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 409).path("code").asText())
+                        .isEqualTo("RECOVERY_REQUIRED");
+                assertThat(queryLong("select count(*) from acc_gl_journal_entry")).isEqualTo(beforeRejectedReset);
+                assertThat(queryLong("select count(*) from m_trial_balance where id=" + trialId)).isEqualTo(1);
+            } finally {
+                executeSql("delete from m_trial_balance where id=" + trialId);
+            }
             JsonNode result = request("POST", PREFIX + "/maintenance/reset/apply", apply, 200);
             assertThat(result.path("retired").asBoolean()).isTrue();
             assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 200)).isEqualTo(result);

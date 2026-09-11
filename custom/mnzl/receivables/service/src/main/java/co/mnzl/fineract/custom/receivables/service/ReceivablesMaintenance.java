@@ -179,6 +179,11 @@ public class ReceivablesMaintenance {
                     && (number(journal, "type_enum") == 2) == string(line, "side").equals("DEBIT") && journal.get("entity_id") == null
                     && journal.get("client_transaction_id") == null && journal.get("share_transaction_id") == null
                     && journal.get("loan_transaction_id") == null && journal.get("savings_transaction_id") == null, "OWNERSHIP_CONFLICT");
+            // Trial balances are historical aggregates without a journal FK. Fail closed instead of leaving stale
+            // balances.
+            require(store.jdbc().queryForObject("select count(*) from m_trial_balance where office_id=? and account_id=? and entry_date>=?",
+                    Long.class, number(journal, "office_id"), number(journal, "account_id"), journal.get("entry_date")) == 0,
+                    "RECOVERY_REQUIRED");
             require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_journal_line where native_journal_id=?", Long.class,
                     Long.parseLong(journalId)) == 1, "OWNERSHIP_CONFLICT");
         }
