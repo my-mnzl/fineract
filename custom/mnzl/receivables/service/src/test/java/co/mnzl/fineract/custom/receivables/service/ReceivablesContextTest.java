@@ -92,8 +92,7 @@ class ReceivablesContextTest {
         for (var candidates : List.of(List.<Map<String, Object>>of(), List.of(row("platform", "retired", true)),
                 List.of(row("platform", "one", false), row("platform", "two", false)))) {
             rows(candidates);
-            assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test"))
-                    .isInstanceOf(ReceivablesException.class);
+            assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test")).isInstanceOf(ReceivablesException.class);
         }
     }
 

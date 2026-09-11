@@ -98,8 +98,7 @@ public class ReceivablesConfiguration {
         var candidates = store.jdbc()
                 .queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?", user.getId(),
                         financier)
-                .stream().filter(row -> !Boolean.TRUE.equals(row.get("retired")) && !"1".equals(string(row, "retired")))
-                .filter(row -> {
+                .stream().filter(row -> !Boolean.TRUE.equals(row.get("retired")) && !"1".equals(string(row, "retired"))).filter(row -> {
                     var scope = json.read(string(row, "scope_json"));
                     return platform.equals(text(scope, "platformId")) && financier.equals(text(scope, "financierOrganizationId"))
                             && environment.equals(text(scope, "environment"));
