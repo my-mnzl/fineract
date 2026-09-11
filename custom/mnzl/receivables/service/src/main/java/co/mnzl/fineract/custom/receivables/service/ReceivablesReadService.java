@@ -79,16 +79,15 @@ public class ReceivablesReadService {
         return configuration.discoverContext(platform, financier, environment);
     }
 
-    public JsonNode authorize(String platform, String financier, String environment, String epoch, String mapping) {
+    public JsonNode authorize(String platform, String financier, String environment, String mapping) {
         security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES");
         ObjectNode scope = json.object();
-        for (String value : new String[] { platform, financier, environment, epoch, mapping }) {
+        for (String value : new String[] { platform, financier, environment, mapping }) {
             require(value != null && !value.isBlank(), "INVALID_DATA");
         }
         scope.put("platformId", platform);
         scope.put("financierOrganizationId", financier);
         scope.put("environment", environment);
-        scope.put("ledgerEpoch", epoch);
         var config = configuration.authorize(scope, false);
         require(mapping.equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
         return scope;

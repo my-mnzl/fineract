@@ -27,7 +27,6 @@
 <column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
 <column name="scope_json" type="CLOB"><constraints nullable="false"/></column>
 <column name="financier_id" type="VARCHAR(200)"><constraints nullable="false"/></column>
-<column name="epoch" type="VARCHAR(200)"><constraints nullable="false"/></column>
 <column name="integration_user_id" type="BIGINT"><constraints nullable="false"/></column>
 <column name="product_id" type="BIGINT"><constraints nullable="false"/></column>
 <column name="office_id" type="BIGINT"><constraints nullable="false"/></column>

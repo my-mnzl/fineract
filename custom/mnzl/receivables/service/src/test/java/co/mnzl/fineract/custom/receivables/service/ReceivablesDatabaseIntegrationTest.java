@@ -170,7 +170,7 @@ class ReceivablesDatabaseIntegrationTest {
                         "Basic " + Base64.getEncoder().encodeToString(authentication.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .header("Fineract-Platform-TenantId", activeTenant).header("Content-Type", "application/json")
                 .header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", activeFinancier).header("X-MNZL-Environment", "test")
-                .header("X-MNZL-Ledger-Epoch", "epoch").header("X-MNZL-Account-Mapping", "mapping-1");
+                .header("X-MNZL-Account-Mapping", "mapping-1");
         var response = http.send(builder
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))
@@ -184,7 +184,6 @@ class ReceivablesDatabaseIntegrationTest {
         scope.put("platformId", "mnzl");
         scope.put("financierOrganizationId", "financier");
         scope.put("environment", "test");
-        scope.put("ledgerEpoch", "epoch");
         if (developer) {
             scope.put("developerOrganizationId", "developer");
         }

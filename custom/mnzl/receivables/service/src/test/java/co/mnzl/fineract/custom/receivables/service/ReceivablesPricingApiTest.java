@@ -55,7 +55,6 @@ class ReceivablesPricingApiTest {
         when(headers.getHeaderString("X-MNZL-Platform")).thenReturn("platform");
         when(headers.getHeaderString("X-MNZL-Financier")).thenReturn("mnzl");
         when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("test");
-        when(headers.getHeaderString("X-MNZL-Ledger-Epoch")).thenReturn("epoch");
     }
 
     private ObjectNode request(String type) {

@@ -52,8 +52,8 @@ public class ReceivablesWriteApiResource {
 
     private JsonNode scope(HttpHeaders headers) {
         var scope = json.object();
-        String[] fields = { "platformId", "financierOrganizationId", "environment", "ledgerEpoch" };
-        String[] names = { "X-MNZL-Platform", "X-MNZL-Financier", "X-MNZL-Environment", "X-MNZL-Ledger-Epoch" };
+        String[] fields = { "platformId", "financierOrganizationId", "environment" };
+        String[] names = { "X-MNZL-Platform", "X-MNZL-Financier", "X-MNZL-Environment" };
         for (int i = 0; i < fields.length; i++) {
             String value = headers.getHeaderString(names[i]);
             require(value != null && !value.isBlank(), "INVALID_DATA");

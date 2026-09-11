@@ -58,17 +58,12 @@ class ReceivablesContextTest {
         doReturn("authenticated-tenant").when(configuration).tenantId();
     }
 
-    private Map<String, Object> row(String platform, String epoch, boolean retired) {
-        var scope = json.object().put("platformId", platform).put("financierOrganizationId", "mnzl").put("environment", "test")
-                .put("ledgerEpoch", epoch);
+    private Map<String, Object> row(String platform) {
+        var scope = json.object().put("platformId", platform).put("financierOrganizationId", "mnzl").put("environment", "test");
         var row = new HashMap<String, Object>();
         row.put("scope_json", json.write(scope));
         row.put("scope_key", configuration.scopeKey(scope));
-        row.put("epoch", epoch);
         row.put("mapping_revision", "map-1");
-        if (retired) {
-            row.put("retired", true);
-        }
         return row;
     }
 
@@ -78,19 +73,18 @@ class ReceivablesContextTest {
 
     @Test
     void discoversOnlyTheAuthenticatedUsersActiveMatchingContext() {
-        rows(List.of(row("other-platform", "other", false), row("platform", "retired", true), row("platform", "active", false)));
+        rows(List.of(row("other-platform"), row("platform")));
         var result = configuration.discoverContext("platform", "mnzl", "test");
         assertThat(result.path("tenantId").asText()).isEqualTo("authenticated-tenant");
-        assertThat(result.path("scope").path("ledgerEpoch").asText()).isEqualTo("active");
+        assertThat(result.path("scope").path("platformId").asText()).isEqualTo("platform");
         assertThat(result.path("accountMappingRevisionId").asText()).isEqualTo("map-1");
         verify(user).validateHasPermissionTo("READ_MNZL_RECEIVABLES");
         verify(jdbc).queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?", 7L, "mnzl");
     }
 
     @Test
-    void rejectsMissingAmbiguousAndRetiredConfigurations() {
-        for (var candidates : List.of(List.<Map<String, Object>>of(), List.of(row("platform", "retired", true)),
-                List.of(row("platform", "one", false), row("platform", "two", false)))) {
+    void rejectsMissingAndAmbiguousConfigurations() {
+        for (var candidates : List.of(List.<Map<String, Object>>of(), List.of(row("platform"), row("platform")))) {
             rows(candidates);
             assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test")).isInstanceOf(ReceivablesException.class);
         }
@@ -104,10 +98,10 @@ class ReceivablesContextTest {
     }
 
     @Test
-    void rejectsIncompleteIdentityAndInconsistentNativeEpoch() {
+    void rejectsIncompleteIdentityAndInconsistentScope() {
         assertThatThrownBy(() -> configuration.discoverContext(null, "mnzl", "test")).isInstanceOf(ReceivablesException.class);
-        var row = row("platform", "active", false);
-        row.put("epoch", "different");
+        var row = row("platform");
+        row.put("scope_key", "different");
         rows(List.of(row));
         assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test")).isInstanceOf(ReceivablesException.class);
     }

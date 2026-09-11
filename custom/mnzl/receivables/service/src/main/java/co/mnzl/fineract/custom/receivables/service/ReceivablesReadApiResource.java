@@ -46,8 +46,7 @@ public class ReceivablesReadApiResource {
 
     private JsonNode scope(HttpHeaders headers) {
         return reads.authorize(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
-                headers.getHeaderString("X-MNZL-Environment"), headers.getHeaderString("X-MNZL-Ledger-Epoch"),
-                headers.getHeaderString("X-MNZL-Account-Mapping"));
+                headers.getHeaderString("X-MNZL-Environment"), headers.getHeaderString("X-MNZL-Account-Mapping"));
     }
 
     @SuppressWarnings("AvoidHidingCauseException") // Cause retained through initCause.

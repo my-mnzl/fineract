@@ -76,7 +76,7 @@ public class ReceivablesConfiguration {
 
     public String scopeKey(JsonNode scope) {
         ObjectNode financier = json.object();
-        for (String field : new String[] { "platformId", "financierOrganizationId", "environment", "ledgerEpoch" }) {
+        for (String field : new String[] { "platformId", "financierOrganizationId", "environment" }) {
             financier.put(field, text(scope, field));
         }
         return json.hash(financier);
@@ -95,10 +95,8 @@ public class ReceivablesConfiguration {
             require(value != null && !value.isBlank(), "INVALID_DATA");
         }
         require(Set.of("local", "test", "staging", "production").contains(environment), "INVALID_DATA");
-        var candidates = store.jdbc()
-                .queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?", user.getId(),
-                        financier)
-                .stream().filter(row -> !Boolean.TRUE.equals(row.get("retired")) && !"1".equals(string(row, "retired"))).filter(row -> {
+        var candidates = store.jdbc().queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?",
+                user.getId(), financier).stream().filter(row -> {
                     var scope = json.read(string(row, "scope_json"));
                     return platform.equals(text(scope, "platformId")) && financier.equals(text(scope, "financierOrganizationId"))
                             && environment.equals(text(scope, "environment"));
@@ -106,8 +104,7 @@ public class ReceivablesConfiguration {
         require(candidates.size() == 1, "FINERACT_CAPABILITY_MISSING");
         var config = candidates.getFirst();
         var scope = json.read(string(config, "scope_json"));
-        require(!text(scope, "ledgerEpoch").isBlank() && string(config, "epoch").equals(text(scope, "ledgerEpoch"))
-                && scopeKey(scope).equals(string(config, "scope_key")), "FINERACT_CAPABILITY_MISSING");
+        require(scopeKey(scope).equals(string(config, "scope_key")), "FINERACT_CAPABILITY_MISSING");
         var result = json.object();
         result.put("tenantId", tenantId());
         result.set("scope", scope);
@@ -119,7 +116,6 @@ public class ReceivablesConfiguration {
         String key = scopeKey(scope);
         Map<String, Object> config = lock ? store.lockConfiguration(key) : store.require("configuration", key);
         require(number(config, "integration_user_id") == security.authenticatedUser().getId(), "FINERACT_CAPABILITY_MISSING");
-        require(string(config, "epoch").equals(text(scope, "ledgerEpoch")), "FINERACT_CAPABILITY_MISSING");
         return config;
     }
 
@@ -147,7 +143,6 @@ public class ReceivablesConfiguration {
         fields.put("scope_key", scope);
         fields.put("scope_json", json.write(input.get("scope")));
         fields.put("financier_id", text(input.get("scope"), "financierOrganizationId"));
-        fields.put("epoch", text(input.get("scope"), "ledgerEpoch"));
         fields.put("integration_user_id", Long.parseLong(text(input, "integrationUserId")));
         fields.put("product_id", Long.parseLong(text(input, "productId")));
         fields.put("office_id", Long.parseLong(text(input, "officeId")));
