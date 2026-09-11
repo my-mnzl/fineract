@@ -1831,6 +1831,75 @@
           }
         }
       }
+    },
+    "/context": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeContext"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12013,6 +12082,27 @@
           "replacementAccountId",
           "replacementSourceHash",
           "approvedBy"
+        ],
+        "additionalProperties": false
+      },
+      "nativeContext": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "tenantId",
+          "scope",
+          "accountMappingRevisionId"
         ],
         "additionalProperties": false
       }

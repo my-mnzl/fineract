@@ -63,6 +63,13 @@ public class ReceivablesReadApiResource {
     }
 
     @GET
+    @Path("/context")
+    public String context(@Context HttpHeaders headers) {
+        return json.write(reads.discoverContext(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
+                headers.getHeaderString("X-MNZL-Environment")));
+    }
+
+    @GET
     @Path("/capabilities")
     public String capabilities(@Context HttpHeaders headers) {
         return json.write(reads.capabilities(scope(headers)));

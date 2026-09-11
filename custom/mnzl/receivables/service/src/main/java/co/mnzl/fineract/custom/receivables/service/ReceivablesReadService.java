@@ -75,6 +75,10 @@ public class ReceivablesReadService {
         }
     }
 
+    public JsonNode discoverContext(String platform, String financier, String environment) {
+        return configuration.discoverContext(platform, financier, environment);
+    }
+
     public JsonNode authorize(String platform, String financier, String environment, String epoch, String mapping) {
         security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES");
         ObjectNode scope = json.object();
