@@ -998,6 +998,61 @@
         }
       }
     },
+    "/pricing-calculations": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pricingCalculationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/calculationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
     "/calculate": {
       "post": {
         "parameters": [
@@ -8497,6 +8552,131 @@
               "kind",
               "cashSource",
               "interestMinor"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "pricingCalculationRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "calculationVersion": {
+                "type": "string",
+                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+              },
+              "productPolicyCode": {
+                "type": "string",
+                "const": "EG_RECEIVABLES_V1"
+              },
+              "schemaVersion": {
+                "type": "string",
+                "const": "1"
+              },
+              "policyRevisionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "calculatorBuild": {
+                "$ref": "#/components/schemas/id"
+              },
+              "basisHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "calculationType": {
+                "type": "string",
+                "const": "PRICE"
+              },
+              "basis": {
+                "$ref": "#/components/schemas/calculationBasis"
+              }
+            },
+            "required": [
+              "calculationVersion",
+              "productPolicyCode",
+              "schemaVersion",
+              "policyRevisionId",
+              "calculatorBuild",
+              "basisHash",
+              "calculationType",
+              "basis"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "calculationVersion": {
+                "type": "string",
+                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+              },
+              "productPolicyCode": {
+                "type": "string",
+                "const": "EG_RECEIVABLES_V1"
+              },
+              "schemaVersion": {
+                "type": "string",
+                "const": "1"
+              },
+              "policyRevisionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "calculatorBuild": {
+                "$ref": "#/components/schemas/id"
+              },
+              "basisHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "calculationType": {
+                "type": "string",
+                "const": "FUNDING"
+              },
+              "terms": {
+                "$ref": "#/components/schemas/fundingTerms"
+              },
+              "fromDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "throughDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "openingPrincipalMinor": {
+                "$ref": "#/components/schemas/version"
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "$ref": "#/components/schemas/financialDate"
+                    },
+                    "event": {
+                      "$ref": "#/components/schemas/fundingEvent"
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "event"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "calculationVersion",
+              "productPolicyCode",
+              "schemaVersion",
+              "policyRevisionId",
+              "calculatorBuild",
+              "basisHash",
+              "calculationType",
+              "terms",
+              "fromDate",
+              "throughDate",
+              "openingPrincipalMinor",
+              "events"
             ],
             "additionalProperties": false
           }

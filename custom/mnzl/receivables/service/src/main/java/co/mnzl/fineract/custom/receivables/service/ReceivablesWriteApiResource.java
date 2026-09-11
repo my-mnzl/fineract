@@ -118,6 +118,17 @@ public class ReceivablesWriteApiResource {
         return json.write(calculations.calculate(request));
     }
 
+    /** Stateless product pricing preserves the caller's policy provenance, independently of the managed ledger's policy. */
+    @POST
+    @Path("/pricing-calculations")
+    public String calculatePricing(@Context HttpHeaders headers, String request) {
+        security.authenticatedUser().validateHasPermissionTo("CALCULATE_MNZL_RECEIVABLES");
+        var config = configuration.authorize(scope(headers), false);
+        var input = json.validate("pricingCalculationRequest", request);
+        require(text(input, "calculatorBuild").equals(string(config, "calculator_build")), "UNSUPPORTED_VERSION");
+        return json.write(calculations.calculate(request));
+    }
+
     @POST
     @Path("/borrowers/resolve")
     public String resolveBorrower(@Context HttpHeaders headers, String request) {
