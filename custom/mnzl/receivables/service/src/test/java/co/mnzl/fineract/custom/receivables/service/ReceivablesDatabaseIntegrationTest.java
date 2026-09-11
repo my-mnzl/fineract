@@ -729,19 +729,20 @@ class ReceivablesDatabaseIntegrationTest {
             assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 409).path("code").asText()).isEqualTo("SOURCE_CHANGED");
             assertThat(request("POST", PREFIX + "/maintenance/reset/plan", reset, 200)).isEqualTo(plan);
             apply.put("planHash", plan.path("planHash").asText());
-            long trialId = queryLong("select coalesce(max(id),0)+1 from m_trial_balance");
+            String trialRow = "m_trial_balance where created_date='1900-01-01'";
+            assertThat(queryLong("select count(*) from " + trialRow)).isZero();
             long journalId = Long.parseLong(journals.get(0).asText());
             long beforeRejectedReset = queryLong("select count(*) from acc_gl_journal_entry");
-            executeSql("insert into m_trial_balance (id, office_id, account_id, amount, entry_date, created_date, closing_balance) "
-                    + "select " + trialId
-                    + ", office_id, account_id, amount, entry_date, entry_date, amount from acc_gl_journal_entry where id=" + journalId);
+            executeSql("insert into m_trial_balance (office_id, account_id, amount, entry_date, created_date, closing_balance) "
+                    + "select office_id, account_id, amount, entry_date, '1900-01-01', amount from acc_gl_journal_entry where id="
+                    + journalId);
             try {
                 assertThat(request("POST", PREFIX + "/maintenance/reset/apply", apply, 409).path("code").asText())
                         .isEqualTo("RECOVERY_REQUIRED");
                 assertThat(queryLong("select count(*) from acc_gl_journal_entry")).isEqualTo(beforeRejectedReset);
-                assertThat(queryLong("select count(*) from m_trial_balance where id=" + trialId)).isEqualTo(1);
+                assertThat(queryLong("select count(*) from " + trialRow)).isEqualTo(1);
             } finally {
-                executeSql("delete from m_trial_balance where id=" + trialId);
+                executeSql("delete from " + trialRow);
             }
             JsonNode result = request("POST", PREFIX + "/maintenance/reset/apply", apply, 200);
             assertThat(result.path("retired").asBoolean()).isTrue();
