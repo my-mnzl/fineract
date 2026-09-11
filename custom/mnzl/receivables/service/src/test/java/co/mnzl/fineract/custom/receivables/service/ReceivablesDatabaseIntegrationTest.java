@@ -714,11 +714,11 @@ class ReceivablesDatabaseIntegrationTest {
                 }
             }
             ObjectNode wrongTenant = reset.deepCopy().put("tenantId", "other");
-            assertThat(request("POST", PREFIX + "/maintenance/windows", wrongTenant, 409).path("code").asText())
+            assertThat(request("POST", PREFIX + "/maintenance/windows", wrongTenant, 403).path("code").asText())
                     .isEqualTo("OWNERSHIP_CONFLICT");
             ObjectNode wrongLoan = reset.deepCopy();
             wrongLoan.set("nativeLoanIds", json.value(List.of("99999999")));
-            assertThat(request("POST", PREFIX + "/maintenance/windows", wrongLoan, 409).path("code").asText())
+            assertThat(request("POST", PREFIX + "/maintenance/windows", wrongLoan, 403).path("code").asText())
                     .isEqualTo("OWNERSHIP_CONFLICT");
             request("POST", PREFIX + "/maintenance/windows", reset, 200);
             JsonNode plan = request("POST", PREFIX + "/maintenance/reset/plan", reset, 200);
