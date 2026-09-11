@@ -520,6 +520,31 @@ public class LoanTransaction extends AbstractAuditableWithUTCDateTimeCustom<Long
         this.chargeRefundChargeType = chargeRefundChargeType;
     }
 
+    public static LoanTransaction purchasedReceivableEffect(Loan loan, LoanTransactionType type, BigDecimal amount, LocalDate date,
+            ExternalId externalId) {
+        if (!loan.isPurchasedReceivable()
+                || !(type == LoanTransactionType.PURCHASED_RECEIVABLE_ACTIVATION || type == LoanTransactionType.REPAYMENT
+                        || type == LoanTransactionType.COMMERCIAL_SETTLEMENT_ADJUSTMENT || type == LoanTransactionType.ASSIGNMENT_OUT
+                        || type == LoanTransactionType.RECEIVABLE_MODIFICATION || type == LoanTransactionType.WRITEOFF)) {
+            throw new IllegalArgumentException("Invalid purchased receivable effect");
+        }
+        LoanTransaction transaction = new LoanTransaction(loan, loan.getOffice(), type, amount, date, externalId);
+        transaction.principalPortion = amount;
+        transaction.interestPortion = BigDecimal.ZERO;
+        transaction.feeChargesPortion = BigDecimal.ZERO;
+        transaction.penaltyChargesPortion = BigDecimal.ZERO;
+        return transaction;
+    }
+
+    /** Keeps native allocation evidence, including the original due dates, for dated reconciliation. */
+    public void reversePurchasedReceivable(LocalDate effectiveDate) {
+        if (!loan.isPurchasedReceivable() || reversed || effectiveDate.isBefore(dateOf)) {
+            throw new IllegalArgumentException("Invalid purchased receivable reversal");
+        }
+        reversed = true;
+        reversedOnDate = effectiveDate;
+    }
+
     public void reverse() {
         this.reversed = true;
         this.reversedOnDate = DateUtils.getBusinessLocalDate();
@@ -853,7 +878,10 @@ public class LoanTransaction extends AbstractAuditableWithUTCDateTimeCustom<Long
                 || type == LoanTransactionType.CAPITALIZED_INCOME_AMORTIZATION || type == LoanTransactionType.CONTRACT_TERMINATION
                 || type == LoanTransactionType.CAPITALIZED_INCOME_AMORTIZATION_ADJUSTMENT || type == LoanTransactionType.BUY_DOWN_FEE
                 || type == LoanTransactionType.BUY_DOWN_FEE_ADJUSTMENT || type == LoanTransactionType.BUY_DOWN_FEE_AMORTIZATION
-                || type == LoanTransactionType.BUY_DOWN_FEE_AMORTIZATION_ADJUSTMENT);
+                || type == LoanTransactionType.BUY_DOWN_FEE_AMORTIZATION_ADJUSTMENT
+                || type == LoanTransactionType.PURCHASED_RECEIVABLE_ACTIVATION
+                || type == LoanTransactionType.COMMERCIAL_SETTLEMENT_ADJUSTMENT || type == LoanTransactionType.ASSIGNMENT_OUT
+                || type == LoanTransactionType.RECEIVABLE_MODIFICATION);
     }
 
     public void updateOutstandingLoanBalance(BigDecimal outstandingLoanBalance) {

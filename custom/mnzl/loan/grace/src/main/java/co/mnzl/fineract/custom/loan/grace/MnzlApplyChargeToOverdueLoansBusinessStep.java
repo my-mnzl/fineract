@@ -50,6 +50,9 @@ public class MnzlApplyChargeToOverdueLoansBusinessStep implements LoanCOBBusines
 
     @Override
     public Loan execute(Loan loan) {
+        if (loan != null && loan.isPurchasedReceivable()) {
+            return loan;
+        }
         if (!loan.isOpen()) {
             return loan;
         }

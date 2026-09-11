@@ -37,6 +37,17 @@ import org.junit.jupiter.api.Test;
 class CustomLoanScheduleGeneratorFactoryTest {
 
     @Test
+    void fixedReceivableSelectsExactGeneratorAndRejectsOrdinaryGeneration() {
+        CustomLoanScheduleGeneratorFactory factory = new CustomLoanScheduleGeneratorFactory(null, null, null, null,
+                mock(MnzlLoanProductStrategyReadService.class));
+        LoanScheduleGenerator generator = factory.create(LoanScheduleSelectionContext.builder()
+                .scheduleStrategyCode(MnzlLoanProductStrategyCodes.SCHEDULE_FIXED_RECEIVABLE).build());
+        assertThat(generator).isInstanceOf(FixedReceivableScheduleGenerator.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> generator.generate(null, null, null, null))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void createUsesCustomGeneratorForCumulativeDecliningBalance() {
         ProgressiveLoanScheduleGenerator progressive = mock(ProgressiveLoanScheduleGenerator.class);
         CumulativeFlatInterestLoanScheduleGenerator flat = mock(CumulativeFlatInterestLoanScheduleGenerator.class);

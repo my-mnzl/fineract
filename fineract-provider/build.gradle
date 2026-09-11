@@ -232,11 +232,16 @@ def customRuntimeProjects = rootProject.subprojects.findAll {
     it.path.startsWith(':custom:') && !it.path.startsWith(':custom:acme:') && it.path != ':custom:docker' && it.tasks.findByName('jar') != null
 }
 def customRuntimeJarTasks = customRuntimeProjects.collect { it.tasks.named('jar') }
-def customRuntimeJars = files(customRuntimeJarTasks.collect { it.flatMap { task -> task.archiveFile } })
+// Resolve each module separately: modules such as the starters share Gradle
+// coordinates, so resolving them together can silently discard custom JARs.
+def customRuntimeFiles = files(customRuntimeJarTasks.collect { it.flatMap { task -> task.archiveFile } },
+        customRuntimeProjects.collect { it.configurations.runtimeClasspath })
 
 tasks.named('bootRun') {
     dependsOn customRuntimeJarTasks
-    classpath += customRuntimeJars
+    // bootRun already includes this project's classes/resources. Its transitive
+    // JAR would duplicate Liquibase changelogs on the launch classpath.
+    classpath += customRuntimeFiles.filter { it != tasks.named('jar').get().archiveFile.get().asFile }
 }
 
 springBoot {
