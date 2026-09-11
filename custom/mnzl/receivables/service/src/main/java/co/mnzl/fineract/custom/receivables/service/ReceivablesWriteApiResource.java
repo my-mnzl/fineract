@@ -76,8 +76,23 @@ public class ReceivablesWriteApiResource {
     @POST
     @Path("/commands")
     public String execute(@Context HttpHeaders headers, String request) {
-        authorizeRequest(headers, request);
-        return json.write(commands.execute(request));
+        long started = System.nanoTime();
+        JsonNode input = json.read(request);
+        String result = "FAILED";
+        try {
+            authorizeRequest(headers, request);
+            String response = json.write(commands.execute(request));
+            result = "COMPLETED";
+            return response;
+        } catch (ReceivablesException exception) {
+            result = exception.code();
+            throw exception;
+        } finally {
+            log.info("MNZL receivables command type={} operationId={} scope={} subject={} result={} latencyMs={}",
+                    input.path("commandType").asText(), input.path("operationId").asText(),
+                    ReceivablesJson.hashText(input.path("scope").toString()), ReceivablesJson.hashText(input.path("subjectId").asText()),
+                    result, (System.nanoTime() - started) / 1_000_000);
+        }
     }
 
     @POST
@@ -103,6 +118,19 @@ public class ReceivablesWriteApiResource {
         JsonNode versions = input.has("basis") ? input.get("basis") : input;
         require(text(versions, "policyRevisionId").equals(string(config, "policy_revision"))
                 && text(versions, "calculatorBuild").equals(string(config, "calculator_build")), "UNSUPPORTED_VERSION");
+        return json.write(calculations.calculate(request));
+    }
+
+    /**
+     * Stateless product pricing preserves the caller's policy provenance, independently of the managed ledger's policy.
+     */
+    @POST
+    @Path("/pricing-calculations")
+    public String calculatePricing(@Context HttpHeaders headers, String request) {
+        security.authenticatedUser().validateHasPermissionTo("CALCULATE_MNZL_RECEIVABLES");
+        var config = configuration.authorize(scope(headers), false);
+        var input = json.validate("pricingCalculationRequest", request);
+        require(text(input, "calculatorBuild").equals(string(config, "calculator_build")), "UNSUPPORTED_VERSION");
         return json.write(calculations.calculate(request));
     }
 

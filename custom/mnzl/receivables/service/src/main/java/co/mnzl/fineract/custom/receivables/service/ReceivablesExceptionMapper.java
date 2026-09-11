@@ -31,7 +31,12 @@ public class ReceivablesExceptionMapper implements ExceptionMapper<ReceivablesEx
 
     @Override
     public Response toResponse(ReceivablesException exception) {
-        int status = exception.code().equals("INVALID_DATA") ? 400 : 409;
+        int status = switch (exception.code()) {
+            case "INVALID_DATA" -> 400;
+            case "OWNERSHIP_CONFLICT" -> 403;
+            case "BANK_PROOF_MISMATCH" -> 422;
+            default -> 409;
+        };
         return Response.status(status).type(MediaType.APPLICATION_JSON)
                 .entity(Map.of("code", exception.code(), "message", exception.code())).build();
     }
