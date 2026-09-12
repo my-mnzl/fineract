@@ -120,6 +120,8 @@ class ReceivablesDatabaseIntegrationTest {
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
+                new ReceivablesOfficeClosureScenarios(this,
+                        application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
                         "select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100") == 0;
@@ -148,7 +150,9 @@ class ReceivablesDatabaseIntegrationTest {
                         "developer-lot-impairment-after-due", "missing-and-expired-lot-forecasts-block-close",
                         "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected",
                         "bound-historical-grant-substitution-rejected", "bound-historical-grant-atomic-retry",
-                        "legacy-grant-new-effects-rejected", "historical-grant-issuer-policy-preserved")));
+                        "legacy-grant-new-effects-rejected", "historical-grant-issuer-policy-preserved",
+                        "office-closure-inclusive-posting-boundary", "office-closure-native-first-serialization",
+                        "office-closure-snapshot-before-close", "office-closure-durable-replay")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -895,6 +899,10 @@ class ReceivablesDatabaseIntegrationTest {
     }
 
     void recordReceipt(String operation, String account, String amount) throws Exception {
+        request("POST", PREFIX + "/commands", receiptCommand(operation, account, amount), 200);
+    }
+
+    ObjectNode receiptCommand(String operation, String account, String amount) {
         ObjectNode cash = command("RECORD_CASH_MOVEMENT", operation, "deal", "DEAL");
         ObjectNode source = json.object();
         source.put("bankSourceId", operation + "-bank");
@@ -913,6 +921,6 @@ class ReceivablesDatabaseIntegrationTest {
         allocation.put("amountMinor", amount);
         source.set("allocations", json.value(List.of(allocation)));
         cash.set("source", source);
-        request("POST", PREFIX + "/commands", cash, 200);
+        return cash;
     }
 }

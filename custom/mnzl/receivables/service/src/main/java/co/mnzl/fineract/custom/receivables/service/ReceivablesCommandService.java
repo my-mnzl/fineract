@@ -72,6 +72,8 @@ public class ReceivablesCommandService {
             require(existing.get("result_json") != null, "RECOVERY_REQUIRED");
             return json.read(string(existing, "result_json"));
         }
+        // Lock before any core or custom financial effects. Exact durable replay above never needs this lock.
+        ledger.lockOffice(number(config, "office_id"));
         configuration.validateExecution(command, config, payloadHash);
         validateVersions(execution);
         Instant now = Instant.now();

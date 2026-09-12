@@ -29,10 +29,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntry;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryRepository;
 import org.apache.fineract.accounting.journalentry.domain.JournalEntryType;
+import org.apache.fineract.accounting.journalentry.exception.JournalEntryInvalidException;
+import org.apache.fineract.accounting.journalentry.service.AccountingProcessorHelper;
+import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -80,9 +84,22 @@ public class ReceivablesLedger {
     private final GLAccountRepository accounts;
     private final OfficeRepository offices;
     private final JournalEntryRepository journals;
+    private final GLClosureRepository closures;
+    private final AccountingProcessorHelper accounting;
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Office lockOffice(long officeId) {
+        return offices.findForAccountingLockById(officeId).orElseThrow();
+    }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public List<JsonNode> post(String scope, String eventKey, LocalDate date, long officeId, List<Line> lines) {
+        var office = lockOffice(officeId);
+        try {
+            accounting.checkForBranchClosures(closures.findFirstByOfficeIdOrderByClosingDateDesc(officeId), date);
+        } catch (JournalEntryInvalidException exception) {
+            throw new ReceivablesException("PERIOD_CLOSED", exception);
+        }
         BigInteger balance = lines.stream().map(l -> l.side().equals("DEBIT") ? l.amountMinor() : l.amountMinor().negate())
                 .reduce(BigInteger.ZERO, BigInteger::add);
         require(balance.signum() == 0, "JOURNAL_MISMATCH");
@@ -95,8 +112,7 @@ public class ReceivablesLedger {
             var account = accounts.findById(glId).orElseThrow();
             require(!account.isDisabled() && account.isDetailAccount(), "FINERACT_CAPABILITY_MISSING");
             String sourceId = eventKey + ":" + sequence++;
-            JournalEntry entry = JournalEntry.createNew(offices.findById(officeId).orElseThrow(), null, account, "EGP",
-                    "R" + eventKey.substring(0, 40), false, date,
+            JournalEntry entry = JournalEntry.createNew(office, null, account, "EGP", "R" + eventKey.substring(0, 40), false, date,
                     line.side().equals("DEBIT") ? JournalEntryType.DEBIT : JournalEntryType.CREDIT, new BigDecimal(line.amountMinor(), 2),
                     "Purchased receivables " + line.component(), null, null, sourceId, null, null, null, null);
             long journalId = journals.saveAndFlush(entry).getId();

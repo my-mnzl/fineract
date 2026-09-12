@@ -42,6 +42,14 @@ public class OfficeRepositoryWrapper {
         return this.repository.findById(id).orElseThrow(() -> new OfficeNotFoundException(id));
     }
 
+    public Office lockForAccounting(final Long id) {
+        return this.repository.findForAccountingLockById(id).orElseThrow(() -> new OfficeNotFoundException(id));
+    }
+
+    public void recordAccountingClosureChange(final Long id) {
+        this.repository.incrementAccountingClosureVersion(id);
+    }
+
     @Transactional(readOnly = true)
     public Office findOfficeHierarchy(final Long id) {
         final Office office = this.repository.findById(id).orElseThrow(() -> new OfficeNotFoundException(id));

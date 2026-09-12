@@ -33,3 +33,26 @@ commands. CURRENT command and capability shapes remain unchanged.
 The native database CI matrix verifies bound execution, payload substitution rejection,
 immutable issuance, disabled legacy issuance, unbound legacy rejection, durable replay
 and rollback of a failure after native journal posting on MariaDB, MySQL and PostgreSQL.
+
+## Core office accounting closures
+
+New native effects share a dedicated office accounting lock with core GL-closure
+creation and deletion. Journal posting applies the core inclusive boundary: a posting
+date on or before the latest office closure returns `PERIOD_CLOSED`. The actual
+posting date is checked, including historical and adjusted closing dates. Existing
+custom period guards remain in force; exact persisted replay precedes the new lock.
+
+Closure creation and deletion increment `m_office.accounting_closure_version` while
+holding the office lock. The physical epoch is intentionally unmapped in the office
+entity so ordinary office edits cannot overwrite it. Under PostgreSQL repeatable
+read, a command whose snapshot predates a committed closure cannot lock that changed
+office row: it aborts with a serialization conflict and no financial effects. A fresh
+retry observes the closure and rejects the closed posting date. MariaDB and MySQL
+use a current locking closure read. A command that acquires the office lock first
+finishes atomically before closure creation proceeds. Comment-only closure updates
+and ordinary office lookups retain their existing behavior.
+
+The real database matrix checks closed/equal/open date boundaries, exact replay after
+closure, native-first serialization, and a snapshot established before a competing
+closure commits. It checks PostgreSQL SQLSTATE `40001`, unchanged financial counts
+after rejection, and fresh-retry `PERIOD_CLOSED` on all three databases.

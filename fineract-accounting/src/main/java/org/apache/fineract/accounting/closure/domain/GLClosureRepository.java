@@ -18,12 +18,25 @@
  */
 package org.apache.fineract.accounting.closure.domain;
 
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface GLClosureRepository extends JpaRepository<GLClosure, Long>, JpaSpecificationExecutor<GLClosure> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    GLClosure findFirstByOfficeIdOrderByClosingDateDesc(Long officeId);
+
+    @Query("select closure.office.id from GLClosure closure where closure.id = :id")
+    Optional<Long> findOfficeIdById(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select closure from GLClosure closure where closure.id = :id")
+    Optional<GLClosure> findForAccountingLockById(@Param("id") Long id);
 
     @Query("select closure from GLClosure closure where closure.closingDate = (select max(closure1.closingDate) from GLClosure closure1 where closure1.office.id=:officeId)  and closure.office.id= :officeId")
     GLClosure getLatestGLClosureByBranch(@Param("officeId") Long officeId);
