@@ -122,7 +122,11 @@ public class ReceivablesPeriodProof {
                 + "where e.scope_key=? and e.sequence_id<=? limit 100001", scopeKey, maximum);
         var mappings = store.scoped("account_map", scopeKey);
         Map<String, Long> approvedGl = new HashMap<>();
-        mappings.forEach(row -> approvedGl.put(string(row, "account_key"), number(row, "native_gl_id")));
+        for (var row : mappings) {
+            require(mapping.equals(string(row, "mapping_revision"))
+                    && approvedGl.put(string(row, "account_key"), number(row, "native_gl_id")) == null, "JOURNAL_MISMATCH");
+        }
+        require(approvedGl.keySet().equals(ReceivablesConfiguration.ACCOUNTS), "JOURNAL_MISMATCH");
         Map<Long, Expected> byJournal = new HashMap<>();
         for (var row : registry) {
             if (!selected.containsKey(string(row, "event_key"))) {
