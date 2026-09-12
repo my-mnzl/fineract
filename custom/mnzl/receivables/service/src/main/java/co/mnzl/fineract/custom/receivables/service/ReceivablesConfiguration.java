@@ -279,8 +279,7 @@ public class ReceivablesConfiguration {
             Map<String, Object> recorded = store.require("authorization",
                     ReceivablesStore.key(scope, "authorization", text(authorization, "authorizationId")));
             require(!Boolean.parseBoolean(string(recorded, "revoked")) && !"1".equals(string(recorded, "revoked"))
-                    && mode.equals(string(recorded, "mode"))
-                    && payloadHash.equals(string(recorded, "command_payload_hash"))
+                    && mode.equals(string(recorded, "mode")) && payloadHash.equals(string(recorded, "command_payload_hash"))
                     && text(command, "executionScopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "scopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "approvedBy").equals(string(recorded, "approved_by"))
@@ -305,9 +304,9 @@ public class ReceivablesConfiguration {
         LocalDate through = LocalDate.parse(text(input, "effectiveThrough"));
         require(!through.isBefore(from), "INVALID_DATA");
         String key = ReceivablesStore.key(scope, "authorization", text(input, "authorizationId"));
-        var fields = new LinkedHashMap<String, Object>(Map.of("scope_key", scope, "authorization_id", text(input, "authorizationId"), "scope_hash",
-                text(input, "scopeHash"), "approved_by", text(input, "approvedBy"), "effective_from", from, "effective_through", through,
-                "mode", text(input, "mode"), "revoked", false));
+        var fields = new LinkedHashMap<String, Object>(Map.of("scope_key", scope, "authorization_id", text(input, "authorizationId"),
+                "scope_hash", text(input, "scopeHash"), "approved_by", text(input, "approvedBy"), "effective_from", from,
+                "effective_through", through, "mode", text(input, "mode"), "revoked", false));
         fields.put("command_payload_hash", text(input, "commandPayloadHash"));
         fields.put("payload_json", json.write(input));
         var old = store.find("authorization", key);
@@ -349,8 +348,7 @@ public class ReceivablesConfiguration {
         var authorization = store.require("authorization",
                 ReceivablesStore.key(e.scope, "authorization", text(e.command, "approvedWorkoutCaseId")));
         require(string(authorization, "mode").equals("WORKOUT") && !Boolean.parseBoolean(string(authorization, "revoked"))
-                && !"1".equals(string(authorization, "revoked")),
-                "APPROVAL_SCOPE_CHANGED");
+                && !"1".equals(string(authorization, "revoked")), "APPROVAL_SCOPE_CHANGED");
         JsonNode approved = json.read(string(authorization, "payload_json"));
         require(approved.get("scope").equals(e.command.get("scope")) && text(approved, "accountId").equals(e.subjectId())
                 && text(approved, "classification").equals(classification) && text(approved, "businessDate").equals(e.date.toString())

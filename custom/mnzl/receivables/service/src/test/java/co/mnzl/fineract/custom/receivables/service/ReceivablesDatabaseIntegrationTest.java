@@ -146,9 +146,9 @@ class ReceivablesDatabaseIntegrationTest {
                         "persisted-native-configuration-readback", "native-hel-historical-repayment-snapshot",
                         "stage-three-writeoff-later-recovery", "recovery-payer-and-exact-transaction-readback",
                         "developer-lot-impairment-after-due", "missing-and-expired-lot-forecasts-block-close",
-                        "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected", "bound-historical-grant-substitution-rejected",
-                        "bound-historical-grant-atomic-retry", "legacy-grant-new-effects-rejected",
-                        "historical-grant-issuer-policy-preserved")));
+                        "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected",
+                        "bound-historical-grant-substitution-rejected", "bound-historical-grant-atomic-retry",
+                        "legacy-grant-new-effects-rejected", "historical-grant-issuer-policy-preserved")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -409,8 +409,8 @@ class ReceivablesDatabaseIntegrationTest {
     Map<String, Long> counts() throws Exception {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (String table : List.of("m_client", "m_loan", "m_loan_transaction", "acc_gl_journal_entry", "m_mnzl_r_account",
-                "m_mnzl_r_command", "m_mnzl_r_event", "m_mnzl_r_segment", "m_mnzl_r_journal_line",
-                "m_mnzl_r_cash_source", "m_mnzl_r_cash_allocation")) {
+                "m_mnzl_r_command", "m_mnzl_r_event", "m_mnzl_r_segment", "m_mnzl_r_journal_line", "m_mnzl_r_cash_source",
+                "m_mnzl_r_cash_allocation")) {
             counts.put(table, queryLong("select count(*) from " + table));
         }
         return counts;

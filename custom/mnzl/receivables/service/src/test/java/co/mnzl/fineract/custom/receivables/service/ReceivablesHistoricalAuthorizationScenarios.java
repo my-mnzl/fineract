@@ -26,7 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/** Real-database coverage of complete-command binding; this is not a cross-day continuation protocol. */
+/**
+ * Real-database coverage of complete-command binding; this is not a cross-day continuation protocol.
+ */
 final class ReceivablesHistoricalAuthorizationScenarios {
 
     private final ReceivablesDatabaseIntegrationTest harness;
@@ -41,8 +43,7 @@ final class ReceivablesHistoricalAuthorizationScenarios {
         ObjectNode grant = harness.issueHistory(command);
         // The configured integration user is also the authenticated CONFIGURE user. Preserve this policy explicitly.
         assertThat(grant.path("approvedBy").asText()).isEqualTo("1");
-        assertThat(harness.queryLong("select integration_user_id from m_mnzl_r_configuration where integration_user_id=1"))
-                .isEqualTo(1);
+        assertThat(harness.queryLong("select integration_user_id from m_mnzl_r_configuration where integration_user_id=1")).isEqualTo(1);
         assertThat(post("/authorizations/v2", grant, 200)).isEqualTo(grant);
         ObjectNode legacyRequest = grant.deepCopy();
         legacyRequest.remove("commandPayloadHash");
@@ -65,8 +66,8 @@ final class ReceivablesHistoricalAuthorizationScenarios {
         List<Consumer<ObjectNode>> changes = List.of(c -> c.put("operationId", "changed-operation"),
                 c -> c.put("idempotencyKey", "changed-idempotency"), c -> c.put("subjectId", "changed-deal"),
                 c -> c.put("actorId", "changed-actor"), c -> c.put("expectedVersion", "1"),
-                c -> c.put("businessDate", harness.today.minusDays(1).toString()),
-                c -> c.put("basisHash", "1".repeat(64)), c -> c.put("executionScopeHash", "1".repeat(64)),
+                c -> c.put("businessDate", harness.today.minusDays(1).toString()), c -> c.put("basisHash", "1".repeat(64)),
+                c -> c.put("executionScopeHash", "1".repeat(64)),
                 c -> c.set("approverIds", harness.json.value(List.of("changed-approver"))),
                 c -> ((ObjectNode) c.get("executionAuthorization")).put("effectiveThrough", harness.today.plusDays(1).toString()),
                 c -> ((ObjectNode) c.get("source")).put("amountMinor", "2"),
@@ -164,8 +165,9 @@ final class ReceivablesHistoricalAuthorizationScenarios {
     private ObjectNode cash(String operation) {
         ObjectNode command = harness.command("RECORD_CASH_MOVEMENT", operation, "history-deal", "DEAL");
         command.put("executionMode", "CORRECTION");
-        command.set("executionAuthorization", harness.json.value(Map.of("authorizationId", operation + "-grant", "scopeHash",
-                "0".repeat(64), "approvedBy", "1", "effectiveFrom", harness.today.toString(), "effectiveThrough", harness.today.toString())));
+        command.set("executionAuthorization",
+                harness.json.value(Map.of("authorizationId", operation + "-grant", "scopeHash", "0".repeat(64), "approvedBy", "1",
+                        "effectiveFrom", harness.today.toString(), "effectiveThrough", harness.today.toString())));
         command.set("source", harness.json.value(Map.of("bankSourceId", operation + "-bank", "bankAccountReference", "test-bank",
                 "verificationEvidenceId", "verified", "valueDate", harness.today.toString(), "currency", "EGP", "amountMinor", "1",
                 "direction", "INCOMING", "allocations", List.of(Map.of("allocationId", operation + "-allocation", "kind",
