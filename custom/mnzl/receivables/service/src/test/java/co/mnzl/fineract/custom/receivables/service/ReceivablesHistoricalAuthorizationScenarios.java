@@ -154,8 +154,8 @@ final class ReceivablesHistoricalAuthorizationScenarios {
             post("/commands", command, 500);
             assertThat(harness.counts()).isEqualTo(before);
         } finally {
-            harness.executeSql(database.equals("postgresql") ? "DROP TRIGGER flex_fail_history ON m_mnzl_r_event"
-                    : "DROP TRIGGER flex_fail_history");
+            harness.executeSql(
+                    database.equals("postgresql") ? "DROP TRIGGER flex_fail_history ON m_mnzl_r_event" : "DROP TRIGGER flex_fail_history");
             if (database.equals("postgresql")) {
                 harness.executeSql("DROP FUNCTION flex_fail_history()");
             }
