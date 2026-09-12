@@ -278,7 +278,8 @@ public class ReceivablesConfiguration {
             require(authorization != null && !authorization.isNull(), "APPROVAL_SCOPE_CHANGED");
             Map<String, Object> recorded = store.require("authorization",
                     ReceivablesStore.key(scope, "authorization", text(authorization, "authorizationId")));
-            require(!Boolean.parseBoolean(string(recorded, "revoked")) && mode.equals(string(recorded, "mode"))
+            require(!Boolean.parseBoolean(string(recorded, "revoked")) && !"1".equals(string(recorded, "revoked"))
+                    && mode.equals(string(recorded, "mode"))
                     && payloadHash.equals(string(recorded, "command_payload_hash"))
                     && text(command, "executionScopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "scopeHash").equals(string(recorded, "scope_hash"))
@@ -347,7 +348,8 @@ public class ReceivablesConfiguration {
     public void requireWorkout(ReceivablesExecution e, String classification, java.math.BigInteger consideration) {
         var authorization = store.require("authorization",
                 ReceivablesStore.key(e.scope, "authorization", text(e.command, "approvedWorkoutCaseId")));
-        require(string(authorization, "mode").equals("WORKOUT") && !Boolean.parseBoolean(string(authorization, "revoked")),
+        require(string(authorization, "mode").equals("WORKOUT") && !Boolean.parseBoolean(string(authorization, "revoked"))
+                && !"1".equals(string(authorization, "revoked")),
                 "APPROVAL_SCOPE_CHANGED");
         JsonNode approved = json.read(string(authorization, "payload_json"));
         require(approved.get("scope").equals(e.command.get("scope")) && text(approved, "accountId").equals(e.subjectId())
