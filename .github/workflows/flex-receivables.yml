@@ -105,9 +105,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build exact tested source
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          native_commit="$(git rev-parse HEAD)"
+          openapi_hash="$(sha256sum custom/mnzl/receivables/openapi/receivables-v1.json | cut -d ' ' -f 1)"
+          vector_hash="$(sha256sum custom/mnzl/receivables/math/src/test/resources/reference-vectors.json | cut -d ' ' -f 1)"
+          build_run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+          labels="org.opencontainers.image.revision=$native_commit,org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          labels="$labels,co.mnzl.receivables.source-revision=$SOURCE_COMMIT,co.mnzl.receivables.build-run=$build_run"
+          labels="$labels,co.mnzl.receivables.openapi-sha256=$openapi_hash,co.mnzl.receivables.vectors-sha256=$vector_hash"
           ./gradlew --no-daemon --console=plain :custom:docker:jibDockerBuild \
-            -Djib.to.image=flex-receivables-build -x test -x cucumber
+            -Djib.to.image=flex-receivables-build "-Djib.container.labels=$labels" -x test -x cucumber
+          docker inspect --format '{{json .Config.Labels}}' flex-receivables-build > /tmp/flex-image-labels.json
+          export NATIVE_COMMIT="$native_commit" OPENAPI_HASH="$openapi_hash" VECTOR_HASH="$vector_hash" BUILD_RUN="$build_run"
+          python3 - <<'PYLABELS'
+          import json, os
+          labels = json.load(open('/tmp/flex-image-labels.json'))
+          expected = {
+              'org.opencontainers.image.revision': os.environ['NATIVE_COMMIT'],
+              'org.opencontainers.image.source': os.environ['GITHUB_SERVER_URL'] + '/' + os.environ['GITHUB_REPOSITORY'],
+              'co.mnzl.receivables.source-revision': os.environ['SOURCE_COMMIT'],
+              'co.mnzl.receivables.build-run': os.environ['BUILD_RUN'],
+              'co.mnzl.receivables.openapi-sha256': os.environ['OPENAPI_HASH'],
+              'co.mnzl.receivables.vectors-sha256': os.environ['VECTOR_HASH'],
+          }
+          assert all(labels.get(key) == value for key, value in expected.items()), 'Image provenance labels missing or incorrect'
+          PYLABELS
       - name: Require actual image startup before publication
         env:
           IMAGE_NAME: flex-receivables-build

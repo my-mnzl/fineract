@@ -157,7 +157,6 @@ final class ReceivablesCommandDatabaseScenarios {
         authorization.put("effectiveFrom", harness.today.toString());
         authorization.put("effectiveThrough", harness.today.toString());
         authorization.put("mode", "CORRECTION");
-        harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/authorizations", authorization, 200);
         authorization.remove(List.of("scope", "mode"));
         ObjectNode correction = command("RESET_RATE", "rate-correction", id);
         correction.put("executionMode", "CORRECTION");
@@ -167,6 +166,7 @@ final class ReceivablesCommandDatabaseScenarios {
         correction.put("corridorRate", "0.25");
         correction.put("spread", "0");
         correction.put("developerAdjustmentDueDate", originalDate.plusDays(45).toString());
+        harness.issueHistory(correction);
         JsonNode result = execute(correction);
         JsonNode event = harness.json.read(harness.queryText(
                 "select event_json from m_mnzl_r_event where record_key='" + result.path("financialEventIds").get(0).asText() + "'"));
@@ -180,6 +180,8 @@ final class ReceivablesCommandDatabaseScenarios {
         correction.put("operationId", "rate-correction-superseded");
         correction.put("idempotencyKey", "rate-correction-superseded");
         correction.put("expectedVersion", harness.version(id));
+        ((ObjectNode) correction.get("executionAuthorization")).put("authorizationId", "rate-correction-superseded-grant");
+        harness.issueHistory(correction);
         harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", correction, 409);
     }
 
@@ -378,7 +380,6 @@ final class ReceivablesCommandDatabaseScenarios {
         authorization.put("effectiveFrom", harness.today.toString());
         authorization.put("effectiveThrough", harness.today.toString());
         authorization.put("mode", "CORRECTION");
-        harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/authorizations", authorization, 200);
         authorization.remove(List.of("scope", "mode"));
         ObjectNode c = command("CORRECT_EVENT", "correction", id);
         c.put("executionMode", "CORRECTION");
@@ -394,6 +395,7 @@ final class ReceivablesCommandDatabaseScenarios {
         replacement.set("riskForecastAfter",
                 forecast(id, "correction-forecast", List.of(harness.bookingCommands.get(id).path("basis").path("cashflows").get(1))));
         c.set("replacementCommand", replacement);
+        harness.issueHistory(c);
         execute(c);
         assertThat(harness.queryText("select event_json from m_mnzl_r_event where record_key='" + eventId + "'")).isEqualTo(eventText);
         assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("99999");

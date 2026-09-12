@@ -259,7 +259,7 @@ public class ReceivablesConfiguration {
         return result;
     }
 
-    public void validateExecution(JsonNode command, Map<String, Object> config) {
+    public void validateExecution(JsonNode command, Map<String, Object> config, String payloadHash) {
         String scope = scopeKey(command.get("scope"));
         require(string(config, "mapping_revision").equals(text(command, "accountMappingRevisionId")), "FINERACT_CAPABILITY_MISSING");
         validateProduct(number(config, "product_id"));
@@ -279,6 +279,7 @@ public class ReceivablesConfiguration {
             Map<String, Object> recorded = store.require("authorization",
                     ReceivablesStore.key(scope, "authorization", text(authorization, "authorizationId")));
             require(!Boolean.parseBoolean(string(recorded, "revoked")) && mode.equals(string(recorded, "mode"))
+                    && payloadHash.equals(string(recorded, "command_payload_hash"))
                     && text(command, "executionScopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "scopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "approvedBy").equals(string(recorded, "approved_by"))
@@ -295,7 +296,7 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode authorizeHistory(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        JsonNode input = json.validate("nativeHistoricalAuthorization", request);
+        JsonNode input = json.validate("nativeHistoricalAuthorizationV2", request);
         String scope = scopeKey(input.get("scope"));
         store.lockConfiguration(scope);
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString()), "APPROVAL_SCOPE_CHANGED");
@@ -303,14 +304,17 @@ public class ReceivablesConfiguration {
         LocalDate through = LocalDate.parse(text(input, "effectiveThrough"));
         require(!through.isBefore(from), "INVALID_DATA");
         String key = ReceivablesStore.key(scope, "authorization", text(input, "authorizationId"));
-        var fields = Map.<String, Object>of("scope_key", scope, "authorization_id", text(input, "authorizationId"), "scope_hash",
+        var fields = new LinkedHashMap<String, Object>(Map.of("scope_key", scope, "authorization_id", text(input, "authorizationId"), "scope_hash",
                 text(input, "scopeHash"), "approved_by", text(input, "approvedBy"), "effective_from", from, "effective_through", through,
-                "mode", text(input, "mode"), "revoked", false);
+                "mode", text(input, "mode"), "revoked", false));
+        fields.put("command_payload_hash", text(input, "commandPayloadHash"));
+        fields.put("payload_json", json.write(input));
         var old = store.find("authorization", key);
         if (old == null) {
             store.insert("authorization", key, fields);
         } else {
-            require(string(old, "scope_hash").equals(text(input, "scopeHash")), "IDEMPOTENCY_CONFLICT");
+            require(old.get("payload_json") != null && input.equals(json.read(string(old, "payload_json")))
+                    && text(input, "commandPayloadHash").equals(string(old, "command_payload_hash")), "IDEMPOTENCY_CONFLICT");
         }
         return input;
     }

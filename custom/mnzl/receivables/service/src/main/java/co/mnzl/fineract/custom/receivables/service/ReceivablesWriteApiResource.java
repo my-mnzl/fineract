@@ -153,6 +153,13 @@ public class ReceivablesWriteApiResource {
 
     @POST
     @Path("/authorizations")
+    public String authorizeLegacy(@Context HttpHeaders headers, String request) {
+        security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
+        throw new ReceivablesException("UNSUPPORTED_VERSION");
+    }
+
+    @POST
+    @Path("/authorizations/v2")
     public String authorize(@Context HttpHeaders headers, String request) {
         require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
                 "OWNERSHIP_CONFLICT");

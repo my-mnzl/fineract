@@ -72,7 +72,7 @@ public class ReceivablesCommandService {
             require(existing.get("result_json") != null, "RECOVERY_REQUIRED");
             return json.read(string(existing, "result_json"));
         }
-        configuration.validateExecution(command, config);
+        configuration.validateExecution(command, config, payloadHash);
         validateVersions(execution);
         Instant now = Instant.now();
         var fields = new LinkedHashMap<String, Object>();

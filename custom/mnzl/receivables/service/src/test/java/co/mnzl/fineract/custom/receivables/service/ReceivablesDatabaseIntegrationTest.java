@@ -119,6 +119,7 @@ class ReceivablesDatabaseIntegrationTest {
                 boolean ordinaryPassed = ordinaryRegression();
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
+                new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
                         "select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100") == 0;
@@ -145,7 +146,9 @@ class ReceivablesDatabaseIntegrationTest {
                         "persisted-native-configuration-readback", "native-hel-historical-repayment-snapshot",
                         "stage-three-writeoff-later-recovery", "recovery-payer-and-exact-transaction-readback",
                         "developer-lot-impairment-after-due", "missing-and-expired-lot-forecasts-block-close",
-                        "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected")));
+                        "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected", "bound-historical-grant-substitution-rejected",
+                        "bound-historical-grant-atomic-retry", "legacy-grant-new-effects-rejected",
+                        "historical-grant-issuer-policy-preserved")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -177,6 +180,15 @@ class ReceivablesDatabaseIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).withFailMessage("%s %s: %s", method, path, response.body()).isEqualTo(status);
         return json.read(response.body());
+    }
+
+    ObjectNode issueHistory(ObjectNode command) throws Exception {
+        ObjectNode grant = ((ObjectNode) command.get("executionAuthorization")).deepCopy();
+        grant.set("scope", scope(false));
+        grant.set("mode", command.get("executionMode"));
+        grant.put("commandPayloadHash", json.hash(command));
+        assertThat(request("POST", PREFIX + "/authorizations/v2", grant, 200)).isEqualTo(grant);
+        return grant;
     }
 
     ObjectNode scope(boolean developer) {
@@ -394,10 +406,11 @@ class ReceivablesDatabaseIntegrationTest {
         }
     }
 
-    private Map<String, Long> counts() throws Exception {
+    Map<String, Long> counts() throws Exception {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (String table : List.of("m_client", "m_loan", "m_loan_transaction", "acc_gl_journal_entry", "m_mnzl_r_account",
-                "m_mnzl_r_command", "m_mnzl_r_event", "m_mnzl_r_segment", "m_mnzl_r_journal_line")) {
+                "m_mnzl_r_command", "m_mnzl_r_event", "m_mnzl_r_segment", "m_mnzl_r_journal_line",
+                "m_mnzl_r_cash_source", "m_mnzl_r_cash_allocation")) {
             counts.put(table, queryLong("select count(*) from " + table));
         }
         return counts;
@@ -796,7 +809,6 @@ class ReceivablesDatabaseIntegrationTest {
         historyAuthorization.put("effectiveFrom", boundary.minusDays(1).toString());
         historyAuthorization.put("effectiveThrough", boundary.minusDays(1).toString());
         historyAuthorization.put("mode", "CORRECTION");
-        request("POST", PREFIX + "/authorizations", historyAuthorization, 200);
         historyAuthorization.remove(List.of("scope", "mode"));
         ObjectNode historicalCash = command("RECORD_CASH_MOVEMENT", "preparing-cash", "deal", "DEAL");
         historicalCash.put("executionMode", "CORRECTION");
@@ -807,6 +819,7 @@ class ReceivablesDatabaseIntegrationTest {
                         "verified", "valueDate", boundary.minusDays(1).toString(), "currency", "EGP", "amountMinor", "1", "direction",
                         "INCOMING", "allocations", List.of(Map.of("allocationId", "preparing-allocation", "kind", "RECEIPT_UNAPPLIED",
                                 "dealId", "deal", "accountId", "account-1", "beneficiaryReferenceId", "financier", "amountMinor", "1")))));
+        issueHistory(historicalCash);
         Map<String, Long> preparedCounts = counts();
         assertThat(request("POST", PREFIX + "/commands", historicalCash, 409).path("code").asText()).isEqualTo("PERIOD_CLOSED");
         assertThat(counts()).isEqualTo(preparedCounts);
