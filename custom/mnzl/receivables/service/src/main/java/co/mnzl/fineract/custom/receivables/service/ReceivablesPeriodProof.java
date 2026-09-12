@@ -19,9 +19,9 @@
 package co.mnzl.fineract.custom.receivables.service;
 
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesException.require;
-import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.number;
-import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.string;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
+import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.number;
+import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
