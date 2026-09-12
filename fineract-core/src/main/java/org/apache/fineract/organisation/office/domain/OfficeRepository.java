@@ -36,8 +36,8 @@ public interface OfficeRepository extends JpaRepository<Office, Long>, JpaSpecif
 
     // A committed closure change must change the locked row, including for PostgreSQL repeatable-read snapshots.
     @Modifying(flushAutomatically = true)
-    @Query(value = "update m_office set accounting_closure_version = accounting_closure_version + 1 where id = :id", nativeQuery = true)
-    int incrementAccountingClosureVersion(@Param("id") Long id);
+    @Query(value = "update m_office set accounting_closure_version = accounting_closure_version + 1 where id = ?1", nativeQuery = true)
+    int incrementAccountingClosureVersion(Long id);
 
     Optional<Office> findByExternalId(ExternalId externalId);
 }
