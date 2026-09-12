@@ -63,7 +63,7 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
 
             // check office is valid
             final Long officeId = command.longValueOfParameterNamed(GLClosureJsonInputParams.OFFICE_ID.getValue());
-            final Office office = this.officeRepositoryWrapper.findOneWithNotFoundDetection(officeId);
+            final Office office = this.officeRepositoryWrapper.lockForAccounting(officeId);
             // TODO: Get Tenant specific date
             // ensure closure date is not in the future
             final LocalDate closureDate = command.localDateValueOfParameterNamed(GLClosureJsonInputParams.CLOSING_DATE.getValue());
@@ -71,13 +71,14 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
                 throw new GLClosureInvalidException(GlClosureInvalidReason.FUTURE_DATE, closureDate);
             }
             // shouldn't be before an existing accounting closure
-            final GLClosure latestGLClosure = this.glClosureRepository.getLatestGLClosureByBranch(officeId);
+            final GLClosure latestGLClosure = this.glClosureRepository.findFirstByOfficeIdOrderByClosingDateDesc(officeId);
             if (latestGLClosure != null && DateUtils.isAfter(latestGLClosure.getClosingDate(), closureDate)) {
                 throw new GLClosureInvalidException(GlClosureInvalidReason.ACCOUNTING_CLOSED, latestGLClosure.getClosingDate());
 
             }
             final GLClosure glClosure = GLClosure.fromJson(office, command);
 
+            this.officeRepositoryWrapper.recordAccountingClosureChange(officeId);
             this.glClosureRepository.saveAndFlush(glClosure);
 
             return new CommandProcessingResultBuilder().withCommandId(command.commandId()).withOfficeId(officeId)
@@ -112,19 +113,24 @@ public class GLClosureWritePlatformServiceJpaRepositoryImpl implements GLClosure
     @Transactional
     @Override
     public CommandProcessingResult deleteGLClosure(final Long glClosureId) {
-        final GLClosure glClosure = this.glClosureRepository.findById(glClosureId)
+        // Only route by immutable office identity before taking the shared accounting lock.
+        final Long officeId = this.glClosureRepository.findOfficeIdById(glClosureId)
+                .orElseThrow(() -> new GLClosureNotFoundException(glClosureId));
+        this.officeRepositoryWrapper.lockForAccounting(officeId);
+        final GLClosure glClosure = this.glClosureRepository.findForAccountingLockById(glClosureId)
                 .orElseThrow(() -> new GLClosureNotFoundException(glClosureId));
 
         /**
          * check if any closures are present for this branch at a later date than this closure date
          **/
         final LocalDate closureDate = glClosure.getClosingDate();
-        final GLClosure latestGLClosure = this.glClosureRepository.getLatestGLClosureByBranch(glClosure.getOffice().getId());
+        final GLClosure latestGLClosure = this.glClosureRepository.findFirstByOfficeIdOrderByClosingDateDesc(officeId);
         if (DateUtils.isAfter(latestGLClosure.getClosingDate(), closureDate)) {
             throw new GLClosureInvalidDeleteException(latestGLClosure.getOffice().getId(), latestGLClosure.getOffice().getName(),
                     latestGLClosure.getClosingDate());
         }
 
+        this.officeRepositoryWrapper.recordAccountingClosureChange(officeId);
         this.glClosureRepository.delete(glClosure);
 
         return new CommandProcessingResultBuilder().withOfficeId(glClosure.getOffice().getId()).withEntityId(glClosure.getId()).build();

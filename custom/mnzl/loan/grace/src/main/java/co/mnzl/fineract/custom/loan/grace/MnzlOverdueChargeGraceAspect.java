@@ -79,6 +79,9 @@ public class MnzlOverdueChargeGraceAspect {
         final int penaltyWaitPeriod = penaltyWaitPeriodDays();
         final LocalDate currentDate = DateUtils.getBusinessLocalDate();
         final Loan loan = loanRepositoryWrapper.findOneWithNotFoundDetection(loanId);
+        if (loan.isPurchasedReceivable()) {
+            return null;
+        }
         final Long officeId = loan.getOffice() != null ? loan.getOffice().getId() : null;
 
         // Hoist working-days config + holiday list once; anchor the holiday lookup at the earliest candidate due date.

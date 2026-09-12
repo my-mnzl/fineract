@@ -20,6 +20,7 @@
 dependencies {
     implementation(project(':fineract-core'))
     implementation(project(':fineract-loan'))
+    implementation(project(':fineract-charge'))
     implementation(project(':fineract-provider'))
     implementation('com.google.code.gson:gson')
     implementation('org.apache.commons:commons-lang3')

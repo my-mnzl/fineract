@@ -55,6 +55,13 @@ public class CustomLoanScheduleGeneratorFactory implements LoanScheduleGenerator
 
     @Override
     public LoanScheduleGenerator create(final LoanScheduleSelectionContext selectionContext) {
+        String strategy = selectionContext == null ? null : selectionContext.scheduleStrategyCode();
+        if (strategy == null && selectionContext != null && selectionContext.loanProductId() != null) {
+            strategy = loanProductStrategyReadService.findScheduleStrategyCode(selectionContext.loanProductId()).orElse(null);
+        }
+        if (MnzlLoanProductStrategyCodes.SCHEDULE_FIXED_RECEIVABLE.equals(strategy)) {
+            return new FixedReceivableScheduleGenerator();
+        }
         if (!usesCustomStrategy(selectionContext)) {
             return defaultLoanScheduleGeneratorFactory.create(selectionContext);
         }

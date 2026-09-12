@@ -90,6 +90,58 @@ import org.springframework.lang.NonNull;
 @Getter
 public class Loan extends AbstractAuditableWithUTCDateTimeCustom<Long> {
 
+    public static final String FIXED_RECEIVABLE_TRANSACTION_STRATEGY = "mnzl-fixed-receivable-principal";
+
+    public boolean isPurchasedReceivable() {
+        return FIXED_RECEIVABLE_TRANSACTION_STRATEGY.equals(transactionProcessingStrategyCode);
+    }
+
+    /** Creates a contractual claim without a customer cash disbursement or ordinary amortization. */
+    public static Loan acquiredReceivable(Client client, LoanProduct product, ExternalId externalId, LocalDate activationDate,
+            BigDecimal face, int periods, LocalDate maturityDate) {
+        if (!product.isAccountingDisabled() || !"EGP".equals(product.getCurrency().getCode()) || face.signum() <= 0 || periods < 1) {
+            throw new IllegalArgumentException("Purchased receivables require EGP face and accounting NONE");
+        }
+        Loan loan = new Loan();
+        loan.client = client;
+        loan.loanProduct = product;
+        loan.loanType = AccountType.INDIVIDUAL;
+        loan.accountNumber = new RandomPasswordGenerator(19).generate();
+        loan.externalId = externalId;
+        loan.transactionProcessingStrategyCode = FIXED_RECEIVABLE_TRANSACTION_STRATEGY;
+        loan.transactionProcessingStrategyName = "Purchased receivable principal";
+        loan.loanRepaymentScheduleDetail = LoanProductRelatedDetail.fixedReceivable(product.getCurrency(), face, periods);
+        loan.proposedPrincipal = face;
+        loan.approvedPrincipal = face;
+        loan.netDisbursalAmount = BigDecimal.ZERO;
+        loan.loanStatus = LoanStatus.ACTIVE;
+        loan.submittedOnDate = activationDate;
+        loan.approvedOnDate = activationDate;
+        loan.actualDisbursementDate = activationDate;
+        loan.expectedDisbursementDate = activationDate;
+        loan.expectedMaturityDate = maturityDate;
+        loan.termFrequency = Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(activationDate, maturityDate));
+        loan.termPeriodFrequencyType = PeriodFrequencyType.DAYS;
+        loan.summary = LoanSummary.create(BigDecimal.ZERO);
+        loan.summary.zeroFields();
+        loan.isFloatingInterestRate = false;
+        loan.createStandingInstructionAtDisbursement = false;
+        return loan;
+    }
+
+    public void refreshPurchasedReceivableSummary(LocalDate date) {
+        if (!isPurchasedReceivable()) {
+            throw new IllegalStateException("Not a purchased receivable");
+        }
+        Money zero = Money.zero(getCurrency());
+        summary.updateSummary(getCurrency(), loanRepaymentScheduleDetail.getPrincipal(), repaymentScheduleInstallments, charges, zero,
+                zero);
+        boolean closed = summary.getTotalOutstanding().signum() == 0;
+        loanStatus = closed ? LoanStatus.CLOSED_OBLIGATIONS_MET : LoanStatus.ACTIVE;
+        closedOnDate = closed ? date : null;
+        actualMaturityDate = closed ? date : null;
+    }
+
     public static final String RECALCULATE_LOAN_SCHEDULE = "recalculateLoanSchedule";
     public static final String EXTERNAL_ID = "externalId";
     public static final String DATE_FORMAT = "dateFormat";

@@ -76,7 +76,9 @@ public enum LoanTransactionType {
     BUY_DOWN_FEE_ADJUSTMENT(41, "loanTransactionType.buyDownFeeAdjustment"), //
     BUY_DOWN_FEE_AMORTIZATION(42, "loanTransactionType.buyDownFeeAmortization"), //
     BUY_DOWN_FEE_AMORTIZATION_ADJUSTMENT(43, "loanTransactionType.buyDownFeeAmortizationAdjustment"), //
-    ;
+    PURCHASED_RECEIVABLE_ACTIVATION(101, "loanTransactionType.purchasedReceivableActivation"), COMMERCIAL_SETTLEMENT_ADJUSTMENT(102,
+            "loanTransactionType.commercialSettlementAdjustment"), ASSIGNMENT_OUT(103,
+                    "loanTransactionType.assignmentOut"), RECEIVABLE_MODIFICATION(104, "loanTransactionType.receivableModification"),;
 
     private final Integer value;
     private final String code;
@@ -93,6 +95,10 @@ public enum LoanTransactionType {
         }
 
         return switch (transactionType) {
+            case 101 -> LoanTransactionType.PURCHASED_RECEIVABLE_ACTIVATION;
+            case 102 -> LoanTransactionType.COMMERCIAL_SETTLEMENT_ADJUSTMENT;
+            case 103 -> LoanTransactionType.ASSIGNMENT_OUT;
+            case 104 -> LoanTransactionType.RECEIVABLE_MODIFICATION;
             case 1 -> LoanTransactionType.DISBURSEMENT;
             case 2 -> LoanTransactionType.REPAYMENT;
             case 3 -> LoanTransactionType.CONTRA;

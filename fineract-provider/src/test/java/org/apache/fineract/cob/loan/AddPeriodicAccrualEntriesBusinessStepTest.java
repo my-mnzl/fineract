@@ -73,6 +73,14 @@ public class AddPeriodicAccrualEntriesBusinessStepTest {
     }
 
     @Test
+    void purchasedReceivableDoesNotGenerateBorrowerAccrual() {
+        Loan loan = Mockito.mock(Loan.class);
+        Mockito.when(loan.isPurchasedReceivable()).thenReturn(true);
+        underTest.execute(loan);
+        Mockito.verifyNoInteractions(loanAccrualsProcessingService);
+    }
+
+    @Test
     public void givenLoanWithAccrual() throws MultiException {
         // given
         final Loan loanForProcessing = Mockito.mock(Loan.class);

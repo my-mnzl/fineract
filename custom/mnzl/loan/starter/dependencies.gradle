@@ -18,6 +18,9 @@
  */
 
 dependencies {
+    implementation(project(':custom:mnzl:receivables:service'))
+    implementation(project(':custom:mnzl:receivables:math'))
+    implementation(project(':custom:mnzl:receivables:native'))
     implementation(project(':fineract-core'))
     implementation(project(':fineract-cob'))
     implementation(project(':fineract-loan'))

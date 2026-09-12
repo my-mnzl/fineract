@@ -59,7 +59,7 @@ class CustomLoanStarterSelectionTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
                         "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
-                        "mnzl.loan.grace.workingDays.enabled=false")
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     COBBusinessStepService businessStepService = ctx.getBean(COBBusinessStepService.class);
                     var result = businessStepService.getCOBBusinessSteps(LoanCOBBusinessStep.class, "JOB");
@@ -74,7 +74,7 @@ class CustomLoanStarterSelectionTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
                         "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
-                        "mnzl.loan.grace.workingDays.enabled=false")
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     assertThat(ctx).hasSingleBean(CustomLoanAutoConfiguration.class);
                     assertThat(ctx).hasBean("customCheckDueInstallmentsBusinessStep");
@@ -96,7 +96,7 @@ class CustomLoanStarterSelectionTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
                         "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
-                        "mnzl.loan.grace.workingDays.enabled=false")
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     assertThat(ctx).doesNotHaveBean(MnzlBalloonLoanInstrument.class);
                 });

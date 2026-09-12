@@ -57,7 +57,7 @@ public class MnzlLoanDelinquencyDomainService implements LoanDelinquencyDomainSe
     }
 
     private void adjustForWorkingDayGrace(Loan loan, CollectionData data) {
-        if (data == null || data.getDelinquentDate() == null) {
+        if (loan.isPurchasedReceivable() || data == null || data.getDelinquentDate() == null) {
             return;
         }
         Integer graceDays = loan.getLoanProductRelatedDetail().getGraceOnArrearsAgeing();

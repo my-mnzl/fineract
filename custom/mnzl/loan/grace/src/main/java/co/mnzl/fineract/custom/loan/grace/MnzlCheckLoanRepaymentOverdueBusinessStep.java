@@ -51,6 +51,9 @@ public class MnzlCheckLoanRepaymentOverdueBusinessStep implements LoanCOBBusines
 
     @Override
     public Loan execute(Loan loan) {
+        if (loan != null && loan.isPurchasedReceivable()) {
+            return loan;
+        }
         List<LoanStatus> nonDisbursedStatuses = Arrays.asList(LoanStatus.INVALID, LoanStatus.SUBMITTED_AND_PENDING_APPROVAL,
                 LoanStatus.APPROVED);
         if (nonDisbursedStatuses.contains(loan.getStatus()) || loan.getSummary().getTotalOutstanding().compareTo(BigDecimal.ZERO) <= 0) {

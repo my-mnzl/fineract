@@ -256,6 +256,8 @@ public final class LoanEnumerations {
 
     public static LoanTransactionEnumData transactionType(final LoanTransactionType type) {
         return switch (type) {
+            case PURCHASED_RECEIVABLE_ACTIVATION, COMMERCIAL_SETTLEMENT_ADJUSTMENT, ASSIGNMENT_OUT, RECEIVABLE_MODIFICATION ->
+                new LoanTransactionEnumData(type.getValue().longValue(), type.getCode(), type.name());
             case INVALID -> new LoanTransactionEnumData(LoanTransactionType.INVALID.getValue().longValue(),
                     LoanTransactionType.INVALID.getCode(), "Invalid");
             case DISBURSEMENT -> new LoanTransactionEnumData(LoanTransactionType.DISBURSEMENT.getValue().longValue(),

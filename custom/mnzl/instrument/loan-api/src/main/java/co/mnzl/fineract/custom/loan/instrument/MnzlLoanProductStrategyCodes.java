@@ -20,6 +20,10 @@ package co.mnzl.fineract.custom.loan.instrument;
 
 public final class MnzlLoanProductStrategyCodes {
 
+    public static final String INSTRUMENT_PURCHASED_RECEIVABLE = "MNZL_PURCHASED_RECEIVABLE";
+    public static final String SCHEDULE_FIXED_RECEIVABLE = "MNZL_FIXED_RECEIVABLE";
+    public static final String CHARGE_NO_BORROWER_CHARGES = "MNZL_NO_BORROWER_CHARGES";
+
     public static final String INSTRUMENT_STANDARD_LOAN = "MNZL_STANDARD_LOAN";
     public static final String INSTRUMENT_BALLOON_LOAN = "MNZL_BALLOON_LOAN";
 
