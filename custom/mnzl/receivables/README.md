@@ -56,3 +56,59 @@ The real database matrix checks closed/equal/open date boundaries, exact replay 
 closure, native-first serialization, and a snapshot established before a competing
 closure commits. It checks PostgreSQL SQLSTATE `40001`, unchanged financial counts
 after rejection, and fresh-retry `PERIOD_CLOSED` on all three databases.
+
+## Observed posted-period proof
+
+`GET /period-activity-proof?postingPeriod=YYYY-MM&eventWatermark=W` requires both
+parameters and the existing scoped READ authority and mapping headers. `W` must not
+exceed the current scoped event watermark. The version 1 response covers **all scoped
+events** posted to that period through `W`, including HEL events without custom
+journal lines. Its monetary proof covers only actual journals in deterministic
+`R` + first 40 event-key character transactions. Ordinary HEL loan/disbursement/fee
+journals are explicitly excluded; this is not a whole-native-book report.
+
+One read-only repeatable-read transaction validates stored event identifiers, period
+and content hashes against the immutable JSON and recomputes each event hash. It
+compares event lines, registry rows and independently enumerated actual GL rows in
+both directions. Missing rows, unregistered extras, changed amounts/accounts/sides,
+reversed custom rows and wrong posting dates fail with `JOURNAL_MISMATCH`. It examines
+expected event transactions across all dates and actual-period rows from other
+scoped event transactions, so a period filter cannot hide shifted journals. Normal
+custom reversals append opposite unreversed lines and remain in gross counts and
+debit/credit totals, even where their net is zero.
+
+`observedGl.semantics = CURRENT_AT_REPEATABLE_READ`: the event watermark freezes
+membership, **not historical GL row values**. `observedAt` describes when this read
+observed the database, not a reusable database snapshot identifier. Store the returned
+proof with the captured report. Re-reading can observe changed native rows and fail;
+it must not be presented as historical as-of reconstruction.
+
+All amounts, counts, watermarks and IDs are decimal strings where applicable. Account
+`netMinor` is debit minus credit. Account controls are sorted lexically by original
+mapping revision, semantic account, native GL ID and currency. Explicit zero rows
+cover the complete current approved mapping; observed older-mapping groups retain
+their original attribution without inventing a complete historical zero-account
+population. Components remain verified event metadata, not a separate native GL
+classification.
+
+All hashes below use lowercase SHA-256 over JCS UTF-8:
+
+- `selection` consists exactly of response `schemaVersion`, `tenantId`, `scope`,
+  `postingPeriod`, `eventWatermark`, `readAccountMappingRevisionId`, `coverage`, and
+  `excludedJournalPopulations`.
+- `eventManifest.sha256` hashes `{selection, events}`, where `events` contains
+  `{eventId, contentHash}` for every included event, sorted by event ID ascending.
+  The count includes zero-line events. Existing `/events` pagination at the same `W`
+  supplies immutable bodies; consumers filter `postingPeriod`, sort and verify this
+  count and hash, detecting omitted zero-net pairs.
+- `observedGl.sha256` hashes `{selection, rows}`, with actual rows sorted by numeric
+  journal ID ascending. Each row contains exactly `journalId`, `eventId`,
+  `transactionId`, `entryDate`, `nativeGlAccountId`, `currency`, `side`, `amountMinor`,
+  boolean `reversed`, `originalMappingRevisionId`, `accountKey`, and `sourceLineId`.
+  Raw observed rows are committed, not returned as a new mutable paging protocol.
+- `proofHash` hashes the complete response before adding `proofHash`.
+
+Each candidate event, registry and actual-journal SQL query fetches at most 100001
+rows. More than 100000 candidates, or more than 100000 included event lines, fails
+with `INVALID_DATA`; no partial/truncated proof is returned. This initial bound
+applies to scoped candidates through the watermark, not just the requested month.
