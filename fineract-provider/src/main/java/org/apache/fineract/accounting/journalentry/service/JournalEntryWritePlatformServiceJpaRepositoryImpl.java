@@ -31,6 +31,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fineract.accounting.common.ProvisioningJournalEntryObserver;
 import org.apache.fineract.accounting.closure.domain.GLClosure;
 import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
 import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccount;
@@ -123,6 +124,7 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
     private final AccountingProcessorForSavingsFactory accountingProcessorForSavingsFactory;
     private final AccountingProcessorForSharesFactory accountingProcessorForSharesFactory;
     private final AccountingProcessorHelper helper;
+    private final List<ProvisioningJournalEntryObserver> provisioningJournalEntryObservers;
     private final JournalEntryCommandFromApiJsonDeserializer fromApiJsonDeserializer;
     private final AccountingRuleRepository accountingRuleRepository;
     private final GLAccountReadPlatformService glAccountReadPlatformService;
@@ -496,20 +498,42 @@ public class JournalEntryWritePlatformServiceJpaRepositoryImpl implements Journa
                 }
             }
             createJournalEntry(provisioningEntry.getCreatedDate(), provisioningEntry.getId(), entry.getKey().office,
-                    entry.getKey().currency, liabilityMap, expenseMap);
+                    entry.getKey().currency, liabilityMap, expenseMap, entry.getValue());
         }
         return "P" + provisioningEntry.getId();
     }
 
     private void createJournalEntry(LocalDate transactionDate, Long entryId, Office office, String currencyCode,
-            Map<GLAccount, BigDecimal> liabilityMap, Map<GLAccount, BigDecimal> expenseMap) {
+            Map<GLAccount, BigDecimal> liabilityMap, Map<GLAccount, BigDecimal> expenseMap, List<LoanProductProvisioningEntry> components) {
         for (Map.Entry<GLAccount, BigDecimal> entry : liabilityMap.entrySet()) {
-            this.helper.createProvisioningCreditJournalEntry(transactionDate, entryId, office, currencyCode, entry.getKey(),
-                    entry.getValue());
+            Long journalId = this.helper.createProvisioningCreditJournalEntry(transactionDate, entryId, office, currencyCode,
+                    entry.getKey(), entry.getValue());
+            notifyProvisioningPosting(journalId, transactionDate, entryId, office, currencyCode, entry.getKey(), false, entry.getValue(),
+                    components);
         }
         for (Map.Entry<GLAccount, BigDecimal> entry : expenseMap.entrySet()) {
-            this.helper.createProvisioningDebitJournalEntry(transactionDate, entryId, office, currencyCode, entry.getKey(),
+            Long journalId = this.helper.createProvisioningDebitJournalEntry(transactionDate, entryId, office, currencyCode, entry.getKey(),
                     entry.getValue());
+            notifyProvisioningPosting(journalId, transactionDate, entryId, office, currencyCode, entry.getKey(), true, entry.getValue(),
+                    components);
+        }
+    }
+
+    private void notifyProvisioningPosting(Long journalId, LocalDate date, Long historyId, Office office, String currency,
+            GLAccount account, boolean debit, BigDecimal amount, List<LoanProductProvisioningEntry> components) {
+        if (provisioningJournalEntryObservers.isEmpty()) {
+            return;
+        }
+        var sources = components.stream().filter(
+                component -> (debit ? component.getExpenseAccount() : component.getLiabilityAccount()).getId().equals(account.getId()))
+                .sorted(java.util.Comparator.comparing(LoanProductProvisioningEntry::getId))
+                .map(component -> new ProvisioningJournalEntryObserver.Component(component.getId(), historyId,
+                        component.getLoanProduct().getId(), office.getId(), component.getProvisioningCategory().getId(),
+                        component.getCriteriaId(), currency, component.getLiabilityAccount().getId(), component.getExpenseAccount().getId(),
+                        component.getReservedAmount()))
+                .toList();
+        for (var observer : provisioningJournalEntryObservers) {
+            observer.posted(journalId, date, historyId, office.getId(), currency, account.getId(), debit, amount, sources);
         }
     }
 

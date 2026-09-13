@@ -75,6 +75,11 @@ public class ReceivablesHelReporting {
         }
         require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_hel_reporting_registration where product_id=? or scope_key=?",
                 Long.class, product, scope) == 0, "OWNERSHIP_CONFLICT");
+        require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_configuration where hel_product_id=? and scope_key<>?",
+                Long.class, product, scope) == 0, "OWNERSHIP_CONFLICT");
+        require(store.jdbc().queryForObject(
+                "select count(*) from m_mnzl_r_hel_funding f join m_loan l on l.id=f.loan_id " + "where l.product_id=? and f.scope_key<>?",
+                Long.class, product, scope) == 0, "OWNERSHIP_CONFLICT");
         ObjectNode registration = json.object();
         registration.put("schemaVersion", "1");
         registration.put("tenantId", configuration.tenantId());
@@ -109,7 +114,7 @@ public class ReceivablesHelReporting {
     public JsonNode capture(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
         JsonNode input = json.validate("nativeHelReportingCaptureRequest", request);
-        configuration.authorize(input.get("scope"), true);
+        var config = configuration.authorize(input.get("scope"), true);
         String scope = configuration.scopeKey(input.get("scope"));
         String captureKey = ReceivablesStore.key(scope, "hel-reporting-capture", text(input, "snapshotId"));
         var old = store.find("hel_reporting_capture", captureKey);
@@ -122,6 +127,7 @@ public class ReceivablesHelReporting {
         JsonNode registration = json.read(string(registrationRow, "registration_json"));
         require(registration.get("scope").equals(input.get("scope")), "OWNERSHIP_CONFLICT");
         long product = number(registrationRow, "product_id");
+        require(product == number(config, "hel_product_id"), "OWNERSHIP_CONFLICT");
         LocalDate date = DateUtils.getBusinessLocalDate();
         require(!date.isBefore(LocalDate.parse(text(registration, "registeredBusinessDate"))), "RECOVERY_REQUIRED");
         String currency = store.jdbc().queryForObject("select currency_code from m_product_loan where id=?", String.class, product);
@@ -152,6 +158,8 @@ public class ReceivablesHelReporting {
             member.put("nativeLoanId", Long.toString(loanId));
             member.put("helSnapshotId", stateId);
             member.put("helSnapshotSequence", Long.toString(sequence));
+            member.put("nativeStatusId", String.valueOf(loan.getStatus().getValue()));
+            member.put("nativeStatusCode", loan.getStatus().name());
             member.put("disbursementState", loan.getActualDisbursementDate() == null ? "UNDISBURSED" : "DISBURSED");
             member.set("loan", state);
             member.set("earningCarrying", measures);
@@ -209,6 +217,11 @@ public class ReceivablesHelReporting {
         manifest.put("journalManifestHash", rowManifest(evidence.journals(), "nativeJournalId"));
         manifest.set("nativeAccountMapping", evidence.mapping());
         manifest.set("productPool", pool);
+        manifest.set("provisionExclusions", evidence.provisionExclusions());
+        LocalDate provisionFloor = evidence.provisionHistoryFloor();
+        LocalDate registeredDate = LocalDate.parse(text(registration, "registeredBusinessDate"));
+        manifest.put("journalHistoryAvailableFromDate",
+                provisionFloor != null && provisionFloor.isAfter(registeredDate) ? provisionFloor.toString() : registeredDate.toString());
         manifest.put("contentHash", json.hash(manifest));
         json.validate("nativeHelReportingSnapshot", json.write(manifest));
         store.insert("hel_reporting_capture", captureKey, Map.of("scope_key", scope, "registration_key", registrationKey, "snapshot_id",

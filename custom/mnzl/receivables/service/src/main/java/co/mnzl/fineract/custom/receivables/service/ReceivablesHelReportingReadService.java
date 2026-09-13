@@ -65,7 +65,7 @@ public class ReceivablesHelReportingReadService {
     public JsonNode journals(JsonNode scope, String snapshotId, LocalDate start, LocalDate through, String cursor, int limit) {
         JsonNode snapshot = reporting.snapshot(scope, snapshotId);
         require(start != null && through != null && !through.isBefore(start)
-                && !start.isBefore(LocalDate.parse(text(snapshot, "registeredBusinessDate")))
+                && !start.isBefore(LocalDate.parse(text(snapshot, "journalHistoryAvailableFromDate")))
                 && !through.isAfter(LocalDate.parse(text(snapshot, "snapshotBusinessDate"))), "RECOVERY_REQUIRED");
         require(limit >= 1 && limit <= 200, "INVALID_DATA");
         String key = ReceivablesStore.key(configuration.scopeKey(scope), "hel-reporting-capture", snapshotId);

@@ -49,7 +49,7 @@ public class ReceivablesHelAccounting {
     private final ReceivablesJson json;
 
     public record Evidence(JsonNode mapping, List<JsonNode> journals, Map<Long, JsonNode> loanMeasures, BigInteger allowance,
-            int provisionJournalCount) {
+            int provisionJournalCount, JsonNode provisionExclusions, LocalDate provisionHistoryFloor) {
     }
 
     public JsonNode mapping(long productId) {
@@ -90,6 +90,8 @@ public class ReceivablesHelAccounting {
             require(accountRoles != null, "SOURCE_CHANGED");
             ObjectNode journal = journal(row, currency);
             journal.put("sourceKind", "LOAN");
+            journal.putNull("originalProvisionJournalId");
+            journal.putNull("originalPostingProofHash");
             journal.put("loanId", Long.toString(number(row, "entity_id")));
             journal.put("accountRole", roleGroup(accountRoles.iterator().next()));
             journal.set("financialAccountTypes", json.value(accountRoles.stream().map(Object::toString).toList()));
@@ -102,58 +104,96 @@ public class ReceivablesHelAccounting {
             journals.add(journal);
             loanJournals.computeIfAbsent(number(row, "entity_id"), ignored -> new ArrayList<>()).add(journal);
         }
-        var provisionRows = store.jdbc()
-                .queryForList("select j.* from acc_gl_journal_entry j where j.entity_type_enum=3 "
-                        + "and j.entry_date<=? and exists (select 1 from m_loanproduct_provisioning_entry p where p.history_id=j.entity_id "
-                        + "and p.product_id=? and p.office_id=j.office_id and p.currency_code=j.currency_code "
-                        + "and (p.liability_account=j.account_id or p.expense_account=j.account_id)) order by j.id", date, productId);
-        BigInteger allowance = BigInteger.ZERO;
-        Map<Long, List<Map<String, Object>>> histories = new HashMap<>();
+        // Enumerate journals independently: native provisioning components can be deleted/reassigned by recreate.
+        var provisionRows = store.jdbc().queryForList("select j.* from acc_gl_journal_entry j where j.entity_type_enum=3 "
+                + "and j.entry_date<=? and j.currency_code=? order by j.id", date, currency);
+        Map<Long, Map<String, Object>> byId = new HashMap<>();
+        Map<Long, Map<String, Object>> originals = new HashMap<>();
         for (var row : provisionRows) {
-            long historyId = number(row, "entity_id");
-            var components = histories.computeIfAbsent(historyId, ignored -> store.jdbc()
-                    .queryForList("select * from m_loanproduct_provisioning_entry where history_id=? order by id", historyId));
+            byId.put(number(row, "id"), row);
+            if (row.get("reversal_id") != null) {
+                require(originals.put(number(row, "reversal_id"), row) == null, "JOURNAL_MISMATCH");
+            }
+        }
+        BigInteger allowance = BigInteger.ZERO;
+        var exclusions = json.array();
+        LocalDate historyFloor = null;
+        int attributedProvisionCount = 0;
+        for (var row : provisionRows) {
+            long journalId = number(row, "id");
+            var original = originals.get(journalId);
+            var sourceRow = original == null ? row : original;
+            if (original != null) {
+                requireExactReversal(original, row);
+            }
+            var saved = store.jdbc().queryForList("select source_json,source_hash from m_mnzl_r_provision_source where native_journal_id=?",
+                    number(sourceRow, "id"));
+            if (saved.isEmpty()) {
+                // Unknown historical gross attribution is never reconstructed from mutable component rows.
+                var reversal = sourceRow.get("reversal_id") == null ? null : byId.get(number(sourceRow, "reversal_id"));
+                require(reversal != null, "RECOVERY_REQUIRED");
+                requireExactReversal(sourceRow, reversal);
+                LocalDate floor = LocalDate.parse(string(sourceRow, "entry_date")).isAfter(LocalDate.parse(string(reversal, "entry_date")))
+                        ? LocalDate.parse(string(sourceRow, "entry_date")).plusDays(1)
+                        : LocalDate.parse(string(reversal, "entry_date")).plusDays(1);
+                historyFloor = historyFloor == null || floor.isAfter(historyFloor) ? floor : historyFloor;
+                require(!date.isBefore(historyFloor), "RECOVERY_REQUIRED");
+                if (original == null) {
+                    var exclusion = exclusions.addObject();
+                    exclusion.put("reason", "UNKNOWN_PRODUCT_ATTRIBUTION_EXACTLY_CANCELLED");
+                    exclusion.set("originalJournal", journal(sourceRow, currency));
+                    exclusion.set("reversalJournal", journal(reversal, currency));
+                    exclusion.put("availableFromDate", floor.toString());
+                    exclusion.put("contentHash", json.hash(exclusion));
+                }
+                continue;
+            }
+            JsonNode proof = json.read(string(saved.getFirst(), "source_json"));
+            require(json.hash(proof).equals(string(saved.getFirst(), "source_hash")), "SOURCE_CHANGED");
+            require(text(proof, "nativeJournalId").equals(Long.toString(number(sourceRow, "id")))
+                    && text(proof, "nativeProvisionHistoryId").equals(Long.toString(number(sourceRow, "entity_id")))
+                    && text(proof, "officeId").equals(Long.toString(number(sourceRow, "office_id")))
+                    && text(proof, "currency").equals(currency)
+                    && text(proof, "nativeGlAccountId").equals(Long.toString(number(sourceRow, "account_id")))
+                    && text(proof, "postingDate").equals(string(sourceRow, "entry_date"))
+                    && text(proof, "side").equals(number(sourceRow, "type_enum") == 2 ? "DEBIT" : "CREDIT")
+                    && new BigDecimal(text(proof, "amount")).compareTo(new BigDecimal(string(sourceRow, "amount"))) == 0,
+                    "JOURNAL_MISMATCH");
             var aggregate = json.array();
             var target = json.array();
             BigInteger aggregateAmount = BigInteger.ZERO;
             BigInteger targetAmount = BigInteger.ZERO;
-            String accountRole = null;
-            for (var component : components) {
-                if (number(component, "office_id") != number(row, "office_id") || !string(component, "currency_code").equals(currency)) {
-                    continue;
-                }
-                boolean liability = number(component, "liability_account") == number(row, "account_id");
-                boolean expense = number(component, "expense_account") == number(row, "account_id");
-                if (!liability && !expense) {
-                    continue;
-                }
-                require(liability != expense, "SOURCE_CHANGED");
-                String role = liability ? "PROVISION_ALLOWANCE" : "PROVISION_EXPENSE";
-                require(accountRole == null || accountRole.equals(role), "SOURCE_CHANGED");
-                accountRole = role;
+            String accountRole = number(sourceRow, "type_enum") == 2 ? "PROVISION_EXPENSE" : "PROVISION_ALLOWANCE";
+            for (JsonNode component : proof.path("components")) {
                 var source = json.object();
-                source.put("nativeProvisionComponentId", Long.toString(number(component, "id")));
-                source.put("nativeProvisionHistoryId", Long.toString(historyId));
-                source.put("productId", Long.toString(number(component, "product_id")));
-                source.put("officeId", Long.toString(number(component, "office_id")));
-                source.put("categoryId", Long.toString(number(component, "category_id")));
-                source.put("criteriaId", Long.toString(number(component, "criteria_id")));
+                source.put("nativeProvisionComponentId", component.path("id").asText());
+                source.put("nativeProvisionHistoryId", component.path("historyId").asText());
+                source.put("productId", component.path("productId").asText());
+                source.put("officeId", component.path("officeId").asText());
+                source.put("categoryId", component.path("categoryId").asText());
+                source.put("criteriaId", component.path("criteriaId").asText());
                 source.put("currency", currency);
                 source.put("nativeGlAccountId", Long.toString(number(row, "account_id")));
-                BigInteger amount = minor(component, "reseve_amount");
-                require(amount.signum() >= 0, "SOURCE_CHANGED");
+                BigDecimal reserved = new BigDecimal(component.path("reservedAmount").asText());
+                require(reserved.stripTrailingZeros().scale() <= 2 && reserved.signum() >= 0, "SOURCE_CHANGED");
+                BigInteger amount = reserved.movePointRight(2).toBigIntegerExact();
                 source.put("reservedAmountMinor", amount.toString());
                 source.put("contentHash", json.hash(source));
                 aggregate.add(source);
                 aggregateAmount = aggregateAmount.add(amount);
-                if (number(component, "product_id") == productId) {
+                if (component.path("productId").asLong() == productId) {
                     target.add(source);
                     targetAmount = targetAmount.add(amount);
                 }
             }
-            require(accountRole != null && aggregateAmount.equals(minor(row, "amount")) && !target.isEmpty(), "JOURNAL_MISMATCH");
+            require(aggregateAmount.equals(minor(row, "amount")), "JOURNAL_MISMATCH");
+            if (target.isEmpty()) {
+                continue;
+            }
             ObjectNode journal = journal(row, currency);
             journal.put("sourceKind", "PROVISION_POOL");
+            journal.put("originalProvisionJournalId", Long.toString(number(sourceRow, "id")));
+            journal.put("originalPostingProofHash", string(saved.getFirst(), "source_hash"));
             journal.putNull("loanId");
             journal.put("accountRole", accountRole);
             journal.set("financialAccountTypes", json.array());
@@ -164,6 +204,7 @@ public class ReceivablesHelAccounting {
             journal.set("targetProvisionComponents", target);
             journal.put("contentHash", json.hash(journal));
             journals.add(journal);
+            attributedProvisionCount++;
             if (accountRole.equals("PROVISION_ALLOWANCE")) {
                 allowance = allowance.add(number(row, "type_enum") == 2 ? targetAmount.negate() : targetAmount);
             }
@@ -172,7 +213,20 @@ public class ReceivablesHelAccounting {
         journals.sort(Comparator.comparingLong(j -> Long.parseLong(text(j, "nativeJournalId"))));
         Map<Long, JsonNode> measures = new TreeMap<>();
         loanJournals.forEach((loan, rows) -> measures.put(loan, measures(rows)));
-        return new Evidence(mapping, journals, measures, allowance, provisionRows.size());
+        return new Evidence(mapping, journals, measures, allowance, attributedProvisionCount, exclusions, historyFloor);
+    }
+
+    private void requireExactReversal(Map<String, Object> original, Map<String, Object> reversal) {
+        require(original.get("reversal_id") != null && number(original, "reversal_id") == number(reversal, "id")
+                && number(original, "id") != number(reversal, "id") && reversal.get("reversal_id") == null
+                && number(original, "entity_type_enum") == 3 && number(reversal, "entity_type_enum") == 3
+                && number(original, "entity_id") == number(reversal, "entity_id")
+                && number(original, "office_id") == number(reversal, "office_id")
+                && number(original, "account_id") == number(reversal, "account_id")
+                && string(original, "currency_code").equals(string(reversal, "currency_code"))
+                && Set.of(1L, 2L).contains(number(original, "type_enum"))
+                && number(original, "type_enum") + number(reversal, "type_enum") == 3
+                && minor(original, "amount").equals(minor(reversal, "amount")), "RECOVERY_REQUIRED");
     }
 
     public JsonNode measures(List<JsonNode> journals) {

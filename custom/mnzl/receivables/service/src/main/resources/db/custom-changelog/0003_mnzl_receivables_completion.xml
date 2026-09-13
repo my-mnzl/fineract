@@ -107,4 +107,11 @@ WHERE e.operation_key=a.operation_key AND s.event_key=e.record_key AND s.subject
 <addUniqueConstraint tableName="m_mnzl_r_hel_reporting_member" columnNames="capture_key,loan_id" constraintName="uq_r_hel_reporting_member"/>
 <addUniqueConstraint tableName="m_mnzl_r_hel_reporting_journal" columnNames="capture_key,native_journal_id" constraintName="uq_r_hel_reporting_journal"/>
 </changeSet>
+<changeSet id="mnzl-receivables-provision-source-3" author="mnzl">
+<createTable tableName="m_mnzl_r_provision_source">
+<column name="native_journal_id" type="BIGINT"><constraints nullable="false" primaryKey="true"/></column>
+<column name="source_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="source_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+</createTable>
+</changeSet>
 </databaseChangeLog>

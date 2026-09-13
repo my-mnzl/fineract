@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.accounting.journalentry.starter;
 
+import java.util.List;
+import org.apache.fineract.accounting.common.ProvisioningJournalEntryObserver;
 import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
 import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccountRepositoryWrapper;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
@@ -90,6 +92,7 @@ public class AccountingJournalEntryConfiguration {
             OfficeRepositoryWrapper officeRepositoryWrapper, AccountingProcessorForLoanFactory accountingProcessorForLoanFactory,
             AccountingProcessorForSavingsFactory accountingProcessorForSavingsFactory,
             AccountingProcessorForSharesFactory accountingProcessorForSharesFactory, AccountingProcessorHelper helper,
+            List<ProvisioningJournalEntryObserver> provisioningJournalEntryObservers,
             JournalEntryCommandFromApiJsonDeserializer fromApiJsonDeserializer, AccountingRuleRepository accountingRuleRepository,
             GLAccountReadPlatformService glAccountReadPlatformService, OrganisationCurrencyRepositoryWrapper organisationCurrencyRepository,
             PlatformSecurityContext context, PaymentDetailWritePlatformService paymentDetailWritePlatformService,
@@ -101,9 +104,10 @@ public class AccountingJournalEntryConfiguration {
             LoanTransactionRepository loanTransactionRepository) {
         return new JournalEntryWritePlatformServiceJpaRepositoryImpl(glClosureRepository, glAccountRepository, glJournalEntryRepository,
                 officeRepositoryWrapper, accountingProcessorForLoanFactory, accountingProcessorForSavingsFactory,
-                accountingProcessorForSharesFactory, helper, fromApiJsonDeserializer, accountingRuleRepository,
-                glAccountReadPlatformService, organisationCurrencyRepository, context, paymentDetailWritePlatformService,
-                financialActivityAccountRepositoryWrapper, accountingProcessorForClientTransactions, configurationReadPlatformService,
-                accountingService, externalAssetOwnerRepository, loanAmortizationAllocationMappingRepository, loanTransactionRepository);
+                accountingProcessorForSharesFactory, helper, provisioningJournalEntryObservers, fromApiJsonDeserializer,
+                accountingRuleRepository, glAccountReadPlatformService, organisationCurrencyRepository, context,
+                paymentDetailWritePlatformService, financialActivityAccountRepositoryWrapper, accountingProcessorForClientTransactions,
+                configurationReadPlatformService, accountingService, externalAssetOwnerRepository,
+                loanAmortizationAllocationMappingRepository, loanTransactionRepository);
     }
 }

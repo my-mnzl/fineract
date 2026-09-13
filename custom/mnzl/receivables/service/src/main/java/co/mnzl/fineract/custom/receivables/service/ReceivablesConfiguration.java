@@ -139,6 +139,13 @@ public class ReceivablesConfiguration {
             require(json.hash(json.read(string(existing, "config_json"))).equals(json.hash(input)), "FINERACT_CAPABILITY_MISSING");
             return capabilities(input.get("scope"), false);
         }
+        if (!input.get("helProductId").isNull()) {
+            long helProduct = Long.parseLong(text(input, "helProductId"));
+            store.jdbc().queryForList("select id from m_product_loan where id=? for update", helProduct);
+            require(store.jdbc().queryForObject(
+                    "select count(*) from m_mnzl_r_hel_reporting_registration where product_id=? and scope_key<>?", Long.class, helProduct,
+                    scope) == 0, "OWNERSHIP_CONFLICT");
+        }
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("scope_key", scope);
         fields.put("scope_json", json.write(input.get("scope")));

@@ -14307,7 +14307,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financierScope"
           },
           "registrationId": {
             "$ref": "#/components/schemas/id"
@@ -14336,7 +14336,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financierScope"
           },
           "registrationId": {
             "$ref": "#/components/schemas/id"
@@ -14363,7 +14363,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financierScope"
           },
           "registrationId": {
             "$ref": "#/components/schemas/id"
@@ -14639,6 +14639,18 @@
           },
           "contentHash": {
             "$ref": "#/components/schemas/sha256"
+          },
+          "originalProvisionJournalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "originalPostingProofHash": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -14661,7 +14673,9 @@
           "aggregateSourceCount",
           "aggregateSourceAmountMinor",
           "targetProvisionComponents",
-          "contentHash"
+          "contentHash",
+          "originalProvisionJournalId",
+          "originalPostingProofHash"
         ],
         "additionalProperties": false
       },
@@ -14994,6 +15008,12 @@
           },
           "contentHash": {
             "$ref": "#/components/schemas/sha256"
+          },
+          "nativeStatusId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeStatusCode": {
+            "$ref": "#/components/schemas/id"
           }
         },
         "required": [
@@ -15003,7 +15023,9 @@
           "disbursementState",
           "loan",
           "earningCarrying",
-          "contentHash"
+          "contentHash",
+          "nativeStatusId",
+          "nativeStatusCode"
         ],
         "additionalProperties": false
       },
@@ -15055,7 +15077,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financierScope"
           },
           "snapshotId": {
             "$ref": "#/components/schemas/id"
@@ -15126,6 +15148,16 @@
           },
           "contentHash": {
             "$ref": "#/components/schemas/sha256"
+          },
+          "provisionExclusions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/nativeHelProvisionExclusion"
+            }
+          },
+          "journalHistoryAvailableFromDate": {
+            "type": "string",
+            "format": "date"
           }
         },
         "required": [
@@ -15152,7 +15184,9 @@
           "journalManifestHash",
           "nativeAccountMapping",
           "productPool",
-          "contentHash"
+          "contentHash",
+          "provisionExclusions",
+          "journalHistoryAvailableFromDate"
         ],
         "additionalProperties": false,
         "description": "Actual-current immutable capture of the independently enumerated whole registered product. No historical as-of override. All hashes use JCS SHA256 omitting own contentHash; registrationRevisionHash omits itself. Membership hash covers sorted native loan ID strings. Member/journal manifests cover ID+contentHash pairs sorted numerically. Captured GL includes full posted history at observation; period reads before registration are unavailable."
@@ -15177,7 +15211,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financierScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -15219,7 +15253,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/financierScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -15382,6 +15416,102 @@
           "ordinaryHelProvisionExpenseMinor"
         ],
         "additionalProperties": false
+      },
+      "nativeHelExcludedJournal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nativeJournalId",
+          "nativeGlAccountId",
+          "officeId",
+          "currency",
+          "postingDate",
+          "side",
+          "amountMinor",
+          "nativeEntityId",
+          "nativeTransactionId",
+          "reversalJournalId"
+        ],
+        "properties": {
+          "nativeJournalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "officeId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "postingDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "DEBIT",
+              "CREDIT"
+            ]
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "nativeEntityId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeTransactionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reversalJournalId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "nativeHelProvisionExclusion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "originalJournal",
+          "reversalJournal",
+          "availableFromDate",
+          "contentHash"
+        ],
+        "properties": {
+          "reason": {
+            "const": "UNKNOWN_PRODUCT_ATTRIBUTION_EXACTLY_CANCELLED"
+          },
+          "originalJournal": {
+            "$ref": "#/components/schemas/nativeHelExcludedJournal"
+          },
+          "reversalJournal": {
+            "$ref": "#/components/schemas/nativeHelExcludedJournal"
+          },
+          "availableFromDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "contentHash": {
+            "type": "string"
+          }
+        }
       }
     }
   }
