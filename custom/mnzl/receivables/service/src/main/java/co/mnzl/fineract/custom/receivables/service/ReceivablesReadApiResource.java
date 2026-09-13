@@ -43,6 +43,7 @@ public class ReceivablesReadApiResource {
     private final ReceivablesReadService reads;
     private final ReceivablesJson json;
     private final ReceivablesHelHistory helHistory;
+    private final ReceivablesPeriodProof periodProof;
 
     private JsonNode scope(HttpHeaders headers) {
         return reads.authorize(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
@@ -172,6 +173,13 @@ public class ReceivablesReadApiResource {
             @QueryParam("eventWatermark") String maximum, @QueryParam("dealId") String deal, @QueryParam("accountId") String account) {
         JsonNode scope = scope(headers);
         return json.write(reads.controls(scope, boundary(scope, date, side, maximum), deal, account));
+    }
+
+    @GET
+    @Path("/period-activity-proof")
+    public String periodProof(@Context HttpHeaders headers, @QueryParam("postingPeriod") String period,
+            @QueryParam("eventWatermark") String maximum) {
+        return json.write(periodProof.read(scope(headers), headers.getHeaderString("X-MNZL-Account-Mapping"), period, maximum));
     }
 
     @GET

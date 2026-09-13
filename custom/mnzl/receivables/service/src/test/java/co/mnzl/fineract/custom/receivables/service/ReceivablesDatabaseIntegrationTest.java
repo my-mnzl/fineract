@@ -122,6 +122,7 @@ class ReceivablesDatabaseIntegrationTest {
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
+                new ReceivablesPeriodProofScenarios(this).verify();
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
                         "select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100") == 0;
@@ -152,7 +153,9 @@ class ReceivablesDatabaseIntegrationTest {
                         "bound-historical-grant-substitution-rejected", "bound-historical-grant-atomic-retry",
                         "legacy-grant-new-effects-rejected", "historical-grant-issuer-policy-preserved",
                         "office-closure-inclusive-posting-boundary", "office-closure-native-first-serialization",
-                        "office-closure-snapshot-before-close", "office-closure-durable-replay")));
+                        "office-closure-snapshot-before-close", "office-closure-durable-replay",
+                        "period-proof-population-and-gross-controls", "period-proof-zero-and-hel-exclusion",
+                        "period-proof-missing-extra-and-cross-date", "period-proof-event-integrity")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -403,10 +406,33 @@ class ReceivablesDatabaseIntegrationTest {
         }
     }
 
+    String queryText(String sql, Object... parameters) throws Exception {
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
+                var statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < parameters.length; index++) {
+                statement.setObject(index + 1, parameters[index]);
+            }
+            try (var rows = statement.executeQuery()) {
+                assertThat(rows.next()).isTrue();
+                return rows.getString(1);
+            }
+        }
+    }
+
     void executeSql(String sql) throws Exception {
         try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
                 var statement = connection.createStatement()) {
             statement.execute(sql);
+        }
+    }
+
+    void executeSql(String sql, Object... parameters) throws Exception {
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
+                var statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < parameters.length; index++) {
+                statement.setObject(index + 1, parameters[index]);
+            }
+            statement.execute();
         }
     }
 

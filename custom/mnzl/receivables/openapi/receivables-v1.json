@@ -1948,6 +1948,105 @@
         },
         "description": "Issues an immutable grant bound to the JCS SHA-256 of the complete final command. CONFIGURE permission and authenticated approvedBy are required; this endpoint does not enforce independent maker/checker approval."
       }
+    },
+    "/period-activity-proof": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "postingPeriod",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/periodActivityProof"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        },
+        "description": "Complete scoped event membership and currently observed deterministic R-event GL proof in one repeatable-read snapshot. Ordinary HEL loan journals are excluded. Gross debit/credit totals and debit-minus-credit net retain zero-net reversal activity. At most 100000 candidate rows per event/registry/actual population; larger reads fail without partial proof. Canonical commitment formulas are documented in custom/mnzl/receivables/README.md."
+      }
     }
   },
   "components": {
@@ -12508,6 +12607,157 @@
           "effectiveThrough",
           "mode",
           "commandPayloadHash"
+        ],
+        "additionalProperties": false
+      },
+      "periodActivityControl": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "originalMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountKey": {
+            "$ref": "#/components/schemas/accountKey"
+          },
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/currency"
+          },
+          "debitMinor": {
+            "$ref": "#/components/schemas/nonnegativeMinorUnits"
+          },
+          "creditMinor": {
+            "$ref": "#/components/schemas/nonnegativeMinorUnits"
+          },
+          "netMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          }
+        },
+        "required": [
+          "originalMappingRevisionId",
+          "accountKey",
+          "nativeGlAccountId",
+          "currency",
+          "debitMinor",
+          "creditMinor",
+          "netMinor"
+        ],
+        "additionalProperties": false
+      },
+      "periodActivityProof": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "postingPeriod": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "readAccountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "coverage": {
+            "type": "string",
+            "const": "SCOPED_EVENTS_CUSTOM_R_JOURNALS_V1"
+          },
+          "excludedJournalPopulations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "const": "ORDINARY_HEL_LOAN_JOURNALS"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "eventManifest": {
+            "type": "object",
+            "properties": {
+              "ordering": {
+                "type": "string",
+                "const": "EVENT_ID_ASC"
+              },
+              "count": {
+                "$ref": "#/components/schemas/version"
+              },
+              "sha256": {
+                "$ref": "#/components/schemas/sha256"
+              }
+            },
+            "required": [
+              "ordering",
+              "count",
+              "sha256"
+            ],
+            "additionalProperties": false
+          },
+          "observedGl": {
+            "type": "object",
+            "properties": {
+              "semantics": {
+                "type": "string",
+                "const": "CURRENT_AT_REPEATABLE_READ"
+              },
+              "observedAt": {
+                "$ref": "#/components/schemas/utcInstant"
+              },
+              "count": {
+                "$ref": "#/components/schemas/version"
+              },
+              "sha256": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "zeroAccountPopulation": {
+                "type": "string",
+                "const": "CURRENT_APPROVED_MAPPING"
+              },
+              "accounts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/periodActivityControl"
+                }
+              }
+            },
+            "required": [
+              "semantics",
+              "observedAt",
+              "count",
+              "sha256",
+              "zeroAccountPopulation",
+              "accounts"
+            ],
+            "additionalProperties": false
+          },
+          "proofHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "tenantId",
+          "scope",
+          "postingPeriod",
+          "eventWatermark",
+          "readAccountMappingRevisionId",
+          "coverage",
+          "excludedJournalPopulations",
+          "eventManifest",
+          "observedGl",
+          "proofHash"
         ],
         "additionalProperties": false
       }
