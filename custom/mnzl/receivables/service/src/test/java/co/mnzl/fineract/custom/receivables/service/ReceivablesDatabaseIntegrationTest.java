@@ -378,8 +378,8 @@ class ReceivablesDatabaseIntegrationTest {
             ObjectNode recovery = json.object();
             recovery.set("sourceCashflowId", flow.get("cashflowId"));
             LocalDate forecastDate = LocalDate.parse(flow.path("dueDate").asText());
-            LocalDate firstClose = (id.equals("developer-impaired-account") ? today : startDate).plusDays(45).withDayOfMonth(1)
-                    .plusMonths(1);
+            LocalDate firstClose = (List.of("developer-impaired-account", "payable-cash-after-due").contains(id) ? today : startDate)
+                    .plusDays(45).withDayOfMonth(1).plusMonths(1);
             recovery.put("date", forecastDate.isBefore(firstClose) ? firstClose.plusDays(1).toString() : forecastDate.toString());
             recovery.set("amountMinor", flow.get("amountMinor"));
             recovery.put("payer", "BORROWER");
