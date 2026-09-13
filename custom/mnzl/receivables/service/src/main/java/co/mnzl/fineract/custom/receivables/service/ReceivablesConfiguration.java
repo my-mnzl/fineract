@@ -225,9 +225,9 @@ public class ReceivablesConfiguration {
             require(store.jdbc().queryForObject("select count(*) from c_configuration where name=? and enabled=?", Long.class,
                     "paymenttype-applicable-for-disbursement-charges", true) == 1, "FINERACT_CAPABILITY_MISSING");
             long helProduct = Long.parseLong(text(input, "helProductId"));
+            require(products.findById(helProduct).isPresent(), "FINERACT_CAPABILITY_MISSING");
             var strategy = strategies.findOne(helProduct);
             require(!"MNZL_PURCHASED_RECEIVABLE".equals(strategy.getInstrumentCode()), "FINERACT_CAPABILITY_MISSING");
-            require(products.findById(helProduct).isPresent(), "FINERACT_CAPABILITY_MISSING");
             long clearing = 0;
             for (var entry : input.get("accountMap")) {
                 if (text(entry, "accountKey").equals("helSettlementClearing")) {
