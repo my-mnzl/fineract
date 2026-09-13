@@ -72,6 +72,10 @@ class ReceivablesDatabaseIntegrationTest {
     private String databasePassword;
     private long ordinaryProductId;
     private long helPaymentTypeId;
+    final ObjectNode pairingEvidence = json.object();
+    final ObjectNode reportingEvidence = json.object();
+    final ObjectNode receiptLossEvidence = json.object();
+    final ObjectNode continuationEvidence = json.object();
     final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
     final Map<String, Long> accounts = new LinkedHashMap<>();
     private final LocalDate startDate = LocalDate.now(ZoneOffset.UTC);
@@ -117,8 +121,11 @@ class ReceivablesDatabaseIntegrationTest {
                 verifyPurchaseAndIdempotency(purchase);
                 verifyRollback(database);
                 boolean ordinaryPassed = ordinaryRegression();
+                new ReceivablesHelReportingScenarios(this).verify();
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
+                new ReceivablesReceiptLossScenarios(this).verify();
+                JsonNode purchasedPopulationPairing = new ReceivablesPurchasedPopulationEvidence(this).capture();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
@@ -130,6 +137,11 @@ class ReceivablesDatabaseIntegrationTest {
                 assertThat(queryLong("select count(*) from m_mnzl_r_event where delivered_at is null")).isGreaterThanOrEqualTo(4);
                 ObjectNode evidence = json.object();
                 evidence.put("database", database);
+                evidence.set("developerEffectPairing", pairingEvidence);
+                evidence.set("helReportingPairing", reportingEvidence);
+                evidence.set("receiptLossPairing", receiptLossEvidence);
+                evidence.set("absentCollectionPairing", continuationEvidence);
+                evidence.set("purchasedPopulationPairing", purchasedPopulationPairing);
                 evidence.put("nativeJournalReadbackMatched", journalsMatched);
                 evidence.put("ordinaryProductRegressionPassed", ordinaryPassed);
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));
@@ -145,8 +157,8 @@ class ReceivablesDatabaseIntegrationTest {
                         "impaired-reversal-restores-allowance", "independent-controls-detect-mirrored-corruption", "future-close-rejected",
                         "preparing-close-blocks-historical-posting", "developer-payment-crosses-receivable-due-date",
                         "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
-                        "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees",
-                        "persisted-native-configuration-readback", "native-hel-historical-repayment-snapshot",
+                        "immutable-event-correction", "seeded-closed-boundary-current-correction", "funding-actual360-no-capitalization",
+                        "hel-native-financed-fees", "persisted-native-configuration-readback", "native-hel-historical-repayment-snapshot",
                         "stage-three-writeoff-later-recovery", "recovery-payer-and-exact-transaction-readback",
                         "developer-lot-impairment-after-due", "missing-and-expired-lot-forecasts-block-close",
                         "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected",
@@ -185,7 +197,8 @@ class ReceivablesDatabaseIntegrationTest {
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))
                 .build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).withFailMessage("%s %s: %s", method, path, response.body()).isEqualTo(status);
+        assertThat(response.statusCode()).withFailMessage("%s %s [%s]: %s", method, path,
+                payload == null ? "" : payload.path("operationId").asText(), response.body()).isEqualTo(status);
         return json.read(response.body());
     }
 
@@ -209,7 +222,7 @@ class ReceivablesDatabaseIntegrationTest {
         return scope;
     }
 
-    private ObjectNode versions() {
+    ObjectNode versions() {
         ObjectNode value = json.object();
         value.put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V1");
         value.put("productPolicyCode", "EG_RECEIVABLES_V1");
@@ -219,9 +232,15 @@ class ReceivablesDatabaseIntegrationTest {
         return value;
     }
 
-    ObjectNode command(String type, String operation, String subject, String kind) {
+    ObjectNode command(String type, String operation, String subject, String kind) throws Exception {
         ObjectNode command = json.object();
         command.put("commandType", type);
+        if (type.equals("RESET_RATE")) {
+            String accountKey = ReceivablesStore.key(json.hash(scope(false)), "account", subject);
+            String forecast = queryText("select snapshot_json from m_mnzl_r_risk_forecast where account_key=? "
+                    + "order by as_of_date desc,forecast_version desc limit 1", accountKey);
+            command.put("expectedRiskForecastHash", json.hash(json.read(forecast)));
+        }
         command.put("executionMode", "CURRENT");
         command.putNull("executionAuthorization");
         command.put("accountMappingRevisionId", "mapping-1");
@@ -362,12 +381,12 @@ class ReceivablesDatabaseIntegrationTest {
         forecast.put("stage", "STAGE_1");
         forecast.put("contentHash", "0".repeat(64));
         List<JsonNode> recoveries = new ArrayList<>();
+        boolean dueAdvanceForecast = List.of("developer-impaired-account", "payable-cash-after-due").contains(id);
         for (JsonNode flow : flows) {
             ObjectNode recovery = json.object();
             recovery.set("sourceCashflowId", flow.get("cashflowId"));
             LocalDate forecastDate = LocalDate.parse(flow.path("dueDate").asText());
-            LocalDate firstClose = (id.equals("developer-impaired-account") ? today : startDate).plusDays(45).withDayOfMonth(1)
-                    .plusMonths(1);
+            LocalDate firstClose = (dueAdvanceForecast ? today : startDate).plusDays(45).withDayOfMonth(1).plusMonths(1);
             recovery.put("date", forecastDate.isBefore(firstClose) ? firstClose.plusDays(1).toString() : forecastDate.toString());
             recovery.set("amountMinor", flow.get("amountMinor"));
             recovery.put("payer", "BORROWER");
@@ -376,13 +395,15 @@ class ReceivablesDatabaseIntegrationTest {
         ObjectNode scenario = json.object();
         scenario.put("scenarioId", "contractual");
         scenario.put("probability", "1");
-        if (today.equals(startDate) || id.equals("developer-impaired-account")) {
+        if (today.equals(startDate) || dueAdvanceForecast) {
             scenario.put("defaultDate", today.plusDays(45).toString());
         } else {
             scenario.putNull("defaultDate");
         }
         scenario.set("recoveries", json.value(recoveries));
         forecast.set("scenarios", json.value(List.of(scenario)));
+        forecast.remove("contentHash");
+        forecast.put("contentHash", json.hash(forecast));
         book.set("riskForecast", forecast);
         bookingCommands.put(id, book);
         return request("POST", PREFIX + "/commands", book, 200);
@@ -552,19 +573,24 @@ class ReceivablesDatabaseIntegrationTest {
         assertThat(queryLong("select count(*) from m_mnzl_r_command where operation_id='failed-book'")).isEqualTo(1);
     }
 
-    private void setupOrdinaryProduct() throws Exception {
+    ObjectNode ordinaryProductRequest() {
         ObjectNode product = (ObjectNode) json.read(
                 "{\"name\":\"Ordinary loan regression\",\"shortName\":\"ORD\",\"currencyCode\":\"EGP\",\"locale\":\"en\",\"digitsAfterDecimal\":2,\"inMultiplesOf\":0,\"principal\":1000,\"numberOfRepayments\":3,\"repaymentEvery\":1,\"repaymentFrequencyType\":2,\"interestRatePerPeriod\":2,\"interestRateFrequencyType\":2,\"amortizationType\":1,\"interestType\":0,\"interestCalculationPeriodType\":1,\"inArrearsTolerance\":0,\"transactionProcessingStrategyCode\":\"mifos-standard-strategy\",\"accountingRule\":2,\"isInterestRecalculationEnabled\":false,\"daysInMonthType\":1,\"daysInYearType\":1}");
         for (String field : List.of("fundSourceAccountId", "loanPortfolioAccountId", "transfersInSuspenseAccountId")) {
             product.put(field, accounts.get("bank"));
         }
         product.put("loanPortfolioAccountId", accounts.get("contractualReceivable"));
-        for (String field : List.of("interestOnLoanAccountId", "incomeFromFeeAccountId", "incomeFromPenaltyAccountId",
-                "incomeFromRecoveryAccountId")) {
-            product.put(field, accounts.get("portfolioInterestIncome"));
+        product.put("interestOnLoanAccountId", accounts.get("portfolioInterestIncome"));
+        for (String field : List.of("incomeFromFeeAccountId", "incomeFromPenaltyAccountId", "incomeFromRecoveryAccountId")) {
+            product.put(field, accounts.get("writtenOffRecoveryIncome"));
         }
         product.put("writeOffAccountId", accounts.get("impairmentExpense"));
         product.put("overpaymentLiabilityAccountId", accounts.get("developerPayable"));
+        return product;
+    }
+
+    private void setupOrdinaryProduct() throws Exception {
+        ObjectNode product = ordinaryProductRequest();
         ObjectNode payment = json.object();
         payment.put("name", "HEL clearing");
         payment.put("description", "Noncash settlement clearing");
@@ -576,20 +602,10 @@ class ReceivablesDatabaseIntegrationTest {
         ordinaryProductId = request("POST", "/loanproducts", product, 200).path("resourceId").asLong();
     }
 
-    private boolean ordinaryRegression() throws Exception {
-        ObjectNode client = json.object();
-        client.put("officeId", 1);
-        client.put("legalFormId", 1);
-        client.put("firstname", "Ordinary");
-        client.put("lastname", "Borrower");
-        client.put("active", true);
-        client.put("activationDate", today.toString());
-        client.put("dateFormat", "yyyy-MM-dd");
-        client.put("locale", "en");
-        long clientId = request("POST", "/clients", client, 200).path("resourceId").asLong();
+    ObjectNode ordinaryLoanRequest(long clientId, long productId) {
         ObjectNode loan = json.object();
         loan.put("clientId", clientId);
-        loan.put("productId", ordinaryProductId);
+        loan.put("productId", productId);
         loan.put("principal", 1000);
         loan.put("numberOfRepayments", 3);
         loan.put("repaymentEvery", 1);
@@ -607,6 +623,21 @@ class ReceivablesDatabaseIntegrationTest {
         loan.put("loanType", "individual");
         loan.put("dateFormat", "yyyy-MM-dd");
         loan.put("locale", "en");
+        return loan;
+    }
+
+    private boolean ordinaryRegression() throws Exception {
+        ObjectNode client = json.object();
+        client.put("officeId", 1);
+        client.put("legalFormId", 1);
+        client.put("firstname", "Ordinary");
+        client.put("lastname", "Borrower");
+        client.put("active", true);
+        client.put("activationDate", today.toString());
+        client.put("dateFormat", "yyyy-MM-dd");
+        client.put("locale", "en");
+        long clientId = request("POST", "/clients", client, 200).path("resourceId").asLong();
+        ObjectNode loan = ordinaryLoanRequest(clientId, ordinaryProductId);
         long id = request("POST", "/loans", loan, 200).path("loanId").asLong();
         ObjectNode approve = json.object();
         approve.put("approvedOnDate", today.toString());
@@ -928,7 +959,7 @@ class ReceivablesDatabaseIntegrationTest {
         request("POST", PREFIX + "/commands", receiptCommand(operation, account, amount), 200);
     }
 
-    ObjectNode receiptCommand(String operation, String account, String amount) {
+    ObjectNode receiptCommand(String operation, String account, String amount) throws Exception {
         ObjectNode cash = command("RECORD_CASH_MOVEMENT", operation, "deal", "DEAL");
         ObjectNode source = json.object();
         source.put("bankSourceId", operation + "-bank");

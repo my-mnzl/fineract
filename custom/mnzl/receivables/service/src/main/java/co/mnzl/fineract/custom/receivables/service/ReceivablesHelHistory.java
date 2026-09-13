@@ -84,7 +84,9 @@ public class ReceivablesHelHistory {
     }
 
     private void capture(Loan loan) {
-        var bindings = store.jdbc().queryForList("select distinct scope_key from m_mnzl_r_hel_funding where loan_id=?", loan.getId());
+        var bindings = store.jdbc().queryForList(
+                "select distinct scope_key from m_mnzl_r_hel_funding where loan_id=? union select scope_key from m_mnzl_r_hel_reporting_registration where product_id=?",
+                loan.getId(), loan.productId());
         if (bindings.isEmpty()) {
             return;
         }
@@ -123,11 +125,11 @@ public class ReceivablesHelHistory {
         return result;
     }
 
-    private ObjectNode snapshot(Loan loan) {
+    public ObjectNode snapshot(Loan loan) {
         var result = json.object();
         result.put("id", loan.getId().toString());
         result.put("externalId", loan.getExternalId().getValue());
-        result.put("clientId", loan.getClientId().toString());
+        result.put("clientId", loan.getClientId() == null ? null : loan.getClientId().toString());
         result.put("loanProductId", loan.productId().toString());
         result.set("currency", json.value(Map.of("code", loan.getCurrencyCode())));
         result.put("principal", loan.getPrincipal().getAmount().toPlainString());
@@ -147,8 +149,9 @@ public class ReceivablesHelHistory {
         if (loan.getClosedOnDate() != null) {
             timeline.put("closedOnDate", loan.getClosedOnDate().toString());
         }
-        result.putObject("summary").put("totalWrittenOff", loan.getTotalWrittenOff().toPlainString()).put("totalOutstanding",
-                loan.getSummary().getTotalOutstanding(loan.getCurrency()).getAmount().toPlainString());
+        result.putObject("summary")
+                .put("totalWrittenOff", loan.getTotalWrittenOff() == null ? "0" : loan.getTotalWrittenOff().toPlainString())
+                .put("totalOutstanding", loan.getSummary().getTotalOutstanding(loan.getCurrency()).getAmount().toPlainString());
         var periods = result.putObject("repaymentSchedule").putArray("periods");
         for (var period : loan.getRepaymentScheduleInstallments()) {
             var value = periods.addObject();

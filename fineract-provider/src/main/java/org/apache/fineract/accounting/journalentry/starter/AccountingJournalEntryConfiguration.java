@@ -19,6 +19,7 @@
 package org.apache.fineract.accounting.journalentry.starter;
 
 import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
+import org.apache.fineract.accounting.common.ProvisioningJournalEntryObserver;
 import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccountRepositoryWrapper;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.glaccount.service.GLAccountReadPlatformService;
@@ -52,6 +53,7 @@ import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanAmortizationAllocationMappingRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.paymentdetail.service.PaymentDetailWritePlatformService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -90,6 +92,7 @@ public class AccountingJournalEntryConfiguration {
             OfficeRepositoryWrapper officeRepositoryWrapper, AccountingProcessorForLoanFactory accountingProcessorForLoanFactory,
             AccountingProcessorForSavingsFactory accountingProcessorForSavingsFactory,
             AccountingProcessorForSharesFactory accountingProcessorForSharesFactory, AccountingProcessorHelper helper,
+            ObjectProvider<ProvisioningJournalEntryObserver> provisioningJournalEntryObservers,
             JournalEntryCommandFromApiJsonDeserializer fromApiJsonDeserializer, AccountingRuleRepository accountingRuleRepository,
             GLAccountReadPlatformService glAccountReadPlatformService, OrganisationCurrencyRepositoryWrapper organisationCurrencyRepository,
             PlatformSecurityContext context, PaymentDetailWritePlatformService paymentDetailWritePlatformService,
@@ -101,9 +104,10 @@ public class AccountingJournalEntryConfiguration {
             LoanTransactionRepository loanTransactionRepository) {
         return new JournalEntryWritePlatformServiceJpaRepositoryImpl(glClosureRepository, glAccountRepository, glJournalEntryRepository,
                 officeRepositoryWrapper, accountingProcessorForLoanFactory, accountingProcessorForSavingsFactory,
-                accountingProcessorForSharesFactory, helper, fromApiJsonDeserializer, accountingRuleRepository,
-                glAccountReadPlatformService, organisationCurrencyRepository, context, paymentDetailWritePlatformService,
-                financialActivityAccountRepositoryWrapper, accountingProcessorForClientTransactions, configurationReadPlatformService,
-                accountingService, externalAssetOwnerRepository, loanAmortizationAllocationMappingRepository, loanTransactionRepository);
+                accountingProcessorForSharesFactory, helper, provisioningJournalEntryObservers.orderedStream().toList(),
+                fromApiJsonDeserializer, accountingRuleRepository, glAccountReadPlatformService, organisationCurrencyRepository, context,
+                paymentDetailWritePlatformService, financialActivityAccountRepositoryWrapper, accountingProcessorForClientTransactions,
+                configurationReadPlatformService, accountingService, externalAssetOwnerRepository,
+                loanAmortizationAllocationMappingRepository, loanTransactionRepository);
     }
 }

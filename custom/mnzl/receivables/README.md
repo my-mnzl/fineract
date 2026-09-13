@@ -112,3 +112,30 @@ Each candidate event, registry and actual-journal SQL query fetches at most 1000
 rows. More than 100000 candidates, or more than 100000 included event lines, fails
 with `INVALID_DATA`; no partial/truncated proof is returned. This initial bound
 applies to scoped candidates through the watermark, not just the requested month.
+
+## Approved post-transfer receipt loss
+
+`RECORD_POST_TRANSFER_RECEIPT_LOSS` records a new, independently verified outgoing
+bank debit in the current open posting period after substitution or HEL conversion.
+It requires a full-command CORRECTION grant, a signed Legal determination of no
+surviving enforceable right, and separate Finance and Credit approvals. The actor
+and all three approvers must be distinct. The integration is responsible for
+verifying the referenced evidence before granting authority; native execution binds
+its immutable identifiers and hashes and enforces the financial constraints.
+
+This command supports only a full original receipt, entirely collected by one
+unreversed COLLECT operation into the original account. It binds the original
+command, bank source and event hashes and the downstream transfer hashes. The
+original source can have only one loss disposition. The outgoing source must be
+new and is owned atomically by this command. Its actual value date is preserved
+separately from the original receipt date and current posting date.
+
+`POST /receipt-loss-configuration` registers one immutable `receiptReturnLoss`
+expense mapping extension per financier scope; GET reads it back. The extension has
+its own ID and content hash and does not alter the original account mapping or its
+configuration hash. Loss posting debits that expense and credits bank exactly once.
+Period proofs retain the base mapping revision and expose the extension ID/hash on
+loss controls. The result appends `receiptLossDisposition` lineage without changing
+old receivable, successor, HEL, developer-lot or event state. This bounded command
+does not recognize a recovery claim or support partial returns; cases with surviving
+rights require their independently evidenced recovery path.

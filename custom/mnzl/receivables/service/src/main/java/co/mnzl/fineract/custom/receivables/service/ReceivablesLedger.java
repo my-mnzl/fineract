@@ -86,6 +86,7 @@ public class ReceivablesLedger {
     private final JournalEntryRepository journals;
     private final GLClosureRepository closures;
     private final AccountingProcessorHelper accounting;
+    private final ReceivablesReceiptLoss receiptLoss;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public Office lockOffice(long officeId) {
@@ -93,7 +94,7 @@ public class ReceivablesLedger {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<JsonNode> post(String scope, String eventKey, LocalDate date, long officeId, List<Line> lines) {
+    public List<JsonNode> post(String scope, String eventKey, LocalDate date, long officeId, List<Line> lines, JsonNode lossDisposition) {
         var office = lockOffice(officeId);
         try {
             accounting.checkForBranchClosures(closures.findFirstByOfficeIdOrderByClosingDateDesc(officeId), date);
@@ -106,9 +107,13 @@ public class ReceivablesLedger {
         List<JsonNode> output = new ArrayList<>();
         int sequence = 0;
         for (Line line : lines) {
-            require(ReceivablesConfiguration.ACCOUNTS.contains(line.accountKey()) && line.amountMinor().signum() > 0, "JOURNAL_MISMATCH");
-            var mapping = store.require("account_map", ReceivablesStore.key(scope, "map", line.accountKey()));
-            long glId = ReceivablesStore.number(mapping, "native_gl_id");
+            boolean loss = ReceivablesReceiptLoss.ACCOUNT.equals(line.accountKey());
+            require((ReceivablesConfiguration.ACCOUNTS.contains(line.accountKey()) || loss) && line.amountMinor().signum() > 0,
+                    "JOURNAL_MISMATCH");
+            require(!loss || lossDisposition != null, "JOURNAL_MISMATCH");
+            long glId = loss ? receiptLoss.glAccount(scope, lossDisposition.get("lossMappingExtension"))
+                    : ReceivablesStore.number(store.require("account_map", ReceivablesStore.key(scope, "map", line.accountKey())),
+                            "native_gl_id");
             var account = accounts.findById(glId).orElseThrow();
             require(!account.isDisabled() && account.isDetailAccount(), "FINERACT_CAPABILITY_MISSING");
             String sourceId = eventKey + ":" + sequence++;

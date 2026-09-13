@@ -183,6 +183,15 @@ public class ReceivablesReadService {
         result.put("nativeClientId", Long.toString(number(account, "native_client_id")));
         result.set("position", position(scope, id, boundary));
         result.set("measurementLegs", json.value(legs));
+        var forecasts = store.jdbc().queryForList(
+                "select f.snapshot_json from m_mnzl_r_risk_forecast f join m_mnzl_r_event e on e.operation_key=f.operation_key "
+                        + "where f.account_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
+                        + " order by f.as_of_date desc,f.forecast_version desc,e.sequence_id desc",
+                string(account, "record_key"), boundary.watermark(), boundary.date(), boundary.date());
+        require(!forecasts.isEmpty(), "SOURCE_CHANGED");
+        JsonNode forecast = json.read(string(forecasts.getFirst(), "snapshot_json"));
+        result.set("riskForecast", forecast);
+        result.put("riskForecastHash", json.hash(forecast));
         result.put("eventWatermark", Long.toString(boundary.watermark()));
         return result;
     }
@@ -623,7 +632,11 @@ public class ReceivablesReadService {
             }
         }
         List<JsonNode> balances = new ArrayList<>();
-        for (String semantic : ReceivablesConfiguration.ACCOUNTS.stream().sorted().toList()) {
+        var observedAccounts = new java.util.TreeSet<>(ReceivablesConfiguration.ACCOUNTS);
+        if (sub.containsKey(ReceivablesReceiptLoss.ACCOUNT)) {
+            observedAccounts.add(ReceivablesReceiptLoss.ACCOUNT);
+        }
+        for (String semantic : observedAccounts) {
             BigInteger mirrored = sub.getOrDefault(semantic, BigInteger.ZERO);
             BigInteger observed = actual.getOrDefault(semantic, BigInteger.ZERO);
             require(mirrored.equals(observed), "JOURNAL_MISMATCH");

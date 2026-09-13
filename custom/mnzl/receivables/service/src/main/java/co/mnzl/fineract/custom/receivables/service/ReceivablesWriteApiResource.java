@@ -27,6 +27,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -47,6 +48,7 @@ public class ReceivablesWriteApiResource {
     private final ReceivablesCommandService commands;
     private final ReceivablesCalculationService calculations;
     private final ReceivablesConfiguration configuration;
+    private final ReceivablesReceiptLoss receiptLoss;
     private final ReceivablesJson json;
     private final PlatformSecurityContext security;
 
@@ -90,6 +92,20 @@ public class ReceivablesWriteApiResource {
                     ReceivablesJson.hashText(input.path("scope").toString()), ReceivablesJson.hashText(input.path("subjectId").asText()),
                     result, (System.nanoTime() - started) / 1_000_000);
         }
+    }
+
+    @POST
+    @Path("/receipt-loss-configuration")
+    public String configureReceiptLoss(@Context HttpHeaders headers, String request) {
+        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
+                "OWNERSHIP_CONFLICT");
+        return json.write(receiptLoss.configure(request));
+    }
+
+    @GET
+    @Path("/receipt-loss-configuration")
+    public String receiptLossConfiguration(@Context HttpHeaders headers) {
+        return json.write(receiptLoss.configuration(scope(headers)));
     }
 
     @POST
@@ -172,6 +188,22 @@ public class ReceivablesWriteApiResource {
         require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
                 "OWNERSHIP_CONFLICT");
         return json.write(configuration.authorizeWorkout(request));
+    }
+
+    @POST
+    @Path("/workout-authorizations/v2")
+    public String authorizeWorkoutV2(@Context HttpHeaders headers, String request) {
+        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
+                "OWNERSHIP_CONFLICT");
+        return json.write(configuration.authorizeWorkoutV2(request));
+    }
+
+    @POST
+    @Path("/workout-authorizations/v2/{authorizationId}/revoke")
+    public String revokeWorkoutV2(@Context HttpHeaders headers, @PathParam("authorizationId") String authorizationId, String request) {
+        JsonNode input = json.validate("nativeWorkoutRevocationRequest", request);
+        require(configuration.scopeKey(input.get("scope")).equals(configuration.scopeKey(scope(headers))), "OWNERSHIP_CONFLICT");
+        return json.write(configuration.revokeWorkoutV2(input.get("scope"), authorizationId));
     }
 
 }

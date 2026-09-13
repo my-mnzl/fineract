@@ -112,6 +112,20 @@ public class ReceivablesMeasurement {
         return purchase;
     }
 
+    public MeasurementState resetState(Position before, Segment future) {
+        var flows = new ArrayList<Cashflow>(future.cashflows());
+        for (Leg leg : before.legs()) {
+            if (leg.discountDays() == 0 && leg.outstandingMinor().signum() > 0) {
+                flows.add(new Cashflow(leg.cashflow().cashflowId(), leg.cashflow().dueDate(), leg.outstandingMinor()));
+            }
+        }
+        Segment next = new Segment(before.businessDate(), flows, future.grossBasisMinor().add(before.pastDueMinor()),
+                future.netBasisMinor().add(before.pastDueMinor()), future.grossYield(), future.netEir());
+        Map<String, BigInteger> outstanding = new LinkedHashMap<>();
+        flows.forEach(flow -> outstanding.put(flow.cashflowId(), flow.amountMinor()));
+        return new MeasurementState(next, ReceivablesMath.position(next, before.businessDate(), outstanding), outstanding);
+    }
+
     public MeasurementState state(Map<String, Object> account) {
         var segment = store.require("segment", string(account, "active_segment_key"));
         return json.convert(json.read(string(segment, "snapshot_json")), MeasurementState.class);
@@ -182,7 +196,10 @@ public class ReceivablesMeasurement {
         int requested = Integer.parseInt(text(forecast, "stage").substring(6));
         int stage = Math.max(requested, CreditAndFunding.stage(position.daysPastDue(), false, false));
         require(stage == requested, "SOURCE_CHANGED");
-        return CreditAndFunding.impairment(position, segment.netEir().rate(), stage, scenarios(forecast)).lossAllowanceMinor();
+        var scenarios = scenarios(forecast);
+        require(scenarios.stream().flatMap(scenario -> scenario.recoveries().stream())
+                .noneMatch(recovery -> recovery.date().isBefore(position.businessDate())), "EVIDENCE_EXPIRED");
+        return CreditAndFunding.impairment(position, segment.netEir().rate(), stage, scenarios).lossAllowanceMinor();
     }
 
     public ObjectNode wirePosition(Map<String, Object> account, Position p, BigInteger allowance, String side) {

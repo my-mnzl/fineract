@@ -310,6 +310,7 @@ public class ReceivablesCalculationService {
         var reset = ReceivableEvents.reset(state, effective, decimal(input, "corridorRate").add(decimal(input, "spread")));
         require(new HashSet<>(measurement.flows(input.get("remainingCashflows"))).equals(new HashSet<>(state.segment().cashflows())),
                 "SOURCE_CHANGED");
+        require(text(input.get("riskForecast"), "stage").equals(text(input.get("position"), "stage")), "SOURCE_CHANGED");
         BigInteger allowance = minor(input.get("position"), "lossAllowanceMinor");
         ObjectNode beforeWire = after(input.get("position"), before, allowance);
         beforeWire.put("boundarySide", "BEFORE_EVENTS");
@@ -320,8 +321,14 @@ public class ReceivablesCalculationService {
         after.put("amortizedCostMinor", before.amortizedCostMinor().add(reset.deltaMinor()).toString());
         after.put("netCarryingMinor", before.amortizedCostMinor().add(reset.deltaMinor()).subtract(allowance).toString());
         after.put("deferredDiscountMinor", before.deferredDiscountMinor().subtract(reset.deltaMinor()).toString());
-        require(before.amortizedCostMinor().add(reset.deltaMinor()).compareTo(allowance) >= 0, "INVALID_DATA");
         var segment = reset.futureSegment() == null ? state.segment() : reset.futureSegment();
+        if (reset.futureSegment() != null) {
+            var resetState = measurement.resetState(before, segment);
+            segment = resetState.segment();
+            var resetPosition = resetState.boundaryPosition();
+            allowance = measurement.allowance(resetPosition, segment, input.get("riskForecast"));
+            after.setAll(measurement.measures(resetPosition, allowance));
+        }
         after.put("grossYield", segment.grossYield().rate().toPlainString());
         after.put("netEir", segment.netEir().rate().toPlainString());
         result.set("positionAfter", after);

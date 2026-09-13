@@ -47,6 +47,9 @@ public final class ReceivablesExecution {
     public co.mnzl.fineract.custom.receivables.nativeinstrument.NativeHelBridge.Funding helFunding;
     public String reversalOf;
     public String correctionOf;
+    public JsonNode developerEffectFrames;
+    public JsonNode receiptLossDisposition;
+    public int developerEffectAccrualLineCount;
 
     public ReceivablesExecution(JsonNode command, String scope, Map<String, Object> configuration) {
         this.command = command;

@@ -51,7 +51,7 @@ public class ReceivablesCashCommands {
 
     public void recordCash(ReceivablesExecution e) {
         JsonNode source = e.command.get("source");
-        recordSource(e, source);
+        recordSource(e, source, true);
         BigInteger allocated = BigInteger.ZERO;
         var ids = new HashSet<String>();
         for (JsonNode allocation : source.get("allocations")) {
@@ -117,10 +117,15 @@ public class ReceivablesCashCommands {
         require(allocated.equals(minor(source, "amountMinor")), "BANK_PROOF_MISMATCH");
     }
 
-    private void recordSource(ReceivablesExecution e, JsonNode source) {
+    public void recordReceiptReturnSource(ReceivablesExecution e, JsonNode source) {
+        require(text(source, "direction").equals("OUTGOING") && !source.has("allocations"), "BANK_PROOF_MISMATCH");
+        recordSource(e, source, false);
+    }
+
+    private void recordSource(ReceivablesExecution e, JsonNode source, boolean currentValueDate) {
         String movement = text(e.command, "operationId");
         String sourceId = text(source, "bankSourceId");
-        require(e.date.equals(LocalDate.parse(text(source, "valueDate"))), "BANK_PROOF_MISMATCH");
+        require(!currentValueDate || e.date.equals(LocalDate.parse(text(source, "valueDate"))), "BANK_PROOF_MISMATCH");
         require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_cash_source where scope_key=? and bank_source_id=?", Long.class,
                 e.scope, sourceId) == 0, "IDEMPOTENCY_CONFLICT");
         JsonNode config = json.read(string(e.configuration, "config_json"));
@@ -376,6 +381,7 @@ public class ReceivablesCashCommands {
             var fields = new LinkedHashMap<String, Object>();
             fields.put("scope_key", e.scope);
             fields.put("lot_key", string(row, "record_key"));
+            fields.put("account_key", string(row, "account_key"));
             fields.put("operation_key", e.operationKey);
             fields.put("cash_source_key",
                     method.equals("CASH") ? ReceivablesStore.key(e.scope, "cash", text(e.command, "cashMovementId")) : null);
@@ -446,7 +452,7 @@ public class ReceivablesCashCommands {
         } else {
             JsonNode source = event.get("cashSource");
             require(text(source, "facilityId").equals(id), "BANK_PROOF_MISMATCH");
-            recordSource(e, source);
+            recordSource(e, source, true);
             if (kind.equals("DRAW")) {
                 delta = minor(event, "principalMinor");
                 require(text(source, "direction").equals("INCOMING") && delta.equals(minor(source, "amountMinor")), "BANK_PROOF_MISMATCH");

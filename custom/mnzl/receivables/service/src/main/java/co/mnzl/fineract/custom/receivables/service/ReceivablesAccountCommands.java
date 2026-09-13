@@ -333,7 +333,8 @@ public class ReceivablesAccountCommands {
 
     private JsonNode latestForecast(String accountKey) {
         var rows = store.jdbc().queryForList(
-                "select snapshot_json from m_mnzl_r_risk_forecast where account_key=? order by as_of_date desc,forecast_version desc limit 1",
+                "select f.snapshot_json from m_mnzl_r_risk_forecast f left join m_mnzl_r_event e on e.operation_key=f.operation_key "
+                        + "where f.account_key=? order by f.as_of_date desc,f.forecast_version desc,e.sequence_id desc limit 1",
                 accountKey);
         require(!rows.isEmpty(), "SOURCE_CHANGED");
         return json.read(string(rows.getFirst(), "snapshot_json"));
@@ -480,6 +481,9 @@ public class ReceivablesAccountCommands {
         String key = string(account, "record_key");
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
+        JsonNode forecast = latestForecast(key);
+        require(e.command.path("expectedRiskForecastHash").isTextual()
+                && json.hash(forecast).equals(e.command.path("expectedRiskForecastHash").asText()), "SOURCE_CHANGED");
         var state = measurement.state(account);
         Position before = ReceivablesMath.position(state, e.date);
         var reset = ReceivableEvents.reset(state, e.date, decimal(e.command, "corridorRate").add(decimal(e.command, "spread")));
@@ -487,20 +491,10 @@ public class ReceivablesAccountCommands {
             return;
         }
         require(reset.lot() == null || reset.lot().dueDate().equals(date(e.command, "developerAdjustmentDueDate")), "SOURCE_CHANGED");
-        var flows = new ArrayList<Cashflow>(reset.futureSegment().cashflows());
-        for (Leg leg : before.legs()) {
-            if (leg.discountDays() == 0 && leg.outstandingMinor().signum() > 0) {
-                flows.add(new Cashflow(leg.cashflow().cashflowId(), leg.cashflow().dueDate(), leg.outstandingMinor()));
-            }
-        }
-        Segment next = new Segment(e.date, flows, reset.futureSegment().grossBasisMinor().add(before.pastDueMinor()),
-                reset.futureSegment().netBasisMinor().add(before.pastDueMinor()), reset.futureSegment().grossYield(),
-                reset.futureSegment().netEir());
-        Map<String, BigInteger> outstanding = new LinkedHashMap<>();
-        flows.forEach(f -> outstanding.put(f.cashflowId(), f.amountMinor()));
-        Position after = ReceivablesMath.position(next, e.date, outstanding);
-        measurement.saveState(e.scope, key, e.operationKey, new MeasurementState(next, after, outstanding),
-                string(e.configuration, "calculator_build"));
+        var resetState = measurement.resetState(before, reset.futureSegment());
+        Segment next = resetState.segment();
+        Position after = resetState.boundaryPosition();
+        measurement.saveState(e.scope, key, e.operationKey, resetState, string(e.configuration, "calculator_build"));
         store.update("account", key,
                 Map.of("gross_minor", after.grossPurchaseBasisMinor().toString(), "net_minor", after.amortizedCostMinor().toString()));
         if (reset.deltaMinor().signum() > 0) {
@@ -511,6 +505,9 @@ public class ReceivablesAccountCommands {
         if (reset.lot() != null) {
             createLot(e, key, reset.lot(), ":reset");
         }
+        BigInteger allowance = measurement.allowance(after, next, forecast);
+        pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")), id, deal, "IMPAIRMENT");
+        store.update("account", key, Map.of("allowance_minor", allowance.toString()));
     }
 
     private void createLot(ReceivablesExecution e, String accountKey, ReceivableEvents.AdjustmentLot lot, String suffix) {
@@ -669,25 +666,28 @@ public class ReceivablesAccountCommands {
         reconcileNative(store.require("account", key), measurement.position(store.require("account", key), e.date), e.date);
     }
 
-    public void settleDeveloper(ReceivablesExecution e) {
+    public void prepareDeveloperSettlement(ReceivablesExecution e) {
         Set<String> accrued = new HashSet<>();
         for (JsonNode requested : e.command.get("lots")) {
             var lot = store.require("developer_lot", ReceivablesStore.key(e.scope, "lot", text(requested, "lotId")));
             String accountKey = string(lot, "account_key");
             if (accrued.add(accountKey)) {
-                var account = store.require("account", accountKey);
-                require(json.read(string(account, "scope_json")).equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
-                if (text(e.command, "executionMode").equals("RECONSTRUCTION")) {
-                    long current = store.jdbc().queryForObject(
-                            "select count(*) from m_mnzl_r_command where subject_key=? and request_json like ? and record_key<>?",
-                            Long.class, ReceivablesStore.key(e.scope, "RECEIVABLE", string(account, "external_id")),
-                            "%\"executionMode\":\"CURRENT\"%", e.operationKey);
-                    require(current == 0, "APPROVAL_SCOPE_CHANGED");
-                }
-                accrue(e, account);
+                accrueDeveloperAccount(e, accountKey);
             }
         }
-        cash.settleDeveloper(e);
+    }
+
+    public void accrueDeveloperAccount(ReceivablesExecution e, String accountKey) {
+        var account = store.require("account", accountKey);
+        require(json.read(string(account, "scope_json")).equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
+        if (text(e.command, "executionMode").equals("RECONSTRUCTION")) {
+            long current = store.jdbc().queryForObject(
+                    "select count(*) from m_mnzl_r_command where subject_key=? and request_json like ? and record_key<>?", Long.class,
+                    ReceivablesStore.key(e.scope, "RECEIVABLE", string(account, "external_id")), "%\"executionMode\":\"CURRENT\"%",
+                    e.operationKey);
+            require(current == 0, "APPROVAL_SCOPE_CHANGED");
+        }
+        accrue(e, account);
     }
 
     public void substitute(ReceivablesExecution e) {
@@ -796,6 +796,10 @@ public class ReceivablesAccountCommands {
         String deal = string(account, "deal_id");
         Position before = measurement.position(account, e.date);
         String classification = text(e.command, "classification");
+        require(!classification.equals("DERECOGNITION") || e.command.hasNonNull("legalOutcome"), "APPROVAL_SCOPE_CHANGED");
+        configuration.requireWorkout(e,
+                classification.equals("DERECOGNITION") ? text(e.command.get("legalOutcome"), "kind") : classification,
+                minor(e.command, "approvedConsiderationMinor"));
         var oldAllocations = new ArrayList<Allocation>();
         for (var leg : store.children("leg", "account_key", key)) {
             if (outstanding(leg).signum() > 0) {
@@ -862,7 +866,6 @@ public class ReceivablesAccountCommands {
         require(outcome != null, "APPROVAL_SCOPE_CHANGED");
         String kind = text(outcome, "kind");
         BigInteger consideration = minor(e.command, "approvedConsiderationMinor");
-        configuration.requireWorkout(e, kind, consideration);
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
         e.nativeTransactions.add(Long.toString(nativeBridge.adjustFace(number(account, "native_loan_id"), e.date,
