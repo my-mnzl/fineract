@@ -559,9 +559,9 @@ class ReceivablesDatabaseIntegrationTest {
             product.put(field, accounts.get("bank"));
         }
         product.put("loanPortfolioAccountId", accounts.get("contractualReceivable"));
-        for (String field : List.of("interestOnLoanAccountId", "incomeFromFeeAccountId", "incomeFromPenaltyAccountId",
-                "incomeFromRecoveryAccountId")) {
-            product.put(field, accounts.get("portfolioInterestIncome"));
+        product.put("interestOnLoanAccountId", accounts.get("portfolioInterestIncome"));
+        for (String field : List.of("incomeFromFeeAccountId", "incomeFromPenaltyAccountId", "incomeFromRecoveryAccountId")) {
+            product.put(field, accounts.get("writtenOffRecoveryIncome"));
         }
         product.put("writeOffAccountId", accounts.get("impairmentExpense"));
         product.put("overpaymentLiabilityAccountId", accounts.get("developerPayable"));

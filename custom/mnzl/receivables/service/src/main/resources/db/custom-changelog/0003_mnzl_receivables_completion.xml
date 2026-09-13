@@ -63,4 +63,48 @@ WHERE e.operation_key=a.operation_key AND s.event_key=e.record_key AND s.subject
 <changeSet id="mnzl-receivables-developer-impairment-proof-3" author="mnzl">
 <addColumn tableName="m_mnzl_r_command"><column name="effect_proof_json" type="CLOB"/></addColumn>
 </changeSet>
+<changeSet id="mnzl-receivables-hel-reporting-capture-3" author="mnzl">
+<createTable tableName="m_mnzl_r_hel_reporting_registration">
+<column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="product_id" type="BIGINT"><constraints nullable="false"/></column>
+<column name="registration_id" type="VARCHAR(200)"><constraints nullable="false"/></column>
+<column name="registered_business_date" type="DATE"><constraints nullable="false"/></column>
+<column name="mapping_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="input_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="registration_json" type="CLOB"><constraints nullable="false"/></column>
+</createTable>
+<createTable tableName="m_mnzl_r_hel_reporting_capture">
+<column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="registration_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="snapshot_id" type="VARCHAR(200)"><constraints nullable="false"/></column>
+<column name="request_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="capture_json" type="CLOB"><constraints nullable="false"/></column>
+</createTable>
+<createTable tableName="m_mnzl_r_hel_reporting_member">
+<column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="capture_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="loan_id" type="BIGINT"><constraints nullable="false"/></column>
+<column name="member_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="content_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+</createTable>
+<createTable tableName="m_mnzl_r_hel_reporting_journal">
+<column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="capture_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="native_journal_id" type="BIGINT"><constraints nullable="false"/></column>
+<column name="posting_date" type="DATE"><constraints nullable="false"/></column>
+<column name="journal_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="content_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="attributed_amount_minor" type="VARCHAR(100)"><constraints nullable="false"/></column>
+<column name="side" type="VARCHAR(8)"><constraints nullable="false"/></column>
+<column name="account_role" type="VARCHAR(32)"><constraints nullable="false"/></column>
+</createTable>
+<addUniqueConstraint tableName="m_mnzl_r_hel_reporting_registration" columnNames="product_id" constraintName="uq_r_hel_reporting_product"/>
+<addUniqueConstraint tableName="m_mnzl_r_hel_reporting_registration" columnNames="scope_key" constraintName="uq_r_hel_reporting_scope"/>
+<addUniqueConstraint tableName="m_mnzl_r_hel_reporting_member" columnNames="capture_key,loan_id" constraintName="uq_r_hel_reporting_member"/>
+<addUniqueConstraint tableName="m_mnzl_r_hel_reporting_journal" columnNames="capture_key,native_journal_id" constraintName="uq_r_hel_reporting_journal"/>
+</changeSet>
 </databaseChangeLog>

@@ -2569,6 +2569,505 @@
           }
         }
       }
+    },
+    "/hel-reporting/registrations": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native immutable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeHelReportingRegistrationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeHelReportingRegistrationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hel-reporting/snapshots": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native immutable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeHelReportingSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeHelReportingCaptureRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hel-reporting/snapshots/{snapshotId}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native immutable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeHelReportingSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/hel-reporting/snapshots/{snapshotId}/members": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native immutable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeHelReportingMembersPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/hel-reporting/snapshots/{snapshotId}/journals": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "periodStartDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "throughDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native immutable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeHelReportingJournalsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10478,6 +10977,10 @@
           "developerEffectProofVersion": {
             "type": "string",
             "const": "1"
+          },
+          "helReportingCaptureVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [
@@ -13799,6 +14302,1086 @@
         ],
         "additionalProperties": false,
         "description": "Immutable native execution frames and exhaustive actual journal partitions for a developer operation. Prior posted positions retain their actual dates. Frame account versions precede final command bookkeeping; accountVersions carries exact resulting committed versions. Missing proof for legacy operations is unavailable, never reconstructed from current state."
+      },
+      "nativeHelReportingRegistrationRequest": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "registrationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "helProductId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "coverageMode": {
+            "type": "string",
+            "const": "ALL_CONFIGURED_HEL_PRODUCT_LOANS"
+          },
+          "initialSnapshotId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "scope",
+          "registrationId",
+          "helProductId",
+          "coverageMode",
+          "initialSnapshotId"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingCaptureRequest": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "registrationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "snapshotId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "scope",
+          "registrationId",
+          "snapshotId"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingRegistration": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "registrationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "helProductId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "coverageMode": {
+            "type": "string",
+            "const": "ALL_CONFIGURED_HEL_PRODUCT_LOANS"
+          },
+          "initialSnapshotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "registeredBy": {
+            "$ref": "#/components/schemas/id"
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "registeredBusinessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "accountingBasis": {
+            "type": "string",
+            "const": "POSTED_NATIVE_RECEIVABLES_NET_OF_RECORDED_PRODUCT_ALLOWANCE_V1"
+          },
+          "nativeMappingHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "registrationRevisionHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "tenantId",
+          "scope",
+          "registrationId",
+          "helProductId",
+          "coverageMode",
+          "initialSnapshotId",
+          "registeredBy",
+          "registeredAt",
+          "registeredBusinessDate",
+          "accountingBasis",
+          "nativeMappingHash",
+          "registrationRevisionHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingCut": {
+        "type": "object",
+        "properties": {
+          "receivablesEventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "helSnapshotSequence": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "receivablesEventWatermark",
+          "helSnapshotSequence"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelAccountMapping": {
+        "type": "object",
+        "properties": {
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "financialAccountType": {
+            "$ref": "#/components/schemas/id"
+          },
+          "paymentTypeId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chargeId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "nativeGlAccountId",
+          "financialAccountType",
+          "paymentTypeId",
+          "chargeId"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelProvisionComponent": {
+        "type": "object",
+        "properties": {
+          "nativeProvisionComponentId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeProvisionHistoryId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "productId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "officeId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "categoryId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "criteriaId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "reservedAmountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "nativeProvisionComponentId",
+          "nativeProvisionHistoryId",
+          "productId",
+          "officeId",
+          "categoryId",
+          "criteriaId",
+          "nativeGlAccountId",
+          "currency",
+          "reservedAmountMinor",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelAccountingJournal": {
+        "type": "object",
+        "properties": {
+          "nativeJournalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "officeId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "postingDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "DEBIT",
+              "CREDIT"
+            ]
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "nativeEntityId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeTransactionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reversalJournalId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "LOAN",
+              "PROVISION_POOL"
+            ]
+          },
+          "loanId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountRole": {
+            "type": "string",
+            "enum": [
+              "EARNING_RECEIVABLE",
+              "DEFERRED_INCOME",
+              "INTEREST_INCOME",
+              "OTHER",
+              "PROVISION_ALLOWANCE",
+              "PROVISION_EXPENSE"
+            ]
+          },
+          "financialAccountTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "attributedAmountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "aggregateSourceHash": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aggregateSourceCount": {
+            "$ref": "#/components/schemas/version"
+          },
+          "aggregateSourceAmountMinor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/version"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetProvisionComponents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/nativeHelProvisionComponent"
+            }
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "nativeJournalId",
+          "nativeGlAccountId",
+          "officeId",
+          "currency",
+          "postingDate",
+          "side",
+          "amountMinor",
+          "nativeEntityId",
+          "nativeTransactionId",
+          "reversalJournalId",
+          "sourceKind",
+          "loanId",
+          "accountRole",
+          "financialAccountTypes",
+          "attributedAmountMinor",
+          "aggregateSourceHash",
+          "aggregateSourceCount",
+          "aggregateSourceAmountMinor",
+          "targetProvisionComponents",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelCarryingComponent": {
+        "type": "object",
+        "properties": {
+          "officeId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "accountRole": {
+            "type": "string",
+            "enum": [
+              "EARNING_RECEIVABLE",
+              "DEFERRED_INCOME",
+              "INTEREST_INCOME",
+              "OTHER",
+              "PROVISION_ALLOWANCE",
+              "PROVISION_EXPENSE"
+            ]
+          },
+          "financialAccountTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "signedBalanceMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "sourceJournalCount": {
+            "$ref": "#/components/schemas/version"
+          },
+          "sourceJournalHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "officeId",
+          "nativeGlAccountId",
+          "currency",
+          "accountRole",
+          "financialAccountTypes",
+          "signedBalanceMinor",
+          "sourceJournalCount",
+          "sourceJournalHash",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelLoanCarrying": {
+        "type": "object",
+        "properties": {
+          "grossEarningCarryingMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/nativeHelCarryingComponent"
+            }
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "grossEarningCarryingMinor",
+          "components",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelLoanState": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/id"
+          },
+          "externalId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "loanProductId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "currency": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "EGP"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "principal": {
+            "type": "string",
+            "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "closedObligationsMet": {
+                "type": "boolean"
+              },
+              "closedWrittenOff": {
+                "type": "boolean"
+              },
+              "closedRescheduled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "active",
+              "closedObligationsMet",
+              "closedWrittenOff",
+              "closedRescheduled"
+            ],
+            "additionalProperties": false
+          },
+          "timeline": {
+            "type": "object",
+            "properties": {
+              "actualDisbursementDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "expectedMaturityDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "closedOnDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "writtenOffOnDate": {
+                "$ref": "#/components/schemas/financialDate"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "totalOutstanding": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+              },
+              "totalOverdue": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+              },
+              "totalWrittenOff": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+              }
+            },
+            "required": [
+              "totalOutstanding",
+              "totalWrittenOff"
+            ],
+            "additionalProperties": false
+          },
+          "repaymentSchedule": {
+            "type": "object",
+            "properties": {
+              "periods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "period": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "dueDate": {
+                      "$ref": "#/components/schemas/financialDate"
+                    },
+                    "totalOutstandingForPeriod": {
+                      "type": "string",
+                      "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                    },
+                    "totalDueForPeriod": {
+                      "type": "string",
+                      "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                    },
+                    "totalPaidForPeriod": {
+                      "type": "string",
+                      "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                    }
+                  },
+                  "required": [
+                    "period",
+                    "dueDate",
+                    "totalOutstandingForPeriod",
+                    "totalDueForPeriod",
+                    "totalPaidForPeriod"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "periods"
+            ],
+            "additionalProperties": false
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "date": {
+                  "$ref": "#/components/schemas/financialDate"
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^\\d+(?:\\.\\d{1,2}0*)?$"
+                },
+                "reversed": {
+                  "type": "boolean"
+                },
+                "type": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repayment": {
+                      "type": "boolean"
+                    },
+                    "writeOff": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "repayment",
+                    "writeOff"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "date",
+                "amount",
+                "reversed",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "externalId",
+          "clientId",
+          "loanProductId",
+          "currency",
+          "principal",
+          "status",
+          "timeline",
+          "summary",
+          "repaymentSchedule",
+          "transactions"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingMember": {
+        "type": "object",
+        "properties": {
+          "nativeLoanId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "helSnapshotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "helSnapshotSequence": {
+            "$ref": "#/components/schemas/version"
+          },
+          "disbursementState": {
+            "type": "string",
+            "enum": [
+              "UNDISBURSED",
+              "DISBURSED"
+            ]
+          },
+          "loan": {
+            "$ref": "#/components/schemas/nativeHelLoanState"
+          },
+          "earningCarrying": {
+            "$ref": "#/components/schemas/nativeHelLoanCarrying"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "nativeLoanId",
+          "helSnapshotId",
+          "helSnapshotSequence",
+          "disbursementState",
+          "loan",
+          "earningCarrying",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelProductPool": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "grossEarningCarryingMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "recordedProductAllowanceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "netEarningCarryingMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "allowanceBasis": {
+            "type": "string",
+            "enum": [
+              "NO_POSTED_PROVISIONING",
+              "RECONCILED_NATIVE_PRODUCT_COMPONENTS"
+            ]
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "currency",
+          "grossEarningCarryingMinor",
+          "recordedProductAllowanceMinor",
+          "netEarningCarryingMinor",
+          "allowanceBasis",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingSnapshot": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "snapshotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "registrationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "registrationRevisionHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "helProductId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "coverageMode": {
+            "type": "string",
+            "const": "ALL_CONFIGURED_HEL_PRODUCT_LOANS"
+          },
+          "accountingBasis": {
+            "type": "string",
+            "const": "POSTED_NATIVE_RECEIVABLES_NET_OF_RECORDED_PRODUCT_ALLOWANCE_V1"
+          },
+          "nativeMappingHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "registeredBusinessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotBusinessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "asOfDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "type": "string",
+            "const": "AFTER_EVENTS"
+          },
+          "cut": {
+            "$ref": "#/components/schemas/nativeHelReportingCut"
+          },
+          "memberCount": {
+            "$ref": "#/components/schemas/version"
+          },
+          "membershipHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "memberManifestHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "journalCount": {
+            "$ref": "#/components/schemas/version"
+          },
+          "journalManifestHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "nativeAccountMapping": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/nativeHelAccountMapping"
+            }
+          },
+          "productPool": {
+            "$ref": "#/components/schemas/nativeHelProductPool"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "tenantId",
+          "scope",
+          "snapshotId",
+          "registrationId",
+          "registrationRevisionHash",
+          "helProductId",
+          "coverageMode",
+          "accountingBasis",
+          "nativeMappingHash",
+          "registeredBusinessDate",
+          "observedAt",
+          "snapshotBusinessDate",
+          "asOfDate",
+          "boundarySide",
+          "cut",
+          "memberCount",
+          "membershipHash",
+          "memberManifestHash",
+          "journalCount",
+          "journalManifestHash",
+          "nativeAccountMapping",
+          "productPool",
+          "contentHash"
+        ],
+        "additionalProperties": false,
+        "description": "Actual-current immutable capture of the independently enumerated whole registered product. No historical as-of override. All hashes use JCS SHA256 omitting own contentHash; registrationRevisionHash omits itself. Membership hash covers sorted native loan ID strings. Member/journal manifests cover ID+contentHash pairs sorted numerically. Captured GL includes full posted history at observation; period reads before registration are unavailable."
+      },
+      "nativeHelReportingRegistrationResult": {
+        "type": "object",
+        "properties": {
+          "registration": {
+            "$ref": "#/components/schemas/nativeHelReportingRegistration"
+          },
+          "initialSnapshot": {
+            "$ref": "#/components/schemas/nativeHelReportingSnapshot"
+          }
+        },
+        "required": [
+          "registration",
+          "initialSnapshot"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelMemberSelection": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "snapshotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "snapshotContentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "registrationRevisionHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "accountingBasis": {
+            "type": "string",
+            "const": "POSTED_NATIVE_RECEIVABLES_NET_OF_RECORDED_PRODUCT_ALLOWANCE_V1"
+          },
+          "cut": {
+            "$ref": "#/components/schemas/nativeHelReportingCut"
+          },
+          "resource": {
+            "type": "string",
+            "const": "MEMBERS"
+          }
+        },
+        "required": [
+          "scope",
+          "tenantId",
+          "snapshotId",
+          "snapshotContentHash",
+          "registrationRevisionHash",
+          "accountingBasis",
+          "cut",
+          "resource"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelJournalSelection": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "snapshotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "snapshotContentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "registrationRevisionHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "accountingBasis": {
+            "type": "string",
+            "const": "POSTED_NATIVE_RECEIVABLES_NET_OF_RECORDED_PRODUCT_ALLOWANCE_V1"
+          },
+          "cut": {
+            "$ref": "#/components/schemas/nativeHelReportingCut"
+          },
+          "resource": {
+            "type": "string",
+            "const": "PERIOD_JOURNALS"
+          },
+          "periodStartDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "throughDate": {
+            "$ref": "#/components/schemas/financialDate"
+          }
+        },
+        "required": [
+          "scope",
+          "tenantId",
+          "snapshotId",
+          "snapshotContentHash",
+          "registrationRevisionHash",
+          "accountingBasis",
+          "cut",
+          "resource",
+          "periodStartDate",
+          "throughDate"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingMembersPage": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "selectionHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/nativeHelReportingSnapshot"
+          },
+          "itemCount": {
+            "$ref": "#/components/schemas/version"
+          },
+          "itemManifestHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selection": {
+            "$ref": "#/components/schemas/nativeHelMemberSelection"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/nativeHelReportingMember"
+            }
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "selectionHash",
+          "snapshot",
+          "itemCount",
+          "itemManifestHash",
+          "nextCursor",
+          "selection",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "nativeHelReportingJournalsPage": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "selectionHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/nativeHelReportingSnapshot"
+          },
+          "itemCount": {
+            "$ref": "#/components/schemas/version"
+          },
+          "itemManifestHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selection": {
+            "$ref": "#/components/schemas/nativeHelJournalSelection"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/nativeHelAccountingJournal"
+            }
+          },
+          "grossAttributedDebitMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossAttributedCreditMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "ordinaryHelInterestIncomeMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "ordinaryHelProvisionExpenseMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "selectionHash",
+          "snapshot",
+          "itemCount",
+          "itemManifestHash",
+          "nextCursor",
+          "selection",
+          "items",
+          "grossAttributedDebitMinor",
+          "grossAttributedCreditMinor",
+          "ordinaryHelInterestIncomeMinor",
+          "ordinaryHelProvisionExpenseMinor"
+        ],
+        "additionalProperties": false
       }
     }
   }

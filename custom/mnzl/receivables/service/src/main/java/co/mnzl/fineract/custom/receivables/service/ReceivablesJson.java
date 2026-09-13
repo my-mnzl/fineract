@@ -90,6 +90,10 @@ public final class ReceivablesJson {
         return node;
     }
 
+    public com.fasterxml.jackson.databind.node.ArrayNode array() {
+        return mapper.createArrayNode();
+    }
+
     public ObjectNode object() {
         return mapper.createObjectNode();
     }
