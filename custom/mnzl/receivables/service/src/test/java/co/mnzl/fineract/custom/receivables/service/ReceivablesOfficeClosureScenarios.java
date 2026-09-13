@@ -188,7 +188,7 @@ final class ReceivablesOfficeClosureScenarios {
                 + "where c.operation_id='office-native-first'")).isEqualTo(2);
     }
 
-    private ObjectNode receipt(String operation) {
+    private ObjectNode receipt(String operation) throws Exception {
         return harness.receiptCommand(operation, "account-1", "1");
     }
 

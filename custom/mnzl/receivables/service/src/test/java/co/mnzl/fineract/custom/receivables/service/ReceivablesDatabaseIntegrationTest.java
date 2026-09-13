@@ -950,7 +950,7 @@ class ReceivablesDatabaseIntegrationTest {
         request("POST", PREFIX + "/commands", receiptCommand(operation, account, amount), 200);
     }
 
-    ObjectNode receiptCommand(String operation, String account, String amount) {
+    ObjectNode receiptCommand(String operation, String account, String amount) throws Exception {
         ObjectNode cash = command("RECORD_CASH_MOVEMENT", operation, "deal", "DEAL");
         ObjectNode source = json.object();
         source.put("bankSourceId", operation + "-bank");
