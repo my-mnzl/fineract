@@ -151,6 +151,45 @@ public class ReceivablesWriteApiResource {
         return json.write(configuration.configure(request));
     }
 
+    @GET
+    @Path("/configuration/active")
+    public String activeConfiguration(@Context HttpHeaders headers) {
+        return json.write(configuration.activeConfiguration(scope(headers)));
+    }
+
+    @POST
+    @Path("/configuration/revisions")
+    public String stage(@Context HttpHeaders headers, String request) {
+        authorizeRequest(headers, request);
+        return json.write(configuration.stage(request));
+    }
+
+    @POST
+    @Path("/configuration/activations")
+    public String activate(@Context HttpHeaders headers, String request) {
+        require(text(json.read(request), "accountMappingRevisionId").equals(headers.getHeaderString("X-MNZL-Account-Mapping")),
+                "FINERACT_CAPABILITY_MISSING");
+        return json.write(configuration.activate(scope(headers), request));
+    }
+
+    @GET
+    @Path("/configuration/runtime")
+    public String runtime() {
+        security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES",
+                java.util.List.of("READ_MNZL_RECEIVABLES", "CONFIGURE_MNZL_RECEIVABLES"));
+        var properties = new java.util.Properties();
+        try (var stream = getClass().getResourceAsStream("/receivables-runtime.properties")) {
+            require(stream != null, "FINERACT_CAPABILITY_MISSING");
+            properties.load(stream);
+        } catch (java.io.IOException exception) {
+            throw new ReceivablesException("FINERACT_CAPABILITY_MISSING", exception);
+        }
+        return json.write(json.object().put("configurationLifecycleVersion", "1")
+                .put("calculationVersion", ReceivablesConfiguration.CALCULATION).put("productPolicyCode", ReceivablesConfiguration.POLICY)
+                .put("sourceRevision", properties.getProperty("sourceRevision"))
+                .put("openApiSha256", properties.getProperty("openApiSha256")));
+    }
+
     @POST
     @Path("/authorizations")
     public String authorizeLegacy(@Context HttpHeaders headers, String request) {

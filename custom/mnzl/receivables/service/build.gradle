@@ -39,3 +39,24 @@ tasks.named('test', Test) {
         outputs.cacheIf { false }
     }
 }
+
+// Embed runtime evidence in the tested artifact, independently of mutable tenant configuration.
+def runtimeMetadata = layout.buildDirectory.dir('generated/receivables-runtime')
+tasks.register('generateReceivablesRuntime') {
+    inputs.file('../openapi/receivables-v1.json')
+    def sourceRevision = providers.exec {
+        workingDir rootProject.projectDir
+        commandLine 'git', 'rev-parse', 'HEAD'
+    }.standardOutput.asText.map { it.trim() }
+    inputs.property('sourceRevision', sourceRevision)
+    outputs.dir(runtimeMetadata)
+    doLast {
+        def directory = runtimeMetadata.get().asFile
+        directory.mkdirs()
+        def schema = file('../openapi/receivables-v1.json').bytes
+        def hash = java.security.MessageDigest.getInstance('SHA-256').digest(schema).encodeHex().toString()
+        new File(directory, 'receivables-runtime.properties').text = "sourceRevision=${sourceRevision.get()}\nopenApiSha256=${hash}\n"
+    }
+}
+sourceSets.main.resources.srcDir(runtimeMetadata)
+tasks.named('processResources') { dependsOn 'generateReceivablesRuntime' }

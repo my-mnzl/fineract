@@ -84,7 +84,7 @@ public class ReceivablesPeriodProof {
         }
         String scopeKey = configuration.scopeKey(scope);
         var config = configuration.authorize(scope, false);
-        diagnostic.check(mapping.equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING", "MAPPING_REVISION");
+        configuration.revision(scopeKey, mapping);
         String tenant = configuration.tenantId();
         Long latest = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, scopeKey);
         diagnostic.check(maximum <= (latest == null ? 0 : latest), "INVALID_DATA", "WATERMARK");
@@ -148,15 +148,8 @@ public class ReceivablesPeriodProof {
                 scopeKey, maximum);
         diagnostic.eventId = null;
         diagnostic.category = "ACCOUNT_MAPPING";
-        var mappings = store.scoped("account_map", scopeKey);
-        Map<String, Long> approvedGl = new HashMap<>();
-        for (var row : mappings) {
-            diagnostic.check(
-                    mapping.equals(string(row, "mapping_revision"))
-                            && approvedGl.put(string(row, "account_key"), number(row, "native_gl_id")) == null,
-                    "JOURNAL_MISMATCH", "MAPPING_REVISION_OR_DUPLICATE");
-        }
-        diagnostic.check(approvedGl.keySet().equals(ReceivablesConfiguration.ACCOUNTS), "JOURNAL_MISMATCH", "MAPPING_POPULATION");
+        Map<String, Map<String, Long>> revisionMappings = new HashMap<>();
+        revisionMappings.put(mapping, configuration.mappings(scopeKey, mapping));
         Map<Long, Expected> byJournal = new HashMap<>();
         for (var row : registry) {
             diagnostic.category = "REGISTRY_DATA";
@@ -173,10 +166,10 @@ public class ReceivablesPeriodProof {
                     && text(match.line(), "component").equals(string(row, "component"))
                     && text(match.line(), "amountMinor").equals(string(row, "amount_minor"))
                     && text(match.line(), "side").equals(string(row, "side")), "JOURNAL_MISMATCH", "REGISTRY_LINE_MISMATCH");
-            if (mapping.equals(text(match.event(), "accountMappingRevisionId"))) {
-                diagnostic.check(Long.valueOf(number(row, "native_gl_id")).equals(approvedGl.get(string(row, "semantic_account"))),
-                        "JOURNAL_MISMATCH", "REGISTRY_ACCOUNT_MISMATCH");
-            }
+            String eventRevision = text(match.event(), "accountMappingRevisionId");
+            var approvedGl = revisionMappings.computeIfAbsent(eventRevision, id -> configuration.mappings(scopeKey, id));
+            diagnostic.check(Long.valueOf(number(row, "native_gl_id")).equals(approvedGl.get(string(row, "semantic_account"))),
+                    "JOURNAL_MISMATCH", "REGISTRY_ACCOUNT_MISMATCH");
             match.registry = row;
             diagnostic.check(byJournal.put(number(row, "native_journal_id"), match) == null, "JOURNAL_MISMATCH", "DUPLICATE_JOURNAL");
         }
@@ -184,9 +177,7 @@ public class ReceivablesPeriodProof {
         diagnostic.journalId = null;
         diagnostic.check(byJournal.size() == expected.size(), "JOURNAL_MISMATCH", "REGISTRY_LINE_MISSING");
         Map<String, ObjectNode> accounts = new LinkedHashMap<>();
-        for (var row : mappings) {
-            account(accounts, mapping, string(row, "account_key"), Long.toString(number(row, "native_gl_id")));
-        }
+        revisionMappings.get(mapping).forEach((semantic, gl) -> account(accounts, mapping, semantic, Long.toString(gl)));
         // Membership comes from the native transaction identity, not the journal registry. Keep rows outside the
         // requested
         // month until checking the expected event date; also catch actual-period rows belonging to differently dated

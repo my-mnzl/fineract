@@ -37,6 +37,7 @@ dependencies {
     implementation('io.github.erdtman:java-json-canonicalization:1.1')
     testCompileOnly('com.github.spotbugs:spotbugs-annotations')
     testImplementation('org.springframework.boot:spring-boot-starter-test')
+    testImplementation('org.liquibase:liquibase-core')
     testImplementation('org.testcontainers:junit-jupiter')
     testImplementation('org.testcontainers:mariadb')
     testImplementation('org.testcontainers:mysql')

@@ -89,7 +89,7 @@ public class ReceivablesReadService {
         scope.put("financierOrganizationId", financier);
         scope.put("environment", environment);
         var config = configuration.authorize(scope, false);
-        require(mapping.equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
+        configuration.revision(key(scope), mapping);
         return scope;
     }
 
@@ -454,6 +454,12 @@ public class ReceivablesReadService {
         return result;
     }
 
+    private long fundingClearing(JsonNode scope, Map<String, Object> funding) {
+        var command = store.require("command", string(funding, "operation_key"));
+        var request = json.read(string(command, "request_json"));
+        return configuration.mappings(key(scope), text(request, "accountMappingRevisionId")).get("helSettlementClearing");
+    }
+
     public JsonNode helJournals(JsonNode scope, long loanId, List<Long> ids, long maximum) {
         require(!ids.isEmpty() && ids.size() <= 200, "INVALID_DATA");
         var rows = store.jdbc().queryForList(
@@ -467,8 +473,7 @@ public class ReceivablesReadService {
         Set<String> recorded = new HashSet<>();
         funded.path("nativeTransactionIds").forEach(id -> recorded.add(id.asText()));
         require(ids.stream().allMatch(id -> recorded.contains(id.toString())), "INVALID_DATA");
-        long clearing = number(store.require("account_map", ReceivablesStore.key(key(scope), "map", "helSettlementClearing")),
-                "native_gl_id");
+        long clearing = fundingClearing(scope, funding);
         List<JsonNode> lines = hel.readJournals(loanId, ids, clearing).stream().map(line -> {
             ObjectNode node = json.object();
             node.put("nativeGlAccountId", Long.toString(line.nativeGlAccountId()));
@@ -561,7 +566,6 @@ public class ReceivablesReadService {
         }
         if (accountId == null) {
             String semantic = "helSettlementClearing";
-            long clearing = number(store.require("account_map", ReceivablesStore.key(key(scope), "map", semantic)), "native_gl_id");
             var fundingRows = store.jdbc().queryForList(
                     "select h.* from m_mnzl_r_hel_funding h join m_mnzl_r_event e on e.operation_key=h.operation_key "
                             + "where h.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
@@ -569,6 +573,7 @@ public class ReceivablesReadService {
                     dealId == null ? new Object[] { key(scope), boundary.watermark(), boundary.date(), boundary.date() }
                             : new Object[] { key(scope), boundary.watermark(), boundary.date(), boundary.date(), dealId });
             for (var funding : fundingRows) {
+                long clearing = fundingClearing(scope, funding);
                 BigInteger expected = new BigInteger(string(funding, "principal_minor"))
                         .subtract(new BigInteger(string(funding, "fees_minor"))).negate();
                 sub.merge(semantic, expected, BigInteger::add);

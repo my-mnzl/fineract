@@ -81,6 +81,7 @@ public class ReceivablesLedger {
 
     private final ReceivablesStore store;
     private final ReceivablesJson json;
+    private final ReceivablesConfiguration configuration;
     private final GLAccountRepository accounts;
     private final OfficeRepository offices;
     private final JournalEntryRepository journals;
@@ -93,7 +94,7 @@ public class ReceivablesLedger {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<JsonNode> post(String scope, String eventKey, LocalDate date, long officeId, List<Line> lines) {
+    public List<JsonNode> post(String scope, String eventKey, LocalDate date, long officeId, String mappingRevision, List<Line> lines) {
         var office = lockOffice(officeId);
         try {
             accounting.checkForBranchClosures(closures.findFirstByOfficeIdOrderByClosingDateDesc(officeId), date);
@@ -103,12 +104,12 @@ public class ReceivablesLedger {
         BigInteger balance = lines.stream().map(l -> l.side().equals("DEBIT") ? l.amountMinor() : l.amountMinor().negate())
                 .reduce(BigInteger.ZERO, BigInteger::add);
         require(balance.signum() == 0, "JOURNAL_MISMATCH");
+        var mappings = configuration.mappings(scope, mappingRevision);
         List<JsonNode> output = new ArrayList<>();
         int sequence = 0;
         for (Line line : lines) {
             require(ReceivablesConfiguration.ACCOUNTS.contains(line.accountKey()) && line.amountMinor().signum() > 0, "JOURNAL_MISMATCH");
-            var mapping = store.require("account_map", ReceivablesStore.key(scope, "map", line.accountKey()));
-            long glId = ReceivablesStore.number(mapping, "native_gl_id");
+            long glId = mappings.get(line.accountKey());
             var account = accounts.findById(glId).orElseThrow();
             require(!account.isDisabled() && account.isDetailAccount(), "FINERACT_CAPABILITY_MISSING");
             String sourceId = eventKey + ":" + sequence++;

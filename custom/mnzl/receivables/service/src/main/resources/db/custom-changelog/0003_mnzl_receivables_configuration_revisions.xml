@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+<changeSet id="mnzl-receivables-configuration-revisions-3" author="mnzl">
+<createTable tableName="m_mnzl_r_configuration_revision">
+<column name="record_key" type="VARCHAR(64)"><constraints primaryKey="true" nullable="false"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="mapping_revision" type="VARCHAR(200)"><constraints nullable="false"/></column>
+<column name="config_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="state" type="VARCHAR(16)"><constraints nullable="false"/></column>
+<column name="created_by" type="BIGINT"/>
+<column name="created_at" type="TIMESTAMP"/>
+</createTable>
+<addUniqueConstraint tableName="m_mnzl_r_configuration_revision" columnNames="scope_key,mapping_revision" constraintName="uq_r_config_revision"/>
+<!-- Preserve the original JSON, including historical provenance. Hash normalization is performed on read. -->
+<sql>insert into m_mnzl_r_configuration_revision (record_key,scope_key,mapping_revision,config_json,state) select record_key,scope_key,mapping_revision,config_json,'ACTIVE' from m_mnzl_r_configuration</sql>
+<createTable tableName="m_mnzl_r_configuration_activation">
+<column name="record_key" type="VARCHAR(64)"><constraints primaryKey="true" nullable="false"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="request_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="result_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="activated_by" type="BIGINT"><constraints nullable="false"/></column>
+</createTable>
+</changeSet>
+</databaseChangeLog>

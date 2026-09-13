@@ -124,19 +124,12 @@ public class ReceivablesConfiguration {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
         JsonNode input = json.validate("nativeConfiguration", request);
         String scope = scopeKey(input.get("scope"));
-        validateProduct(Long.parseLong(text(input, "productId")));
-        Set<String> keys = new HashSet<>();
-        for (JsonNode entry : input.get("accountMap")) {
-            require(keys.add(text(entry, "accountKey")), "FINERACT_CAPABILITY_MISSING");
-            var rows = store.jdbc().queryForList("select disabled, account_usage from acc_gl_account where id=?",
-                    Long.parseLong(text(entry, "nativeGlAccountId")));
-            require(rows.size() == 1 && !Boolean.parseBoolean(String.valueOf(rows.getFirst().get("disabled")))
-                    && ((Number) rows.getFirst().get("account_usage")).intValue() == 1, "FINERACT_CAPABILITY_MISSING");
-        }
-        require(keys.equals(ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
+        input = normalizeConfiguration(input);
+        validateConfiguration(input);
         Map<String, Object> existing = store.find("configuration", scope);
         if (existing != null) {
-            require(json.hash(json.read(string(existing, "config_json"))).equals(json.hash(input)), "FINERACT_CAPABILITY_MISSING");
+            require(json.hash(normalizeConfiguration(json.read(string(existing, "config_json")))).equals(json.hash(input)),
+                    "FINERACT_CAPABILITY_MISSING");
             return capabilities(input.get("scope"), false);
         }
         Map<String, Object> fields = new LinkedHashMap<>();
@@ -160,6 +153,7 @@ public class ReceivablesConfiguration {
                     Map.of("scope_key", scope, "account_key", text(entry, "accountKey"), "native_gl_id",
                             Long.parseLong(text(entry, "nativeGlAccountId")), "mapping_revision", text(input, "accountMappingRevisionId")));
         }
+        insertRevision(input, "ACTIVE");
         return capabilities(input.get("scope"), false);
     }
 
@@ -171,36 +165,205 @@ public class ReceivablesConfiguration {
         } else {
             security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
         }
-        require(string(config, "mapping_revision").equals(mappingRevision), "FINERACT_CAPABILITY_MISSING");
-        validateProduct(number(config, "product_id"));
-        ObjectNode result = (ObjectNode) json.read(string(config, "config_json"));
-        result.put("productId", Long.toString(number(config, "product_id")));
-        result.put("officeId", Long.toString(number(config, "office_id")));
-        result.put("integrationUserId", Long.toString(number(config, "integration_user_id")));
-        result.put("accountMappingRevisionId", string(config, "mapping_revision"));
-        result.put("policyRevisionId", string(config, "policy_revision"));
-        result.put("calculatorBuild", string(config, "calculator_build"));
-        if (config.get("hel_product_id") == null) {
-            result.putNull("helProductId");
-        } else {
-            result.put("helProductId", Long.toString(number(config, "hel_product_id")));
+        return revision(scopeKey(scope), mappingRevision);
+    }
+
+    /** The existing mapping token identifies the entire immutable configuration snapshot. */
+    public JsonNode normalizeConfiguration(JsonNode input) {
+        ObjectNode normalized = input.deepCopy();
+        var entries = new java.util.ArrayList<JsonNode>();
+        input.path("accountMap").forEach(entries::add);
+        entries.sort(java.util.Comparator.comparing(entry -> text(entry, "accountKey")));
+        normalized.set("accountMap", json.value(entries));
+        return normalized;
+    }
+
+    public JsonNode revision(String scope, String id) {
+        var rows = store.jdbc().queryForList(
+                "select config_json from m_mnzl_r_configuration_revision where scope_key=? and mapping_revision=?", scope, id);
+        require(rows.size() == 1, "FINERACT_CAPABILITY_MISSING");
+        return normalizeConfiguration(json.read(string(rows.getFirst(), "config_json")));
+    }
+
+    public Map<String, Long> mappings(String scope, String id) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        for (var entry : revision(scope, id).get("accountMap")) {
+            require(result.put(text(entry, "accountKey"), Long.parseLong(text(entry, "nativeGlAccountId"))) == null,
+                    "FINERACT_CAPABILITY_MISSING");
         }
-        if (config.get("hel_payment_type_id") == null) {
-            result.putNull("helPaymentTypeId");
-        } else {
-            result.put("helPaymentTypeId", Long.toString(number(config, "hel_payment_type_id")));
+        require(result.keySet().equals(ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
+        return result;
+    }
+
+    private void insertRevision(JsonNode input, String state) {
+        String scope = scopeKey(input.get("scope"));
+        store.insert("configuration_revision", ReceivablesStore.key(scope, "configuration", text(input, "accountMappingRevisionId")),
+                Map.of("scope_key", scope, "mapping_revision", text(input, "accountMappingRevisionId"), "config_json", json.write(input),
+                        "state", state, "created_by", security.authenticatedUser().getId(), "created_at",
+                        java.sql.Timestamp.from(java.time.Instant.now())));
+    }
+
+    private void validateConfiguration(JsonNode input) {
+        validateProduct(Long.parseLong(text(input, "productId")));
+        Set<String> keys = new HashSet<>();
+        for (JsonNode entry : input.get("accountMap")) {
+            require(keys.add(text(entry, "accountKey")), "FINERACT_CAPABILITY_MISSING");
+            var rows = store.jdbc().queryForList("select disabled, account_usage from acc_gl_account where id=?",
+                    Long.parseLong(text(entry, "nativeGlAccountId")));
+            require(rows.size() == 1 && !disabled(rows.getFirst().get("disabled"))
+                    && ((Number) rows.getFirst().get("account_usage")).intValue() == 1, "FINERACT_CAPABILITY_MISSING");
         }
-        var mappings = result.putArray("accountMap");
-        for (var mapping : store.scoped("account_map", scopeKey(scope))) {
-            var actual = store.jdbc().queryForMap("select disabled,account_usage from acc_gl_account where id=?",
-                    number(mapping, "native_gl_id"));
-            require(!Boolean.parseBoolean(string(actual, "disabled")) && !"1".equals(string(actual, "disabled"))
-                    && number(actual, "account_usage") == 1, "FINERACT_CAPABILITY_MISSING");
-            require(mappingRevision.equals(string(mapping, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
-            mappings.addObject().put("accountKey", string(mapping, "account_key")).put("nativeGlAccountId",
-                    Long.toString(number(mapping, "native_gl_id")));
+        require(keys.equals(ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
+        require(store.jdbc().queryForObject("select count(*) from m_office where id=?", Long.class,
+                Long.parseLong(text(input, "officeId"))) == 1, "FINERACT_CAPABILITY_MISSING");
+        require(store.jdbc().queryForObject("select count(*) from m_appuser where id=? and enabled=? and is_deleted=?", Long.class,
+                Long.parseLong(text(input, "integrationUserId")), true, false) == 1, "FINERACT_CAPABILITY_MISSING");
+        require(input.get("helProductId").isNull() == input.get("helPaymentTypeId").isNull(), "FINERACT_CAPABILITY_MISSING");
+        if (!input.get("helProductId").isNull()) {
+            require(store.jdbc().queryForObject("select count(*) from m_payment_type where id=? and is_cash_payment=?", Long.class,
+                    Long.parseLong(text(input, "helPaymentTypeId")), false) == 1, "FINERACT_CAPABILITY_MISSING");
+            require(store.jdbc().queryForObject("select count(*) from c_configuration where name=? and enabled=?", Long.class,
+                    "paymenttype-applicable-for-disbursement-charges", true) == 1, "FINERACT_CAPABILITY_MISSING");
+            long helProduct = Long.parseLong(text(input, "helProductId"));
+            var strategy = strategies.findOne(helProduct);
+            require(!"MNZL_PURCHASED_RECEIVABLE".equals(strategy.getInstrumentCode()), "FINERACT_CAPABILITY_MISSING");
+            require(products.findById(helProduct).isPresent(), "FINERACT_CAPABILITY_MISSING");
+            long clearing = 0;
+            for (var entry : input.get("accountMap")) {
+                if (text(entry, "accountKey").equals("helSettlementClearing")) {
+                    clearing = Long.parseLong(text(entry, "nativeGlAccountId"));
+                }
+            }
+            require(store.jdbc().queryForObject(
+                    "select count(*) from acc_product_mapping where product_id=? and product_type=1 "
+                            + "and financial_account_type=1 and payment_type=? and gl_account_id=?",
+                    Long.class, helProduct, Long.parseLong(text(input, "helPaymentTypeId")), clearing) == 1, "FINERACT_CAPABILITY_MISSING");
         }
-        require(mappings.size() == ACCOUNTS.size(), "FINERACT_CAPABILITY_MISSING");
+    }
+
+    private void verifyActiveProjection(Map<String, Object> config) {
+        String scope = string(config, "scope_key");
+        var snapshot = revision(scope, string(config, "mapping_revision"));
+        require(snapshot.equals(normalizeConfiguration(json.read(string(config, "config_json")))), "FINERACT_CAPABILITY_MISSING");
+        for (var field : Map.of("productId", "product_id", "officeId", "office_id", "integrationUserId", "integration_user_id",
+                "accountMappingRevisionId", "mapping_revision", "policyRevisionId", "policy_revision", "calculatorBuild",
+                "calculator_build", "helProductId", "hel_product_id", "helPaymentTypeId", "hel_payment_type_id").entrySet()) {
+            require(snapshot.get(field.getKey()).isNull() ? config.get(field.getValue()) == null
+                    : text(snapshot, field.getKey()).equals(string(config, field.getValue())), "FINERACT_CAPABILITY_MISSING");
+        }
+        Map<String, Long> actual = new LinkedHashMap<>();
+        for (var row : store.scoped("account_map", scope)) {
+            require(string(config, "mapping_revision").equals(string(row, "mapping_revision"))
+                    && actual.put(string(row, "account_key"), number(row, "native_gl_id")) == null, "FINERACT_CAPABILITY_MISSING");
+        }
+        require(actual.equals(mappings(scope, string(config, "mapping_revision"))), "FINERACT_CAPABILITY_MISSING");
+    }
+
+    private static boolean disabled(Object value) {
+        return Boolean.parseBoolean(String.valueOf(value)) || "1".equals(String.valueOf(value));
+    }
+
+    @Transactional(readOnly = true)
+    public JsonNode activeConfiguration(JsonNode scope) {
+        var config = store.find("configuration", scopeKey(scope));
+        var result = json.object();
+        if (config == null) {
+            security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
+            return result.putNull("configuration").putNull("contentHash");
+        }
+        var snapshot = readConfiguration(scope, string(config, "mapping_revision"));
+        verifyActiveProjection(config);
+        result.set("configuration", snapshot);
+        result.put("contentHash", json.hash(snapshot));
+        return result;
+    }
+
+    @Transactional
+    public JsonNode stage(String request) {
+        security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
+        var input = normalizeConfiguration(json.validate("nativeConfiguration", request));
+        String scope = scopeKey(input.get("scope"));
+        var active = store.lockConfiguration(scope);
+        var old = store.jdbc().queryForList("select * from m_mnzl_r_configuration_revision where scope_key=? and mapping_revision=?", scope,
+                text(input, "accountMappingRevisionId"));
+        if (!old.isEmpty()) {
+            require(json.hash(input).equals(json.hash(normalizeConfiguration(json.read(string(old.getFirst(), "config_json"))))),
+                    "IDEMPOTENCY_CONFLICT");
+            return stagedResult(input, string(old.getFirst(), "state"));
+        }
+        verifyActiveProjection(active);
+        validateConfiguration(input);
+        validateChange(active, input);
+        insertRevision(input, "STAGED");
+        return stagedResult(input, "STAGED");
+    }
+
+    private JsonNode stagedResult(JsonNode input, String state) {
+        return json.object().put("accountMappingRevisionId", text(input, "accountMappingRevisionId")).put("contentHash", json.hash(input))
+                .put("state", state);
+    }
+
+    private void validateChange(Map<String, Object> active, JsonNode input) {
+        var previous = normalizeConfiguration(json.read(string(active, "config_json")));
+        require(previous.get("scope").equals(input.get("scope")) && previous.get("officeId").equals(input.get("officeId")),
+                "FINERACT_CAPABILITY_MISSING");
+        String scope = scopeKey(input.get("scope"));
+        boolean used = store.jdbc().queryForObject("select count(*) from m_mnzl_r_command where scope_key=?", Long.class, scope) > 0;
+        if (used) {
+            for (String field : java.util.List.of("productId", "accountMap", "bankAccountReference", "helProductId", "helPaymentTypeId")) {
+                require(previous.get(field).equals(input.get(field)), "FINERACT_CAPABILITY_MISSING");
+            }
+        }
+    }
+
+    @Transactional
+    public JsonNode activate(JsonNode scopeNode, String request) {
+        security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
+        var input = json.validate("nativeConfigurationActivationRequest", request);
+        String scope = scopeKey(scopeNode);
+        var active = store.lockConfiguration(scope);
+        String key = ReceivablesStore.key(scope, "configuration-activation", text(input, "activationId"));
+        var existing = store.find("configuration_activation", key);
+        if (existing != null) {
+            require(json.hash(input).equals(string(existing, "request_hash")), "IDEMPOTENCY_CONFLICT");
+            return json.read(string(existing, "result_json"));
+        }
+        require(text(input, "expectedActiveAccountMappingRevisionId").equals(string(active, "mapping_revision")),
+                "ACCOUNT_VERSION_CHANGED");
+        String target = text(input, "accountMappingRevisionId");
+        var rows = store.jdbc().queryForList("select * from m_mnzl_r_configuration_revision where scope_key=? and mapping_revision=?",
+                scope, target);
+        require(rows.size() == 1 && "STAGED".equals(string(rows.getFirst(), "state")), "FINERACT_CAPABILITY_MISSING");
+        var snapshot = normalizeConfiguration(json.read(string(rows.getFirst(), "config_json")));
+        require(json.hash(snapshot).equals(text(input, "contentHash")), "IDEMPOTENCY_CONFLICT");
+        require(store.jdbc().queryForObject("select count(*) from m_mnzl_r_period where scope_key=? and status='PREPARING'", Long.class,
+                scope) == 0, "PERIOD_CLOSED");
+        verifyActiveProjection(active);
+        validateConfiguration(snapshot);
+        validateChange(active, snapshot);
+        var fields = new LinkedHashMap<String, Object>();
+        fields.put("integration_user_id", Long.parseLong(text(snapshot, "integrationUserId")));
+        fields.put("product_id", Long.parseLong(text(snapshot, "productId")));
+        fields.put("mapping_revision", target);
+        fields.put("policy_revision", text(snapshot, "policyRevisionId"));
+        fields.put("calculator_build", text(snapshot, "calculatorBuild"));
+        fields.put("hel_product_id", snapshot.get("helProductId").isNull() ? null : Long.parseLong(text(snapshot, "helProductId")));
+        fields.put("hel_payment_type_id",
+                snapshot.get("helPaymentTypeId").isNull() ? null : Long.parseLong(text(snapshot, "helPaymentTypeId")));
+        fields.put("config_json", json.write(snapshot));
+        fields.put("version", number(active, "version") + 1);
+        store.update("configuration", scope, fields);
+        for (var entry : snapshot.get("accountMap")) {
+            store.update("account_map", ReceivablesStore.key(scope, "map", text(entry, "accountKey")),
+                    Map.of("mapping_revision", target, "native_gl_id", Long.parseLong(text(entry, "nativeGlAccountId"))));
+        }
+        store.jdbc().update("update m_mnzl_r_configuration_revision set state='RETIRED' where scope_key=? and state='ACTIVE'", scope);
+        store.update("configuration_revision", string(rows.getFirst(), "record_key"), Map.of("state", "ACTIVE"));
+        var result = json.object().put("activationId", text(input, "activationId"))
+                .put("previousAccountMappingRevisionId", string(active, "mapping_revision")).put("accountMappingRevisionId", target)
+                .put("contentHash", text(input, "contentHash")).put("activatedAt", java.time.Instant.now().toString());
+        store.insert("configuration_activation", key, Map.of("scope_key", scope, "request_hash", json.hash(input), "result_json",
+                json.write(result), "activated_by", security.authenticatedUser().getId()));
         return result;
     }
 
@@ -221,7 +384,8 @@ public class ReceivablesConfiguration {
         Map<String, Object> config = checkUser ? authorize(scope, false) : store.require("configuration", scopeKey(scope));
         boolean ready;
         try {
-            validateProduct(number(config, "product_id"));
+            verifyActiveProjection(config);
+            validateConfiguration(json.read(string(config, "config_json")));
             ready = true;
         } catch (ReceivablesException e) {
             ready = false;
@@ -239,7 +403,7 @@ public class ReceivablesConfiguration {
         result.put("chargeStrategyCode", "MNZL_NO_BORROWER_CHARGES");
         result.put("accountingMode", "NONE");
         result.put("productConfigurationReady", ready);
-        result.put("accountConfigurationReady", store.scoped("account_map", scopeKey(scope)).size() == ACCOUNTS.size());
+        result.put("accountConfigurationReady", ready);
         Long watermark = store.jdbc().queryForObject("select coalesce(max(sequence_id),0) from m_mnzl_r_event where scope_key=?",
                 Long.class, scopeKey(scope));
         result.put("currentEventWatermark", Long.toString(watermark));
@@ -261,6 +425,7 @@ public class ReceivablesConfiguration {
 
     public void validateExecution(JsonNode command, Map<String, Object> config, String payloadHash) {
         String scope = scopeKey(command.get("scope"));
+        verifyActiveProjection(config);
         require(string(config, "mapping_revision").equals(text(command, "accountMappingRevisionId")), "FINERACT_CAPABILITY_MISSING");
         validateProduct(number(config, "product_id"));
         LocalDate date = LocalDate.parse(text(command, "businessDate"));

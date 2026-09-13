@@ -171,7 +171,8 @@ public class ReceivablesCommandService {
             positions.add(measurement.wirePosition(account, measurement.position(account, e.date),
                     ReceivablesMeasurement.amount(account, "allowance_minor"), e.boundarySide));
         }
-        var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"), e.lines);
+        var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"),
+                string(e.configuration, "mapping_revision"), e.lines);
         var event = json.object();
         event.put("calculationVersion", ReceivablesConfiguration.CALCULATION);
         event.put("productPolicyCode", ReceivablesConfiguration.POLICY);
