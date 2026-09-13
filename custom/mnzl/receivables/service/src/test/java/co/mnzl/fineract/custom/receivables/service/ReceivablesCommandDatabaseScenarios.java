@@ -490,6 +490,15 @@ final class ReceivablesCommandDatabaseScenarios {
         String eventId = original.path("financialEventIds").get(0).asText();
         String eventText = harness.queryText("select event_json from m_mnzl_r_event where record_key='" + eventId + "'");
         JsonNode event = harness.json.read(eventText);
+        Map<Long, List<String>> physicalJournals = new java.util.LinkedHashMap<>();
+        for (JsonNode line : event.path("journalLines")) {
+            long journalId = line.path("journalId").asLong();
+            physicalJournals.put(journalId,
+                    List.of(harness.queryText("select amount from acc_gl_journal_entry where id=?", journalId),
+                            harness.queryText("select entry_date from acc_gl_journal_entry where id=?", journalId),
+                            harness.queryText("select account_id from acc_gl_journal_entry where id=?", journalId),
+                            harness.queryText("select type_enum from acc_gl_journal_entry where id=?", journalId)));
+        }
         var originalDate = harness.today;
         var correctionDate = originalDate.withDayOfMonth(1).plusMonths(1);
         String historicalPath = ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/position?businessDate=" + originalDate
@@ -560,6 +569,14 @@ final class ReceivablesCommandDatabaseScenarios {
         assertThat(correctedEvent.path("correctionOfEventId").asText()).isEqualTo(eventId);
         assertThat(correctedEvent.path("reversalOfEventId").asText()).isEqualTo(eventId);
         assertThat(harness.request("GET", historicalPath, null, 200)).isEqualTo(historicalPosition);
+        for (var originalJournal : physicalJournals.entrySet()) {
+            long journalId = originalJournal.getKey();
+            assertThat(List.of(harness.queryText("select amount from acc_gl_journal_entry where id=?", journalId),
+                    harness.queryText("select entry_date from acc_gl_journal_entry where id=?", journalId),
+                    harness.queryText("select account_id from acc_gl_journal_entry where id=?", journalId),
+                    harness.queryText("select type_enum from acc_gl_journal_entry where id=?", journalId)))
+                    .isEqualTo(originalJournal.getValue());
+        }
         assertThat(harness.queryText("select snapshot_json from m_mnzl_r_period where record_key='correction-closed-boundary'"))
                 .isEqualTo(harness.json.write(historicalPosition));
         assertThat(harness.queryText("select source_json from m_mnzl_r_cash_source where cash_movement_id='due-receipt'"))
@@ -1020,7 +1037,7 @@ final class ReceivablesCommandDatabaseScenarios {
         secondReset.put("corridorObservationId", "developer-impaired-second-rate");
         secondReset.put("corridorRate", "0.32");
         secondReset.put("spread", "0");
-        secondReset.put("developerAdjustmentDueDate", harness.today.plusDays(60).toString());
+        secondReset.put("developerAdjustmentDueDate", harness.today.plusDays(45).toString());
         execute(secondReset);
         ObjectNode borrowerImpairment = command("SET_IMPAIRMENT", "developer-proof-borrower-stage-three", id);
         ObjectNode borrowerForecast = forecast(id, "developer-proof-stage-three", List.of()).put("stage", "STAGE_3").put("forecastVersion",
@@ -1103,7 +1120,7 @@ final class ReceivablesCommandDatabaseScenarios {
         later.put("corridorObservationId", "developer-impairment-later-rate");
         later.put("corridorRate", "0.33");
         later.put("spread", "0");
-        later.put("developerAdjustmentDueDate", harness.today.plusDays(30).toString());
+        later.set("developerAdjustmentDueDate", harness.bookingCommands.get(id).path("basis").path("cashflows").get(1).get("dueDate"));
         execute(later);
         assertThat(harness.request("GET", proofPath, null, 200)).isEqualTo(proof);
         assertThat(execute(impairment)).isEqualTo(operation);

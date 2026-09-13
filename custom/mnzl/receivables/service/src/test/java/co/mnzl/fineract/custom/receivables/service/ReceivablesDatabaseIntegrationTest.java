@@ -190,7 +190,8 @@ class ReceivablesDatabaseIntegrationTest {
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))
                 .build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).withFailMessage("%s %s: %s", method, path, response.body()).isEqualTo(status);
+        assertThat(response.statusCode()).withFailMessage("%s %s [%s]: %s", method, path,
+                payload == null ? "" : payload.path("operationId").asText(), response.body()).isEqualTo(status);
         return json.read(response.body());
     }
 
