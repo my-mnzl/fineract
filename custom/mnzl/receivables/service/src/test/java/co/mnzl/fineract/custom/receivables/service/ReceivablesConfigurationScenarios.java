@@ -59,11 +59,12 @@ final class ReceivablesConfigurationScenarios {
         String helLoan = harness.queryText("select loan_id from m_mnzl_r_hel_funding where operation_key=?", helOperation);
         JsonNode helResult = harness.json
                 .read(harness.queryText("select result_json from m_mnzl_r_hel_funding where operation_key=?", helOperation));
-        String helPath = BASE + "/hel-journals?loanId=" + helLoan;
+        var helPathBuilder = new StringBuilder(BASE).append("/hel-journals?loanId=").append(helLoan);
         for (JsonNode id : helResult.path("nativeTransactionIds")) {
-            helPath += "&transactionIds=" + id.asText();
+            helPathBuilder.append("&transactionIds=").append(id.asText());
         }
-        helPath += "&eventWatermark=" + harness.queryLong("select max(sequence_id) from m_mnzl_r_event");
+        String helPath = helPathBuilder.append("&eventWatermark=").append(harness.queryLong("select max(sequence_id) from m_mnzl_r_event"))
+                .toString();
         JsonNode helBefore = harness.request("GET", helPath, null, 200);
         ObjectNode changed = original.deepCopy();
         changed.put("calculatorBuild", "build-next");

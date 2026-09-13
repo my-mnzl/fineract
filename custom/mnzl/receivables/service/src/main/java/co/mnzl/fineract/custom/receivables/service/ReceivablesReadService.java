@@ -88,7 +88,7 @@ public class ReceivablesReadService {
         scope.put("platformId", platform);
         scope.put("financierOrganizationId", financier);
         scope.put("environment", environment);
-        var config = configuration.authorize(scope, false);
+        configuration.authorize(scope, false);
         configuration.revision(key(scope), mapping);
         return scope;
     }

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -50,7 +51,7 @@ class ReceivablesConfigurationApiTest {
     private final AppUser user = mock(AppUser.class);
     private final HttpHeaders headers = mock(HttpHeaders.class);
     private final ReceivablesWriteApiResource api = new ReceivablesWriteApiResource(null, null, configuration, json, security);
-    private final Logger logger = (Logger) LoggerFactory.getLogger(ReceivablesWriteApiResource.class);
+    private final Logger logger = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(ReceivablesWriteApiResource.class);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     ReceivablesConfigurationApiTest() throws Exception {}

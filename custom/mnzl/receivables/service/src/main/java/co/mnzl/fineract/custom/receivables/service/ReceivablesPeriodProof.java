@@ -83,7 +83,7 @@ public class ReceivablesPeriodProof {
             throw new ReceivablesException("INVALID_DATA", failure);
         }
         String scopeKey = configuration.scopeKey(scope);
-        var config = configuration.authorize(scope, false);
+        configuration.authorize(scope, false);
         configuration.revision(scopeKey, mapping);
         String tenant = configuration.tenantId();
         Long latest = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, scopeKey);
