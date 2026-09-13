@@ -413,6 +413,16 @@ class ReceivablesDatabaseIntegrationTest {
         }
     }
 
+    void executeSql(String sql, Object... parameters) throws Exception {
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
+                var statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < parameters.length; index++) {
+                statement.setObject(index + 1, parameters[index]);
+            }
+            statement.execute();
+        }
+    }
+
     Map<String, Long> counts() throws Exception {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (String table : List.of("m_client", "m_loan", "m_loan_transaction", "acc_gl_journal_entry", "m_mnzl_r_account",

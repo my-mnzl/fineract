@@ -96,44 +96,45 @@ final class ReceivablesPeriodProofScenarios {
         String eventId = harness.queryText("select e.record_key from m_mnzl_r_event e join m_mnzl_r_command c "
                 + "on c.record_key=e.operation_key where c.operation_id='office-native-first'");
         String period = harness.queryText("select posting_period from m_mnzl_r_event where record_key='" + eventId + "'");
-        String journalCondition = "id in (select native_journal_id from m_mnzl_r_journal_line where event_key='" + eventId + "')";
+        final String journalCondition = "id in (select native_journal_id from m_mnzl_r_journal_line where event_key=?)";
         JsonNode original = proof(period, watermark, 200);
-        harness.executeSql("create table flex_proof_journal_backup as select * from acc_gl_journal_entry where " + journalCondition);
+        harness.executeSql("create table flex_proof_journal_backup as select * from acc_gl_journal_entry where " + journalCondition,
+                eventId);
         try {
             assertThat(harness.queryLong("select count(*) from flex_proof_journal_backup")).isEqualTo(2);
             // A missing debit/credit pair nets to zero; population correspondence must still reject it.
-            harness.executeSql("delete from acc_gl_journal_entry where " + journalCondition);
+            harness.executeSql("delete from acc_gl_journal_entry where " + journalCondition, eventId);
             rejected(period, watermark);
             restoreJournals();
-            harness.executeSql("update acc_gl_journal_entry set entry_date='1900-01-01' where " + journalCondition);
+            harness.executeSql("update acc_gl_journal_entry set entry_date='1900-01-01' where " + journalCondition, eventId);
             rejected(period, watermark);
             rejected("1900-01", watermark); // An event outside the period has actual native rows inside it.
             restoreJournals();
-            harness.executeSql("update acc_gl_journal_entry set reversed=true where " + journalCondition);
+            harness.executeSql("update acc_gl_journal_entry set reversed=true where " + journalCondition, eventId);
             rejected(period, watermark);
             restoreJournals();
             long extra = harness.queryLong("select max(id) from acc_gl_journal_entry") + 1000;
-            harness.executeSql("update flex_proof_journal_backup set id=id+" + extra);
+            harness.executeSql("update flex_proof_journal_backup set id=id+?", extra);
             harness.executeSql("insert into acc_gl_journal_entry select * from flex_proof_journal_backup");
             try {
                 rejected(period, watermark); // Actual transaction rows absent from the registry are visible.
             } finally {
                 harness.executeSql("delete from acc_gl_journal_entry where id in (select id from flex_proof_journal_backup)");
-                harness.executeSql("update flex_proof_journal_backup set id=id-" + extra);
+                harness.executeSql("update flex_proof_journal_backup set id=id-?", extra);
             }
-            String condition = " where record_key='" + eventId + "'";
-            harness.executeSql("update m_mnzl_r_event set posting_period='1900-01'" + condition);
+            final String condition = " where record_key=?";
+            harness.executeSql("update m_mnzl_r_event set posting_period='1900-01'" + condition, eventId);
             try {
                 rejected(period, watermark);
             } finally {
-                harness.executeSql("update m_mnzl_r_event set posting_period='" + period + "'" + condition);
+                harness.executeSql("update m_mnzl_r_event set posting_period=?" + condition, period, eventId);
             }
-            String hash = harness.queryText("select content_hash from m_mnzl_r_event" + condition);
-            harness.executeSql("update m_mnzl_r_event set content_hash='" + "0".repeat(64) + "'" + condition);
+            String hash = harness.queryText("select content_hash from m_mnzl_r_event where record_key='" + eventId + "'");
+            harness.executeSql("update m_mnzl_r_event set content_hash=?" + condition, "0".repeat(64), eventId);
             try {
                 rejected(period, watermark);
             } finally {
-                harness.executeSql("update m_mnzl_r_event set content_hash='" + hash + "'" + condition);
+                harness.executeSql("update m_mnzl_r_event set content_hash=?" + condition, hash, eventId);
             }
             assertThat(proof(period, watermark, 200).path("observedGl").path("sha256"))
                     .isEqualTo(original.path("observedGl").path("sha256"));
