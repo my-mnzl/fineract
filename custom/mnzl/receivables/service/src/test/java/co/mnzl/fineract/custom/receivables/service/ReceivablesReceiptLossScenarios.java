@@ -90,6 +90,9 @@ final class ReceivablesReceiptLossScenarios {
         ObjectNode downstream;
         String successor = null;
         Long helLoan = null;
+        JsonNode helFundingCommand = null;
+        JsonNode helFundingOperation = null;
+        JsonNode helFundingEvent = null;
         if (hel) {
             long client = get(ROOT + "/accounts/" + id).path("nativeClientId").asLong();
             ObjectNode loan = harness.ordinaryLoanRequest(client, get(ROOT + "/configuration").path("helProductId").asLong());
@@ -106,7 +109,11 @@ final class ReceivablesReceiptLossScenarios {
             fund.put("expectedPrincipalMinor", "100000");
             fund.put("expectedFinancedFeesMinor", "0");
             fund.set("financedFeeIds", harness.json.array());
-            post(ROOT + "/hel-funding/commands", fund, 200);
+            JsonNode funded = post(ROOT + "/hel-funding/commands", fund, 200);
+            helFundingCommand = fund;
+            helFundingOperation = get(ROOT + "/hel-funding/operations/" + id + "-fund");
+            assertThat(helFundingOperation).isEqualTo(funded);
+            helFundingEvent = event(helFundingOperation);
             downstream = command("SETTLE_RECEIVABLE", id + "-transfer", id);
             downstream.set("settlementSource", harness.json
                     .value(Map.of("kind", "HEL_CLEARING", "helFundingOperationId", id + "-fund", "closureReason", "CONVERTED_TO_HEL")));
@@ -257,6 +264,11 @@ final class ReceivablesReceiptLossScenarios {
         evidence.set("originalEvent", originalEvent);
         evidence.set("downstreamCommand", downstream);
         evidence.set("downstreamEvent", downstreamEvent);
+        if (hel) {
+            evidence.set("helFundingCommand", helFundingCommand);
+            evidence.set("helFundingOperation", helFundingOperation);
+            evidence.set("helFundingEvent", helFundingEvent);
+        }
         evidence.set("command", loss);
         evidence.set("operation", result);
         evidence.set("event", outcomeEvent);
