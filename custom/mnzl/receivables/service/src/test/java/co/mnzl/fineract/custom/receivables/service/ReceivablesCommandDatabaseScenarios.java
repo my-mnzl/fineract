@@ -1137,6 +1137,9 @@ final class ReceivablesCommandDatabaseScenarios {
         later.put("spread", "0");
         later.set("developerAdjustmentDueDate", harness.bookingCommands.get(id).path("basis").path("cashflows").get(1).get("dueDate"));
         execute(later);
+        JsonNode resetPosition = harness.request("GET", accountPath + "/position", null, 200);
+        assertThat(resetPosition.path("lossAllowanceMinor")).isEqualTo(resetPosition.path("amortizedCostMinor"));
+        assertThat(resetPosition.path("netCarryingMinor").asText()).isEqualTo("0");
         assertThat(harness.request("GET", proofPath, null, 200)).isEqualTo(proof);
         assertThat(execute(impairment)).isEqualTo(operation);
         assertThat(harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/transactions", null, 200)

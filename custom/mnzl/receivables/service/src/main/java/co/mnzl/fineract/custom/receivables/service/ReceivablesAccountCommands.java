@@ -511,6 +511,9 @@ public class ReceivablesAccountCommands {
         if (reset.lot() != null) {
             createLot(e, key, reset.lot(), ":reset");
         }
+        BigInteger allowance = measurement.allowance(after, next, latestForecast(key));
+        pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")), id, deal, "IMPAIRMENT");
+        store.update("account", key, Map.of("allowance_minor", allowance.toString()));
     }
 
     private void createLot(ReceivablesExecution e, String accountKey, ReceivableEvents.AdjustmentLot lot, String suffix) {
