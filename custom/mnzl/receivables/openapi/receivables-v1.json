@@ -2059,6 +2059,33 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "requestBody": {
@@ -2179,6 +2206,16 @@
           },
           "503": {
             "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeWorkoutRevocationRequest"
+              }
+            }
           }
         }
       }
@@ -12991,6 +13028,18 @@
           "scope",
           "approvedWorkoutCaseId",
           "revoked"
+        ],
+        "additionalProperties": false
+      },
+      "nativeWorkoutRevocationRequest": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          }
+        },
+        "required": [
+          "scope"
         ],
         "additionalProperties": false
       }

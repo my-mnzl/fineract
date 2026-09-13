@@ -283,8 +283,10 @@ final class ReceivablesCommandDatabaseScenarios {
             assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", changed, 409).path("code").asText())
                     .isEqualTo("APPROVAL_SCOPE_CHANGED");
             String revokePath = ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2/" + id + "-approval/revoke";
-            assertThat(harness.request("POST", revokePath, null, 200).path("revoked").asBoolean()).isTrue();
-            assertThat(harness.request("POST", revokePath, null, 200).path("revoked").asBoolean()).isTrue();
+            assertThat(harness.request("POST", revokePath, harness.json.value(Map.of("scope", c.get("scope"))), 200).path("revoked")
+                    .asBoolean()).isTrue();
+            assertThat(harness.request("POST", revokePath, harness.json.value(Map.of("scope", c.get("scope"))), 200).path("revoked")
+                    .asBoolean()).isTrue();
             harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200);
             assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", c, 409).path("code").asText())
                     .isEqualTo("APPROVAL_SCOPE_CHANGED");
@@ -294,7 +296,11 @@ final class ReceivablesCommandDatabaseScenarios {
             harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200);
             long bank = glBalance("bank");
             long loss = glBalance("modificationGainLoss");
-            execute(c);
+            JsonNode committed = execute(c);
+            String committedRevokePath = ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2/"
+                    + c.path("approvedWorkoutCaseId").asText() + "/revoke";
+            harness.request("POST", committedRevokePath, harness.json.value(Map.of("scope", c.get("scope"))), 200);
+            assertThat(execute(c)).isEqualTo(committed);
             assertThat(account(id).path("closureReason").asText()).isEqualTo("WORKOUT");
             assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("0");
             assertThat(glBalance("bank")).isEqualTo(bank);
@@ -331,6 +337,8 @@ final class ReceivablesCommandDatabaseScenarios {
         c.set("modifiedCashflows", harness.json.value(flows));
         c.set("riskForecast", forecast(id, "modified-forecast", flows).put("stage", "STAGE_2"));
         c.set("legalEvidenceIds", harness.json.value(List.of("signed-modification")));
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", c, 409).path("code").asText())
+                .isEqualTo("APPROVAL_SCOPE_CHANGED");
         issueWorkout(c);
         execute(c);
         JsonNode modified = account(id);
@@ -361,6 +369,8 @@ final class ReceivablesCommandDatabaseScenarios {
         c.set("modifiedCashflows", harness.json.value(List.of()));
         c.set("riskForecast", forecast(id, "written-off-forecast", List.of()));
         c.set("legalEvidenceIds", harness.json.value(List.of("approved-writeoff")));
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", c, 409).path("code").asText())
+                .isEqualTo("APPROVAL_SCOPE_CHANGED");
         issueWorkout(c);
         execute(c);
         assertThat(account(id).path("closureReason").asText()).isEqualTo("WRITE_OFF");

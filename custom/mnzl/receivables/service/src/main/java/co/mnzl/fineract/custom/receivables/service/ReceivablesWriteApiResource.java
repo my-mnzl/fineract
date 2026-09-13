@@ -185,8 +185,10 @@ public class ReceivablesWriteApiResource {
 
     @POST
     @Path("/workout-authorizations/v2/{authorizationId}/revoke")
-    public String revokeWorkoutV2(@Context HttpHeaders headers, @PathParam("authorizationId") String authorizationId) {
-        return json.write(configuration.revokeWorkoutV2(scope(headers), authorizationId));
+    public String revokeWorkoutV2(@Context HttpHeaders headers, @PathParam("authorizationId") String authorizationId, String request) {
+        JsonNode input = json.validate("nativeWorkoutRevocationRequest", request);
+        require(configuration.scopeKey(input.get("scope")).equals(configuration.scopeKey(scope(headers))), "OWNERSHIP_CONFLICT");
+        return json.write(configuration.revokeWorkoutV2(input.get("scope"), authorizationId));
     }
 
 }

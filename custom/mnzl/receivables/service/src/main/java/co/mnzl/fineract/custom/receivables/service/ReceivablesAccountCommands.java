@@ -796,6 +796,7 @@ public class ReceivablesAccountCommands {
         String deal = string(account, "deal_id");
         Position before = measurement.position(account, e.date);
         String classification = text(e.command, "classification");
+        require(!classification.equals("DERECOGNITION") || e.command.hasNonNull("legalOutcome"), "APPROVAL_SCOPE_CHANGED");
         configuration.requireWorkout(e,
                 classification.equals("DERECOGNITION") ? text(e.command.get("legalOutcome"), "kind") : classification,
                 minor(e.command, "approvedConsiderationMinor"));
