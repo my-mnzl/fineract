@@ -225,7 +225,24 @@ final class ReceivablesReceiptLossScenarios {
                 .put("dispositionId", id + "-duplicate");
         assertThat(post(ROOT + "/commands", authorize(duplicate, id + "-duplicate-grant"), 409).path("code").asText())
                 .isEqualTo("IDEMPOTENCY_CONFLICT");
+        JsonNode periodProof = get(ROOT + "/period-activity-proof?postingPeriod=" + h.today.toString().substring(0, 7) + "&eventWatermark="
+                + result.path("eventWatermark").asText());
+        List<JsonNode> lossControls = new ArrayList<>();
+        periodProof.path("observedGl").path("accounts").forEach(control -> {
+            if (control.path("accountKey").asText().equals("receiptReturnLoss")) {
+                lossControls.add(control);
+            }
+        });
+        assertThat(lossControls).hasSize(1);
+        JsonNode lossControl = lossControls.getFirst();
+        assertThat(lossControl.path("originalMappingRevisionId").asText()).isEqualTo("mapping-1");
+        assertThat(lossControl.path("mappingExtensionId")).isEqualTo(extension.get("extensionId"));
+        assertThat(lossControl.path("mappingExtensionHash")).isEqualTo(extension.get("contentHash"));
+        assertThat(lossControl.path("nativeGlAccountId").asText()).isEqualTo(Long.toString(lossGl));
+        assertThat(lossControl.path("creditMinor").asText()).isEqualTo("0");
+        assertThat(Long.parseLong(lossControl.path("debitMinor").asText())).isGreaterThanOrEqualTo(50000);
         var evidence = h.receiptLossEvidence.putObject(hel ? "hel" : "substitution");
+        evidence.set("periodProof", periodProof);
         evidence.set("extension", extension);
         evidence.set("originalReceipt", receipt);
         evidence.set("collection", collect);
