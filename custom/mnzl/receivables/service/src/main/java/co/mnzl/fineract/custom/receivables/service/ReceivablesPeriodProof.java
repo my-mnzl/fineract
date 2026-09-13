@@ -18,7 +18,6 @@
  */
 package co.mnzl.fineract.custom.receivables.service;
 
-import static co.mnzl.fineract.custom.receivables.service.ReceivablesException.require;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.number;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
@@ -39,12 +38,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** A complete event population and independently observed custom journal proof in one database snapshot. */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class ReceivablesPeriodProof {
@@ -55,8 +56,25 @@ public class ReceivablesPeriodProof {
     private final ReceivablesConfiguration configuration;
 
     public JsonNode read(JsonNode scope, String mapping, String period, String watermark) {
-        require(period != null && period.matches("[0-9]{4}-(0[1-9]|1[0-2])") && watermark != null
-                && watermark.matches("0|[1-9][0-9]{0,18}"), "INVALID_DATA");
+        long started = System.nanoTime();
+        Diagnostic diagnostic = new Diagnostic();
+        try {
+            return readProof(scope, mapping, period, watermark, diagnostic);
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "MNZL receivables period proof scope={} period={} watermark={} result={} category={} eventHash={} journalId={} latencyMs={}",
+                    ReceivablesJson.hashText(scope.toString()), period != null && period.matches("[0-9]{4}-[0-9]{2}") ? period : "INVALID",
+                    watermark != null && watermark.matches("[0-9]{1,19}") ? watermark : "INVALID",
+                    failure instanceof ReceivablesException rejected ? rejected.code() : "FAILED", diagnostic.category,
+                    diagnostic.eventId == null ? null : ReceivablesJson.hashText(diagnostic.eventId), diagnostic.journalId,
+                    (System.nanoTime() - started) / 1_000_000);
+            throw failure;
+        }
+    }
+
+    private JsonNode readProof(JsonNode scope, String mapping, String period, String watermark, Diagnostic diagnostic) {
+        diagnostic.check(period != null && period.matches("[0-9]{4}-(0[1-9]|1[0-2])") && watermark != null
+                && watermark.matches("0|[1-9][0-9]{0,18}"), "INVALID_DATA", "INPUT");
         long maximum;
         try {
             YearMonth.parse(period);
@@ -66,10 +84,10 @@ public class ReceivablesPeriodProof {
         }
         String scopeKey = configuration.scopeKey(scope);
         var config = configuration.authorize(scope, false);
-        require(mapping.equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
+        diagnostic.check(mapping.equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING", "MAPPING_REVISION");
         String tenant = configuration.tenantId();
         Long latest = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, scopeKey);
-        require(maximum <= (latest == null ? 0 : latest), "INVALID_DATA");
+        diagnostic.check(maximum <= (latest == null ? 0 : latest), "INVALID_DATA", "WATERMARK");
         ObjectNode selection = json.object();
         selection.put("schemaVersion", "1");
         selection.put("tenantId", tenant);
@@ -80,32 +98,37 @@ public class ReceivablesPeriodProof {
         selection.put("coverage", "SCOPED_EVENTS_CUSTOM_R_JOURNALS_V1");
         selection.set("excludedJournalPopulations", json.value(List.of("ORDINARY_HEL_LOAN_JOURNALS")));
 
-        var events = bounded("select e.*,c.command_type,c.request_json,c.operation_id from m_mnzl_r_event e "
-                + "left join m_mnzl_r_command c on c.record_key=e.operation_key where e.scope_key=? and e.sequence_id<=? limit 100001",
+        var events = bounded(diagnostic, "EVENT_POPULATION_LIMIT",
+                "select e.*,c.command_type,c.request_json,c.operation_id from m_mnzl_r_event e "
+                        + "left join m_mnzl_r_command c on c.record_key=e.operation_key where e.scope_key=? and e.sequence_id<=? limit 100001",
                 scopeKey, maximum);
         Map<String, JsonNode> selected = new HashMap<>();
         Map<String, LocalDate> postingDates = new HashMap<>();
         List<JsonNode> members = new ArrayList<>();
         Map<String, Expected> expected = new HashMap<>();
         for (var row : events) {
-            require(row.get("request_json") != null && row.get("command_type") != null, "JOURNAL_MISMATCH");
+            diagnostic.category = "EVENT_DATA";
+            diagnostic.eventId = string(row, "record_key");
+            diagnostic.check(row.get("request_json") != null && row.get("command_type") != null, "JOURNAL_MISMATCH",
+                    "EVENT_COMMAND_MISSING");
             ObjectNode event = (ObjectNode) json.read(string(row, "event_json"));
             String id = text(event, "eventId");
             ObjectNode unhashed = event.deepCopy();
             unhashed.remove("contentHash");
-            require(id.equals(string(row, "record_key")) && id.equals(string(row, "event_id"))
+            diagnostic.check(id.equals(string(row, "record_key")) && id.equals(string(row, "event_id"))
                     && text(event, "contentHash").equals(string(row, "content_hash"))
                     && text(event, "contentHash").equals(json.hash(unhashed))
                     && text(event, "postingPeriod").equals(string(row, "posting_period"))
                     && text(event, "businessDate").equals(string(row, "business_date"))
                     && text(event, "operationId").equals(string(row, "operation_id")) && tenant.equals(text(event, "tenantId"))
-                    && configuration.scopeKey(event.get("scope")).equals(scopeKey), "JOURNAL_MISMATCH");
+                    && configuration.scopeKey(event.get("scope")).equals(scopeKey), "JOURNAL_MISMATCH", "EVENT_INTEGRITY");
             LocalDate date = LocalDate.parse(text(event, "businessDate"));
             JsonNode command = json.read(string(row, "request_json"));
             if (string(row, "command_type").equals("CLOSE_PERIOD") && text(command, "phase").equals("PREPARE")) {
                 date = LocalDate.parse(text(command, "boundaryDate")).minusDays(1);
             }
-            require(YearMonth.from(date).toString().equals(text(event, "postingPeriod")), "JOURNAL_MISMATCH");
+            diagnostic.check(YearMonth.from(date).toString().equals(text(event, "postingPeriod")), "JOURNAL_MISMATCH",
+                    "EVENT_POSTING_DATE");
             if (!period.equals(text(event, "postingPeriod"))) {
                 continue;
             }
@@ -113,41 +136,53 @@ public class ReceivablesPeriodProof {
             postingDates.put(id, date);
             members.add(json.value(Map.of("eventId", id, "contentHash", text(event, "contentHash"))));
             for (JsonNode line : event.get("journalLines")) {
-                require(expected.put(text(line, "sourceLineId"), new Expected(event, line)) == null, "JOURNAL_MISMATCH");
-                require(expected.size() <= MAX_ROWS, "INVALID_DATA");
+                diagnostic.check(expected.put(text(line, "sourceLineId"), new Expected(event, line)) == null, "JOURNAL_MISMATCH",
+                        "DUPLICATE_SOURCE_LINE");
+                diagnostic.check(expected.size() <= MAX_ROWS, "INVALID_DATA", "EVENT_LINE_LIMIT");
             }
         }
         members.sort(Comparator.comparing(row -> text(row, "eventId")));
-        var registry = bounded("select l.* from m_mnzl_r_journal_line l join m_mnzl_r_event e on e.record_key=l.event_key "
-                + "where e.scope_key=? and e.sequence_id<=? limit 100001", scopeKey, maximum);
+        var registry = bounded(diagnostic, "REGISTRY_POPULATION_LIMIT",
+                "select l.* from m_mnzl_r_journal_line l join m_mnzl_r_event e on e.record_key=l.event_key "
+                        + "where e.scope_key=? and e.sequence_id<=? limit 100001",
+                scopeKey, maximum);
+        diagnostic.eventId = null;
+        diagnostic.category = "ACCOUNT_MAPPING";
         var mappings = store.scoped("account_map", scopeKey);
         Map<String, Long> approvedGl = new HashMap<>();
         for (var row : mappings) {
-            require(mapping.equals(string(row, "mapping_revision"))
-                    && approvedGl.put(string(row, "account_key"), number(row, "native_gl_id")) == null, "JOURNAL_MISMATCH");
+            diagnostic.check(
+                    mapping.equals(string(row, "mapping_revision"))
+                            && approvedGl.put(string(row, "account_key"), number(row, "native_gl_id")) == null,
+                    "JOURNAL_MISMATCH", "MAPPING_REVISION_OR_DUPLICATE");
         }
-        require(approvedGl.keySet().equals(ReceivablesConfiguration.ACCOUNTS), "JOURNAL_MISMATCH");
+        diagnostic.check(approvedGl.keySet().equals(ReceivablesConfiguration.ACCOUNTS), "JOURNAL_MISMATCH", "MAPPING_POPULATION");
         Map<Long, Expected> byJournal = new HashMap<>();
         for (var row : registry) {
+            diagnostic.category = "REGISTRY_DATA";
+            diagnostic.eventId = string(row, "event_key");
             if (!selected.containsKey(string(row, "event_key"))) {
                 continue;
             }
+            diagnostic.journalId = number(row, "native_journal_id");
             Expected match = expected.get(string(row, "source_line_id"));
-            require(match != null && scopeKey.equals(string(row, "scope_key"))
+            diagnostic.check(match != null && scopeKey.equals(string(row, "scope_key"))
                     && text(match.event(), "eventId").equals(string(row, "event_key"))
                     && text(match.line(), "journalId").equals(Long.toString(number(row, "native_journal_id")))
                     && text(match.line(), "accountKey").equals(string(row, "semantic_account"))
                     && text(match.line(), "component").equals(string(row, "component"))
                     && text(match.line(), "amountMinor").equals(string(row, "amount_minor"))
-                    && text(match.line(), "side").equals(string(row, "side")), "JOURNAL_MISMATCH");
+                    && text(match.line(), "side").equals(string(row, "side")), "JOURNAL_MISMATCH", "REGISTRY_LINE_MISMATCH");
             if (mapping.equals(text(match.event(), "accountMappingRevisionId"))) {
-                require(Long.valueOf(number(row, "native_gl_id")).equals(approvedGl.get(string(row, "semantic_account"))),
-                        "JOURNAL_MISMATCH");
+                diagnostic.check(Long.valueOf(number(row, "native_gl_id")).equals(approvedGl.get(string(row, "semantic_account"))),
+                        "JOURNAL_MISMATCH", "REGISTRY_ACCOUNT_MISMATCH");
             }
             match.registry = row;
-            require(byJournal.put(number(row, "native_journal_id"), match) == null, "JOURNAL_MISMATCH");
+            diagnostic.check(byJournal.put(number(row, "native_journal_id"), match) == null, "JOURNAL_MISMATCH", "DUPLICATE_JOURNAL");
         }
-        require(byJournal.size() == expected.size(), "JOURNAL_MISMATCH");
+        diagnostic.eventId = null;
+        diagnostic.journalId = null;
+        diagnostic.check(byJournal.size() == expected.size(), "JOURNAL_MISMATCH", "REGISTRY_LINE_MISSING");
         Map<String, ObjectNode> accounts = new LinkedHashMap<>();
         for (var row : mappings) {
             account(accounts, mapping, string(row, "account_key"), Long.toString(number(row, "native_gl_id")));
@@ -156,12 +191,17 @@ public class ReceivablesPeriodProof {
         // requested
         // month until checking the expected event date; also catch actual-period rows belonging to differently dated
         // events.
-        var actual = bounded("select j.*,e.record_key event_key from acc_gl_journal_entry j join m_mnzl_r_event e "
-                + "on j.transaction_id=concat('R',substring(e.record_key,1,40)) "
-                + "where e.scope_key=? and e.sequence_id<=? order by j.id limit 100001", scopeKey, maximum);
+        var actual = bounded(diagnostic, "ACTUAL_POPULATION_LIMIT",
+                "select j.*,e.record_key event_key from acc_gl_journal_entry j join m_mnzl_r_event e "
+                        + "on j.transaction_id=concat('R',substring(e.record_key,1,40)) "
+                        + "where e.scope_key=? and e.sequence_id<=? order by j.id limit 100001",
+                scopeKey, maximum);
         List<JsonNode> committedRows = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
         for (var row : actual) {
+            diagnostic.category = "ACTUAL_DATA";
+            diagnostic.eventId = string(row, "event_key");
+            diagnostic.journalId = number(row, "id");
             String eventId = string(row, "event_key");
             LocalDate date = LocalDate.parse(string(row, "entry_date"));
             if (!selected.containsKey(eventId) && !YearMonth.from(date).toString().equals(period)) {
@@ -169,16 +209,23 @@ public class ReceivablesPeriodProof {
             }
             long id = number(row, "id");
             Expected match = byJournal.get(id);
-            require(match != null && selected.containsKey(eventId) && seen.add(id) && text(match.event(), "eventId").equals(eventId)
-                    && date.equals(postingDates.get(eventId)), "JOURNAL_MISMATCH");
+            diagnostic.check(match != null && selected.containsKey(eventId), "JOURNAL_MISMATCH", "ACTUAL_JOURNAL_EXTRA");
+            diagnostic.check(seen.add(id), "JOURNAL_MISMATCH", "ACTUAL_JOURNAL_DUPLICATE");
+            diagnostic.check(text(match.event(), "eventId").equals(eventId), "JOURNAL_MISMATCH", "ACTUAL_EVENT_MISMATCH");
+            diagnostic.check(date.equals(postingDates.get(eventId)), "JOURNAL_MISMATCH", "ACTUAL_POSTING_DATE");
             String side = number(row, "type_enum") == 2 ? "DEBIT" : "CREDIT";
             BigInteger amount = new BigDecimal(string(row, "amount")).movePointRight(2).toBigIntegerExact();
             String gl = Long.toString(number(row, "account_id"));
             boolean reversed = "1".equals(string(row, "reversed")) || Boolean.parseBoolean(string(row, "reversed"));
-            require(!reversed && Set.of(1L, 2L).contains(number(row, "type_enum")) && amount.signum() > 0
-                    && side.equals(text(match.line(), "side")) && amount.toString().equals(text(match.line(), "amountMinor"))
-                    && gl.equals(Long.toString(number(match.registry, "native_gl_id"))) && "EGP".equals(string(row, "currency_code"))
-                    && text(match.line(), "sourceLineId").equals(string(row, "ref_num")), "JOURNAL_MISMATCH");
+            diagnostic.check(!reversed, "JOURNAL_MISMATCH", "ACTUAL_REVERSED");
+            diagnostic.check(Set.of(1L, 2L).contains(number(row, "type_enum")) && amount.signum() > 0
+                    && side.equals(text(match.line(), "side")) && amount.toString().equals(text(match.line(), "amountMinor")),
+                    "JOURNAL_MISMATCH", "ACTUAL_SIDE_OR_AMOUNT");
+            diagnostic.check(gl.equals(Long.toString(number(match.registry, "native_gl_id"))), "JOURNAL_MISMATCH",
+                    "ACTUAL_ACCOUNT_MISMATCH");
+            diagnostic.check(
+                    "EGP".equals(string(row, "currency_code")) && text(match.line(), "sourceLineId").equals(string(row, "ref_num")),
+                    "JOURNAL_MISMATCH", "ACTUAL_CURRENCY_OR_REFERENCE");
             String revision = text(match.event(), "accountMappingRevisionId");
             String semantic = text(match.line(), "accountKey");
             ObjectNode observed = json.object();
@@ -199,7 +246,10 @@ public class ReceivablesPeriodProof {
             String field = side.equals("DEBIT") ? "debitMinor" : "creditMinor";
             balance.put(field, new BigInteger(text(balance, field)).add(amount).toString());
         }
-        require(seen.size() == expected.size(), "JOURNAL_MISMATCH");
+        diagnostic.eventId = null;
+        diagnostic.journalId = null;
+        diagnostic.check(seen.size() == expected.size(), "JOURNAL_MISMATCH", "ACTUAL_JOURNAL_MISSING");
+        diagnostic.category = "PROOF_ENCODING";
         List<ObjectNode> balances = new ArrayList<>(accounts.values());
         balances.sort(Comparator.comparing((ObjectNode row) -> text(row, "originalMappingRevisionId"))
                 .thenComparing(row -> text(row, "accountKey")).thenComparing(row -> text(row, "nativeGlAccountId"))
@@ -226,9 +276,12 @@ public class ReceivablesPeriodProof {
         return json.validate("periodActivityProof", json.write(result));
     }
 
-    private List<Map<String, Object>> bounded(String sql, Object... args) {
+    private List<Map<String, Object>> bounded(Diagnostic diagnostic, String category, String sql, Object... args) {
+        diagnostic.category = "POPULATION_READ";
+        diagnostic.eventId = null;
+        diagnostic.journalId = null;
         var rows = store.jdbc().queryForList(sql, args);
-        require(rows.size() <= MAX_ROWS, "INVALID_DATA");
+        diagnostic.check(rows.size() <= MAX_ROWS, "INVALID_DATA", category);
         return rows;
     }
 
@@ -244,6 +297,20 @@ public class ReceivablesPeriodProof {
             row.put("creditMinor", "0");
             return row;
         });
+    }
+
+    private static final class Diagnostic {
+
+        private String category = "INPUT";
+        private String eventId;
+        private Long journalId;
+
+        private void check(boolean condition, String code, String failureCategory) {
+            if (!condition) {
+                category = failureCategory;
+                throw new ReceivablesException(code);
+            }
+        }
     }
 
     private static final class Expected {
