@@ -182,7 +182,10 @@ public class ReceivablesMeasurement {
         int requested = Integer.parseInt(text(forecast, "stage").substring(6));
         int stage = Math.max(requested, CreditAndFunding.stage(position.daysPastDue(), false, false));
         require(stage == requested, "SOURCE_CHANGED");
-        return CreditAndFunding.impairment(position, segment.netEir().rate(), stage, scenarios(forecast)).lossAllowanceMinor();
+        var scenarios = scenarios(forecast);
+        require(scenarios.stream().flatMap(scenario -> scenario.recoveries().stream())
+                .noneMatch(recovery -> recovery.date().isBefore(position.businessDate())), "EVIDENCE_EXPIRED");
+        return CreditAndFunding.impairment(position, segment.netEir().rate(), stage, scenarios).lossAllowanceMinor();
     }
 
     public ObjectNode wirePosition(Map<String, Object> account, Position p, BigInteger allowance, String side) {

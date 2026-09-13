@@ -560,6 +560,21 @@ final class ReceivablesCommandDatabaseScenarios {
         }
         c.set("replacementCommand", replacement);
         harness.issueHistory(c);
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", c, 409).path("code").asText())
+                .isEqualTo("EVIDENCE_EXPIRED");
+        ObjectNode currentRisk = command("SET_IMPAIRMENT", "correction-current-risk", id);
+        ObjectNode currentForecast = replacement.path("riskForecastAfter").deepCopy();
+        currentForecast.put("forecastId", "correction-current-risk-forecast");
+        currentForecast.put("forecastVersion", "2");
+        currentRisk.set("forecast", currentForecast);
+        currentRisk.set("qualitativeFindingIds", harness.json.value(List.of()));
+        currentRisk.set("cureEvidenceIds", harness.json.value(List.of()));
+        execute(currentRisk);
+        c.put("expectedVersion", harness.version(id));
+        replacement.put("expectedVersion", harness.version(id));
+        ((ObjectNode) replacement.path("riskForecastAfter")).put("forecastVersion", "3");
+        ((ObjectNode) c.path("executionAuthorization")).put("authorizationId", "correction-current-risk-authorization");
+        harness.issueHistory(c);
         JsonNode corrected = execute(c);
         JsonNode correctedEvent = harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?",
                 corrected.path("financialEventIds").get(0).asText()));
