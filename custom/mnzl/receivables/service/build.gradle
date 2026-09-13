@@ -42,12 +42,27 @@ tasks.named('test', Test) {
 
 // Embed runtime evidence in the tested artifact, independently of mutable tenant configuration.
 def runtimeMetadata = layout.buildDirectory.dir('generated/receivables-runtime')
-tasks.register('generateReceivablesRuntime') {
+def sourceRevisionHint = 'Supply -PreceivablesSourceRevision=<40 lowercase hexadecimal commit SHA> or RECEIVABLES_SOURCE_REVISION when building without Git metadata.'
+def sourceRevision = providers.gradleProperty('receivablesSourceRevision')
+    .orElse(providers.environmentVariable('RECEIVABLES_SOURCE_REVISION'))
+    .orElse(providers.provider {
+        try {
+            return providers.exec {
+                workingDir rootProject.projectDir
+                commandLine 'git', 'rev-parse', 'HEAD'
+            }.standardOutput.asText.get().trim()
+        } catch (Exception failure) {
+            throw new GradleException("Cannot determine the native receivables source revision. ${sourceRevisionHint}", failure)
+        }
+    }).map { value ->
+        def revision = value.trim()
+        if (!(revision ==~ /[0-9a-f]{40}/)) {
+            throw new GradleException("Invalid native receivables source revision. ${sourceRevisionHint}")
+        }
+        revision
+    }
+def generateReceivablesRuntime = tasks.register('generateReceivablesRuntime') {
     inputs.file('../openapi/receivables-v1.json')
-    def sourceRevision = providers.exec {
-        workingDir rootProject.projectDir
-        commandLine 'git', 'rev-parse', 'HEAD'
-    }.standardOutput.asText.map { it.trim() }
     inputs.property('sourceRevision', sourceRevision)
     outputs.dir(runtimeMetadata)
     doLast {
@@ -58,5 +73,5 @@ tasks.register('generateReceivablesRuntime') {
         new File(directory, 'receivables-runtime.properties').text = "sourceRevision=${sourceRevision.get()}\nopenApiSha256=${hash}\n"
     }
 }
-sourceSets.main.resources.srcDir(runtimeMetadata)
-tasks.named('processResources') { dependsOn 'generateReceivablesRuntime' }
+// Task-backed resources carry the producer dependency into processResources, sourcesJar and other consumers.
+sourceSets.main.resources.srcDir(generateReceivablesRuntime)

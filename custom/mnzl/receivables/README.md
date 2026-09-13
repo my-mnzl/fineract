@@ -144,3 +144,17 @@ proofs and HEL journals resolve their original revision, not the current GL map.
 `GET /configuration/runtime` exposes the lifecycle version and build-time native
 source/OpenAPI hashes separately from declared `calculatorBuild` compatibility.
 An application image release alone does not change calculator compatibility.
+
+For source-archive builds without Git metadata, supply the exact source commit with
+`-PreceivablesSourceRevision=<40 lowercase hexadecimal commit SHA>` or
+`RECEIVABLES_SOURCE_REVISION`. The Gradle property takes precedence over the environment
+variable; otherwise the build reads `git rev-parse HEAD`. Missing or invalid provenance
+fails the metadata-generation task with instructions. This revision describes the source
+artifact and must not be substituted with the configurable `calculatorBuild` value.
+
+Bootstrap, staging and activation requests emit `mnzl.receivables.configuration` JSON
+log events with actor ID, hashed authenticated tenant and scope, revision/activation identifiers, outcome,
+rejection code and latency. Each event describes one HTTP attempt after transaction
+completion; activation retries retain the original `activatedAt`. `expectedActiveRevision`
+is the caller's precondition, while `sourceRevision` is the recorded predecessor on
+success. Logs exclude configuration bodies and financial contents.
