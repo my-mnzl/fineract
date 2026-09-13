@@ -113,7 +113,7 @@ final class ReceivablesReceiptLossScenarios {
             helFundingCommand = fund;
             helFundingOperation = get(ROOT + "/hel-funding/operations/" + id + "-fund");
             assertThat(helFundingOperation).isEqualTo(funded);
-            helFundingEvent = event(helFundingOperation);
+            helFundingEvent = event(helFundingOperation.path("operation"));
             downstream = command("SETTLE_RECEIVABLE", id + "-transfer", id);
             downstream.set("settlementSource", harness.json
                     .value(Map.of("kind", "HEL_CLEARING", "helFundingOperationId", id + "-fund", "closureReason", "CONVERTED_TO_HEL")));
