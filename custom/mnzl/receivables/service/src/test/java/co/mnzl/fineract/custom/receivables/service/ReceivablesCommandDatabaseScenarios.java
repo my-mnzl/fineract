@@ -58,11 +58,48 @@ final class ReceivablesCommandDatabaseScenarios {
         developerImpairmentAfterDue();
         rateCorrection();
         impairmentForecastTransitions();
+        absentCollectionContinuation();
         assertThat(harness
                 .queryLong("select count(*) from m_mnzl_r_journal_line l left join acc_gl_journal_entry j on j.id=l.native_journal_id "
                         + "where j.id is null or l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100 "
                         + "or j.type_enum<>case when l.side='DEBIT' then 2 else 1 end or j.currency_code<>'EGP'"))
                 .isZero();
+    }
+
+    private void absentCollectionContinuation() throws Exception {
+        String id = "absent-collection-account";
+        harness.purchase(id);
+        var date = harness.today.plusDays(45);
+        if (date.plusDays(1).getMonth() != date.getMonth()) {
+            date = date.plusDays(1);
+        }
+        harness.moveDate(date);
+        execute(harness.receiptCommand("absent-receipt", id, "2"));
+        ObjectNode original = command("COLLECT", "absent-original", id);
+        original.set("allocations",
+                harness.json.value(List.of(Map.of("allocationId", "absent-allocation", "cashMovementId", "absent-receipt", "cashflowId",
+                        id + "-0", "installmentId", id + "-0", "instrumentId", "absent-cheque", "amountMinor", "1"))));
+        String savedOriginal = harness.json.write(original);
+        harness.moveDate(date.plusDays(1));
+        ObjectNode continuation = original.deepCopy();
+        continuation.put("operationId", "absent-continuation");
+        continuation.put("idempotencyKey", "absent-continuation");
+        continuation.put("executionMode", "CORRECTION");
+        continuation.set("executionAuthorization", harness.json.value(Map.of("authorizationId", "absent-authorization", "scopeHash",
+                "0".repeat(64), "approvedBy", "1", "effectiveFrom", date.toString(), "effectiveThrough", date.toString())));
+        continuation.set("absentCommandContinuation",
+                harness.json.value(Map.of("originalCommandJson", savedOriginal, "originalCommandHash", harness.json.hash(original))));
+        harness.issueHistory(continuation);
+        JsonNode result = execute(continuation);
+        assertThat(result.path("businessDate").asText()).isEqualTo(date.toString());
+        assertThat(harness.json.write(original)).isEqualTo(savedOriginal);
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", original, 409).path("code").asText())
+                .isEqualTo("IDEMPOTENCY_CONFLICT");
+        ObjectNode alias = original.deepCopy();
+        alias.put("operationId", "absent-original-alias");
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", alias, 409).path("code").asText())
+                .isEqualTo("IDEMPOTENCY_CONFLICT");
+        assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("99999");
     }
 
     private void impairmentForecastTransitions() throws Exception {

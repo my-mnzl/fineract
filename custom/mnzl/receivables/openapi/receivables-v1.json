@@ -4379,6 +4379,9 @@
                 "items": {
                   "$ref": "#/components/schemas/collectionAllocation"
                 }
+              },
+              "absentCommandContinuation": {
+                "$ref": "#/components/schemas/absentCommandContinuation"
               }
             },
             "required": [
@@ -13040,6 +13043,25 @@
         },
         "required": [
           "scope"
+        ],
+        "additionalProperties": false
+      },
+      "absentCommandContinuation": {
+        "type": "object",
+        "description": "Separately authorized continuation of the exact saved CURRENT COLLECT, preserving original financial and posting date in its still-open period. Only untouched receipt sources qualify: no prior collection, including reversed collections, and no used receipt allocations. Account versions and every financial field remain unchanged.",
+        "properties": {
+          "originalCommandJson": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576
+          },
+          "originalCommandHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "originalCommandJson",
+          "originalCommandHash"
         ],
         "additionalProperties": false
       }

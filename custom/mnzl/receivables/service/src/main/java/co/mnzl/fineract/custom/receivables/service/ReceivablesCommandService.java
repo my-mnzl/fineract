@@ -49,6 +49,7 @@ public class ReceivablesCommandService {
     private final ReceivablesCashCommands cash;
     private final ReceivablesCloseCommands close;
     private final ReceivablesHelCommands hel;
+    private final ReceivablesAbsentCollection absentCollection;
     private final PlatformSecurityContext security;
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
@@ -72,10 +73,12 @@ public class ReceivablesCommandService {
             require(existing.get("result_json") != null, "RECOVERY_REQUIRED");
             return json.read(string(existing, "result_json"));
         }
+        absentCollection.rejectConsumedOriginal(execution, idempotencyHash);
         // Lock before any core or custom financial effects. Exact durable replay above never needs this lock.
         ledger.lockOffice(number(config, "office_id"));
         configuration.validateExecution(command, config, payloadHash);
         validateVersions(execution);
+        absentCollection.consume(execution);
         Instant now = Instant.now();
         var fields = new LinkedHashMap<String, Object>();
         fields.put("scope_key", execution.scope);

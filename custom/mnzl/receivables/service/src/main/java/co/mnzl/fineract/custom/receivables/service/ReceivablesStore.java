@@ -35,7 +35,8 @@ public class ReceivablesStore {
     private final JdbcTemplate jdbc;
     private static final Set<String> TABLES = Set.of("configuration", "account_map", "account", "leg", "segment", "segment_leg", "command",
             "event", "journal_line", "cash_source", "cash_allocation", "collection", "developer_lot", "lot_allocation", "funding_facility",
-            "funding_event", "risk_forecast", "period", "authorization", "hel_funding", "state_snapshot", "hel_snapshot");
+            "funding_event", "risk_forecast", "period", "authorization", "hel_funding", "state_snapshot", "hel_snapshot",
+            "consumed_intent");
 
     private static String table(String table) {
         if (!TABLES.contains(table)) {
