@@ -406,6 +406,19 @@ class ReceivablesDatabaseIntegrationTest {
         }
     }
 
+    String queryText(String sql, Object... parameters) throws Exception {
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
+                var statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < parameters.length; index++) {
+                statement.setObject(index + 1, parameters[index]);
+            }
+            try (var rows = statement.executeQuery()) {
+                assertThat(rows.next()).isTrue();
+                return rows.getString(1);
+            }
+        }
+    }
+
     void executeSql(String sql) throws Exception {
         try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword);
                 var statement = connection.createStatement()) {

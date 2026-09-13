@@ -95,7 +95,7 @@ final class ReceivablesPeriodProofScenarios {
     private void verifyDamage(long watermark) throws Exception {
         String eventId = harness.queryText("select e.record_key from m_mnzl_r_event e join m_mnzl_r_command c "
                 + "on c.record_key=e.operation_key where c.operation_id='office-native-first'");
-        String period = harness.queryText("select posting_period from m_mnzl_r_event where record_key='" + eventId + "'");
+        String period = harness.queryText("select posting_period from m_mnzl_r_event where record_key=?", eventId);
         final String journalCondition = "id in (select native_journal_id from m_mnzl_r_journal_line where event_key=?)";
         JsonNode original = proof(period, watermark, 200);
         harness.executeSql("create table flex_proof_journal_backup as select * from acc_gl_journal_entry where " + journalCondition,
@@ -129,7 +129,7 @@ final class ReceivablesPeriodProofScenarios {
             } finally {
                 harness.executeSql("update m_mnzl_r_event set posting_period=?" + condition, period, eventId);
             }
-            String hash = harness.queryText("select content_hash from m_mnzl_r_event where record_key='" + eventId + "'");
+            String hash = harness.queryText("select content_hash from m_mnzl_r_event where record_key=?", eventId);
             harness.executeSql("update m_mnzl_r_event set content_hash=?" + condition, "0".repeat(64), eventId);
             try {
                 rejected(period, watermark);
