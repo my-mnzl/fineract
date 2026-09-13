@@ -162,7 +162,7 @@ final class ReceivablesHistoricalAuthorizationScenarios {
         }
     }
 
-    private ObjectNode cash(String operation) {
+    private ObjectNode cash(String operation) throws Exception {
         ObjectNode command = harness.command("RECORD_CASH_MOVEMENT", operation, "history-deal", "DEAL");
         command.put("executionMode", "CORRECTION");
         command.set("executionAuthorization",
