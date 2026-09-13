@@ -48,6 +48,7 @@ public class ReceivablesWriteApiResource {
     private final ReceivablesCommandService commands;
     private final ReceivablesCalculationService calculations;
     private final ReceivablesConfiguration configuration;
+    private final ReceivablesReceiptLoss receiptLoss;
     private final ReceivablesJson json;
     private final PlatformSecurityContext security;
 
@@ -91,6 +92,20 @@ public class ReceivablesWriteApiResource {
                     ReceivablesJson.hashText(input.path("scope").toString()), ReceivablesJson.hashText(input.path("subjectId").asText()),
                     result, (System.nanoTime() - started) / 1_000_000);
         }
+    }
+
+    @POST
+    @Path("/receipt-loss-configuration")
+    public String configureReceiptLoss(@Context HttpHeaders headers, String request) {
+        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
+                "OWNERSHIP_CONFLICT");
+        return json.write(receiptLoss.configure(request));
+    }
+
+    @GET
+    @Path("/receipt-loss-configuration")
+    public String receiptLossConfiguration(@Context HttpHeaders headers) {
+        return json.write(receiptLoss.configuration(scope(headers)));
     }
 
     @POST

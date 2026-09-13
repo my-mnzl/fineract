@@ -178,6 +178,9 @@ final class ReceivablesHelReportingScenarios {
         assertThat(knownReversal.path("provisionExclusions").isEmpty()).isTrue();
         assertThat(capture("reporting-canceled-unknown")).isEqualTo(canceled);
         hash(knownReversal);
+        members("reporting-posted");
+        members("reporting-canceled-unknown");
+        members("reporting-known-reversal");
         harness.reportingEvidence.set("registrationResult", registered);
         harness.reportingEvidence.set("initialMembers", json.value(members));
         harness.reportingEvidence.set("postedSnapshot", posted);
@@ -226,8 +229,10 @@ final class ReceivablesHelReportingScenarios {
         List<JsonNode> result = new ArrayList<>();
         String cursor = null;
         JsonNode first = null;
+        var capturedPages = json.array();
         do {
             JsonNode page = harness.request("GET", path + (cursor == null ? "" : "&cursor=" + encode(cursor)), null, 200);
+            capturedPages.add(page);
             if (first == null) {
                 first = page;
             }
@@ -240,6 +245,11 @@ final class ReceivablesHelReportingScenarios {
         assertThat(first.path("itemManifestHash").asText())
                 .isEqualTo(manifest(result, path.contains("/members?") ? "nativeLoanId" : "nativeJournalId"));
         result.forEach(this::hash);
+        ObjectNode selections = (ObjectNode) harness.reportingEvidence.get("pageSelections");
+        if (selections == null) {
+            selections = harness.reportingEvidence.putObject("pageSelections");
+        }
+        selections.set(path, capturedPages);
         return result;
     }
 

@@ -53,6 +53,7 @@ public class ReceivablesPeriodProof {
     private static final int MAX_ROWS = 100000;
     private final ReceivablesStore store;
     private final ReceivablesJson json;
+    private final ReceivablesReceiptLoss receiptLoss;
     private final ReceivablesConfiguration configuration;
 
     public JsonNode read(JsonNode scope, String mapping, String period, String watermark) {
@@ -174,8 +175,12 @@ public class ReceivablesPeriodProof {
                     && text(match.line(), "amountMinor").equals(string(row, "amount_minor"))
                     && text(match.line(), "side").equals(string(row, "side")), "JOURNAL_MISMATCH", "REGISTRY_LINE_MISMATCH");
             if (mapping.equals(text(match.event(), "accountMappingRevisionId"))) {
-                diagnostic.check(Long.valueOf(number(row, "native_gl_id")).equals(approvedGl.get(string(row, "semantic_account"))),
-                        "JOURNAL_MISMATCH", "REGISTRY_ACCOUNT_MISMATCH");
+                Long expectedGl = approvedGl.get(string(row, "semantic_account"));
+                if (ReceivablesReceiptLoss.ACCOUNT.equals(string(row, "semantic_account"))) {
+                    expectedGl = receiptLoss.glAccount(scopeKey, match.event().path("receiptLossDisposition").get("lossMappingExtension"));
+                }
+                diagnostic.check(Long.valueOf(number(row, "native_gl_id")).equals(expectedGl), "JOURNAL_MISMATCH",
+                        "REGISTRY_ACCOUNT_MISMATCH");
             }
             match.registry = row;
             diagnostic.check(byJournal.put(number(row, "native_journal_id"), match) == null, "JOURNAL_MISMATCH", "DUPLICATE_JOURNAL");
@@ -243,6 +248,13 @@ public class ReceivablesPeriodProof {
             observed.put("sourceLineId", text(match.line(), "sourceLineId"));
             committedRows.add(observed);
             ObjectNode balance = account(accounts, revision, semantic, gl);
+            if (ReceivablesReceiptLoss.ACCOUNT.equals(semantic)) {
+                JsonNode extension = match.event().path("receiptLossDisposition").path("lossMappingExtension");
+                observed.put("mappingExtensionId", text(extension, "extensionId"));
+                observed.put("mappingExtensionHash", text(extension, "contentHash"));
+                balance.put("mappingExtensionId", text(extension, "extensionId"));
+                balance.put("mappingExtensionHash", text(extension, "contentHash"));
+            }
             String field = side.equals("DEBIT") ? "debitMinor" : "creditMinor";
             balance.put(field, new BigInteger(text(balance, field)).add(amount).toString());
         }

@@ -115,4 +115,24 @@ WHERE e.operation_key=a.operation_key AND s.event_key=e.record_key AND s.subject
 <column name="source_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
 </createTable>
 </changeSet>
+<changeSet id="mnzl-receivables-receipt-loss-4" author="mnzl">
+<createTable tableName="m_mnzl_r_receipt_loss_extension">
+<column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="extension_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+<column name="native_gl_id" type="BIGINT"><constraints nullable="false"/></column>
+<column name="request_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="extension_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="content_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+</createTable>
+<createTable tableName="m_mnzl_r_receipt_loss">
+<column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true"/></column>
+<column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="disposition_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+<column name="operation_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="disposition_json" type="CLOB"><constraints nullable="false"/></column>
+<column name="content_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+</createTable>
+<addUniqueConstraint tableName="m_mnzl_r_receipt_loss" columnNames="scope_key,disposition_id" constraintName="uq_r_receipt_loss_disposition"/>
+</changeSet>
 </databaseChangeLog>

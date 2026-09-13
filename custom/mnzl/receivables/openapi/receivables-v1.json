@@ -3068,6 +3068,108 @@
           }
         }
       }
+    },
+    "/receipt-loss-configuration": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable mapping extension; base configuration is unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/receiptLossMapping"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        },
+        "operationId": "readReceiptLossMapping",
+        "summary": "Read immutable receipt-loss mapping extension"
+      },
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/receiptLossMappingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Immutable mapping extension; base configuration is unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/receiptLossMapping"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        },
+        "operationId": "configureReceiptLossMapping",
+        "summary": "Configure immutable receipt-loss mapping extension"
+      }
     }
   },
   "components": {
@@ -4680,7 +4782,8 @@
           "RECOVER_WRITTEN_OFF",
           "SET_DEVELOPER_IMPAIRMENT",
           "CLOSE_PERIOD",
-          "CORRECT_EVENT"
+          "CORRECT_EVENT",
+          "RECORD_POST_TRANSFER_RECEIPT_LOSS"
         ]
       },
       "financialCommand": {
@@ -10034,6 +10137,183 @@
               "correctionEvidenceId"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "executionMode": {
+                "type": "string",
+                "const": "CORRECTION"
+              },
+              "executionAuthorization": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "authorizationId": {
+                        "$ref": "#/components/schemas/id"
+                      },
+                      "scopeHash": {
+                        "$ref": "#/components/schemas/sha256"
+                      },
+                      "approvedBy": {
+                        "$ref": "#/components/schemas/id"
+                      },
+                      "effectiveFrom": {
+                        "$ref": "#/components/schemas/financialDate"
+                      },
+                      "effectiveThrough": {
+                        "$ref": "#/components/schemas/financialDate"
+                      }
+                    },
+                    "required": [
+                      "authorizationId",
+                      "scopeHash",
+                      "approvedBy",
+                      "effectiveFrom",
+                      "effectiveThrough"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "accountMappingRevisionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "operationId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "idempotencyKey": {
+                "$ref": "#/components/schemas/id"
+              },
+              "expectedVersion": {
+                "$ref": "#/components/schemas/version"
+              },
+              "businessDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "basisHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "scope": {
+                "$ref": "#/components/schemas/scope"
+              },
+              "subjectId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "subjectKind": {
+                "type": "string",
+                "const": "RECEIVABLE"
+              },
+              "affectedAccountVersions": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "executionScopeHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "actorId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "approverIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "approvalEvidenceIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "commandType": {
+                "type": "string",
+                "const": "RECORD_POST_TRANSFER_RECEIPT_LOSS"
+              },
+              "dispositionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "originalCollectionOperationId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "originalCollectionCommandHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "originalCollectionEventHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "originalBankSourceId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "originalBankSourceHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "downstreamOperationId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "downstreamCommandHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "downstreamEventHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "lossMappingExtensionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "lossMappingExtensionHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "lossApproval": {
+                "$ref": "#/components/schemas/receiptLossApproval"
+              },
+              "bankDebit": {
+                "$ref": "#/components/schemas/receiptLossBankDebit"
+              },
+              "dealId": {
+                "$ref": "#/components/schemas/id"
+              }
+            },
+            "required": [
+              "executionMode",
+              "executionAuthorization",
+              "accountMappingRevisionId",
+              "operationId",
+              "idempotencyKey",
+              "expectedVersion",
+              "businessDate",
+              "basisHash",
+              "scope",
+              "subjectId",
+              "subjectKind",
+              "affectedAccountVersions",
+              "executionScopeHash",
+              "actorId",
+              "approverIds",
+              "approvalEvidenceIds",
+              "commandType",
+              "dispositionId",
+              "originalCollectionOperationId",
+              "originalCollectionCommandHash",
+              "originalCollectionEventHash",
+              "originalBankSourceId",
+              "originalBankSourceHash",
+              "downstreamOperationId",
+              "downstreamCommandHash",
+              "downstreamEventHash",
+              "lossMappingExtensionId",
+              "lossMappingExtensionHash",
+              "lossApproval",
+              "bankDebit",
+              "dealId"
+            ],
+            "additionalProperties": false,
+            "description": "Current-period approved loss for a full returned bank receipt previously fully collected into this source account before substitution or HEL-funded settlement. Separately signed Legal and independent Finance/Credit approvals assert no surviving enforceable right and are bound by a full-command historical authorization. Atomically owns the new bank debit. Partial returns, receipt reclassification, and new claim recognition are not supported."
           }
         ]
       },
@@ -10417,7 +10697,8 @@
           "writtenOffRecoveryIncome",
           "fundingPrincipal",
           "fundingInterestPayable",
-          "fundingExpense"
+          "fundingExpense",
+          "receiptReturnLoss"
         ]
       },
       "financialEvent": {
@@ -10593,6 +10874,9 @@
           },
           "contentHash": {
             "$ref": "#/components/schemas/sha256"
+          },
+          "receiptLossDisposition": {
+            "$ref": "#/components/schemas/receiptLossDisposition"
           }
         },
         "required": [
@@ -11000,6 +11284,10 @@
           "helReportingCaptureVersion": {
             "type": "string",
             "const": "1"
+          },
+          "receiptLossDispositionVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [
@@ -11021,7 +11309,8 @@
           "accountMappingRevisionId",
           "periodState",
           "businessDate",
-          "blockers"
+          "blockers",
+          "receiptLossDispositionVersion"
         ],
         "additionalProperties": false
       },
@@ -13685,6 +13974,12 @@
           },
           "netMinor": {
             "$ref": "#/components/schemas/minorUnits"
+          },
+          "mappingExtensionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "mappingExtensionHash": {
+            "$ref": "#/components/schemas/sha256"
           }
         },
         "required": [
@@ -15469,6 +15764,314 @@
             "const": "0"
           }
         }
+      },
+      "receiptLossMappingRequest": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "extensionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeLossGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "approvedBy": {
+            "$ref": "#/components/schemas/id"
+          },
+          "approvalEvidenceIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "scope",
+          "extensionId",
+          "accountMappingRevisionId",
+          "nativeLossGlAccountId",
+          "approvedBy",
+          "approvalEvidenceIds"
+        ],
+        "additionalProperties": false
+      },
+      "receiptLossMapping": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "extensionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeLossGlAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "approvedBy": {
+            "$ref": "#/components/schemas/id"
+          },
+          "approvalEvidenceIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "accountKey": {
+            "type": "string",
+            "const": "receiptReturnLoss"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "scope",
+          "extensionId",
+          "accountMappingRevisionId",
+          "nativeLossGlAccountId",
+          "approvedBy",
+          "approvalEvidenceIds",
+          "accountKey",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "receiptLossApproval": {
+        "type": "object",
+        "properties": {
+          "legalDetermination": {
+            "type": "string",
+            "const": "NO_SURVIVING_ENFORCEABLE_RIGHT"
+          },
+          "approvalDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "legalApproverId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "financeApproverId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "creditApproverId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "signedLegalEvidenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "signedLegalEvidenceHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "financeApprovalEvidenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "financeApprovalEvidenceHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "creditApprovalEvidenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "creditApprovalEvidenceHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "reviewedCounterpartyReferences": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        },
+        "required": [
+          "legalDetermination",
+          "approvalDate",
+          "legalApproverId",
+          "financeApproverId",
+          "creditApproverId",
+          "signedLegalEvidenceId",
+          "signedLegalEvidenceHash",
+          "financeApprovalEvidenceId",
+          "financeApprovalEvidenceHash",
+          "creditApprovalEvidenceId",
+          "creditApprovalEvidenceHash",
+          "reviewedCounterpartyReferences"
+        ],
+        "additionalProperties": false
+      },
+      "receiptLossBankDebit": {
+        "type": "object",
+        "properties": {
+          "bankSourceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "bankAccountReference": {
+            "$ref": "#/components/schemas/id"
+          },
+          "verificationEvidenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "valueDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "currency": {
+            "type": "string",
+            "const": "EGP"
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/positiveMinorUnits"
+          },
+          "direction": {
+            "type": "string",
+            "const": "OUTGOING"
+          }
+        },
+        "required": [
+          "bankSourceId",
+          "bankAccountReference",
+          "verificationEvidenceId",
+          "valueDate",
+          "currency",
+          "amountMinor",
+          "direction"
+        ],
+        "additionalProperties": false
+      },
+      "receiptLossDisposition": {
+        "type": "object",
+        "properties": {
+          "dispositionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalCollectionOperationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalCollectionCommandHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "originalCollectionEventHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "originalBankSourceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalBankSourceHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "downstreamOperationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "downstreamCommandHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "downstreamEventHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "APPROVED_NO_RIGHT_LOSS"
+          },
+          "sourceAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalCollectionEventId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "downstreamEventId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalValueDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "returnValueDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "returnBankSourceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "returnAmountMinor": {
+            "$ref": "#/components/schemas/positiveMinorUnits"
+          },
+          "lossMappingExtension": {
+            "$ref": "#/components/schemas/receiptLossMapping"
+          },
+          "lossApproval": {
+            "$ref": "#/components/schemas/receiptLossApproval"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "helFundingEvidence": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "fundingOperationId": {
+                    "$ref": "#/components/schemas/id"
+                  },
+                  "fundingCommandHash": {
+                    "$ref": "#/components/schemas/sha256"
+                  },
+                  "fundingEventId": {
+                    "$ref": "#/components/schemas/id"
+                  },
+                  "fundingEventHash": {
+                    "$ref": "#/components/schemas/sha256"
+                  },
+                  "nativeLoanId": {
+                    "$ref": "#/components/schemas/id"
+                  }
+                },
+                "required": [
+                  "fundingOperationId",
+                  "fundingCommandHash",
+                  "fundingEventId",
+                  "fundingEventHash",
+                  "nativeLoanId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dispositionId",
+          "originalCollectionOperationId",
+          "originalCollectionCommandHash",
+          "originalCollectionEventHash",
+          "originalBankSourceId",
+          "originalBankSourceHash",
+          "downstreamOperationId",
+          "downstreamCommandHash",
+          "downstreamEventHash",
+          "outcome",
+          "sourceAccountId",
+          "originalCollectionEventId",
+          "downstreamEventId",
+          "originalValueDate",
+          "returnValueDate",
+          "returnBankSourceId",
+          "returnAmountMinor",
+          "lossMappingExtension",
+          "lossApproval",
+          "contentHash",
+          "helFundingEvidence"
+        ],
+        "additionalProperties": false
       }
     }
   }

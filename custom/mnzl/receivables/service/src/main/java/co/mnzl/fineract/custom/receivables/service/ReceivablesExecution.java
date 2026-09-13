@@ -48,6 +48,7 @@ public final class ReceivablesExecution {
     public String reversalOf;
     public String correctionOf;
     public JsonNode developerEffectFrames;
+    public JsonNode receiptLossDisposition;
     public int developerEffectAccrualLineCount;
 
     public ReceivablesExecution(JsonNode command, String scope, Map<String, Object> configuration) {

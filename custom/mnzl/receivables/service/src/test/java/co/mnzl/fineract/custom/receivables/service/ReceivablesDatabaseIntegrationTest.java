@@ -74,6 +74,7 @@ class ReceivablesDatabaseIntegrationTest {
     private long helPaymentTypeId;
     final ObjectNode pairingEvidence = json.object();
     final ObjectNode reportingEvidence = json.object();
+    final ObjectNode receiptLossEvidence = json.object();
     final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
     final Map<String, Long> accounts = new LinkedHashMap<>();
     private final LocalDate startDate = LocalDate.now(ZoneOffset.UTC);
@@ -122,6 +123,7 @@ class ReceivablesDatabaseIntegrationTest {
                 new ReceivablesHelReportingScenarios(this).verify();
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
+                new ReceivablesReceiptLossScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
@@ -135,6 +137,7 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("database", database);
                 evidence.set("developerEffectPairing", pairingEvidence);
                 evidence.set("helReportingPairing", reportingEvidence);
+                evidence.set("receiptLossPairing", receiptLossEvidence);
                 evidence.put("nativeJournalReadbackMatched", journalsMatched);
                 evidence.put("ordinaryProductRegressionPassed", ordinaryPassed);
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));

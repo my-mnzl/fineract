@@ -50,6 +50,7 @@ public class ReceivablesCommandService {
     private final ReceivablesCloseCommands close;
     private final ReceivablesHelCommands hel;
     private final ReceivablesAbsentCollection absentCollection;
+    private final ReceivablesReceiptLoss receiptLoss;
     private final ReceivablesDeveloperEffectProof developerEffectProof;
     private final PlatformSecurityContext security;
 
@@ -104,6 +105,7 @@ public class ReceivablesCommandService {
             case "COLLECT" -> accounts.collect(execution, false);
             case "REVERSE_COLLECTION" -> accounts.reverse(execution);
             case "RESET_RATE" -> accounts.reset(execution);
+            case "RECORD_POST_TRANSFER_RECEIPT_LOSS" -> receiptLoss.execute(execution);
             case "SETTLE_DEVELOPER_ADJUSTMENT" -> developerEffectProof.execute(execution);
             case "SETTLE_RECEIVABLE" -> accounts.settle(execution, false);
             case "RECOURSE_RECOVERY" -> accounts.recourse(execution);
@@ -172,7 +174,8 @@ public class ReceivablesCommandService {
             positions.add(measurement.wirePosition(account, measurement.position(account, e.date),
                     ReceivablesMeasurement.amount(account, "allowance_minor"), e.boundarySide));
         }
-        var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"), e.lines);
+        var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"), e.lines,
+                e.receiptLossDisposition);
         var event = json.object();
         event.put("calculationVersion", ReceivablesConfiguration.CALCULATION);
         event.put("productPolicyCode", ReceivablesConfiguration.POLICY);
@@ -185,11 +188,12 @@ public class ReceivablesCommandService {
         event.set("scope", e.command.get("scope"));
         event.put("tenantId", configuration.tenantId());
         String commandType = text(e.command, "commandType");
-        event.put("sourceKind",
-                commandType.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "HEL"
-                        : commandType.equals("CLOSE_PERIOD") ? "CLOSE"
-                                : commandType.equals("RECORD_FUNDING_EVENT") ? "FUNDING"
-                                        : commandType.equals("RECORD_CASH_MOVEMENT") ? "CASH" : "RECEIVABLE");
+        event.put("sourceKind", commandType.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "HEL"
+                : commandType.equals("CLOSE_PERIOD") ? "CLOSE"
+                        : commandType.equals("RECORD_FUNDING_EVENT") ? "FUNDING"
+                                : (commandType.equals("RECORD_CASH_MOVEMENT") || commandType.equals("RECORD_POST_TRANSFER_RECEIPT_LOSS"))
+                                        ? "CASH"
+                                        : "RECEIVABLE");
         if (e.command.has("dealId")) {
             event.put("dealId", text(e.command, "dealId"));
         } else if (!positions.isEmpty() && e.command.get("scope").has("developerOrganizationId")) {
@@ -213,6 +217,9 @@ public class ReceivablesCommandService {
         event.set("journalLines", json.value(journalLines));
         event.set("positionsAfter", json.value(positions));
         event.set("bankMovements", json.value(e.bankMovements));
+        if (e.receiptLossDisposition != null) {
+            event.set("receiptLossDisposition", e.receiptLossDisposition);
+        }
         event.put("contentHash", json.hash(event));
         json.validate("financialEvent", json.write(event));
         var fields = new LinkedHashMap<String, Object>();

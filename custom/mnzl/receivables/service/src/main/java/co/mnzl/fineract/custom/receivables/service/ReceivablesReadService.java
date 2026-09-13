@@ -632,7 +632,11 @@ public class ReceivablesReadService {
             }
         }
         List<JsonNode> balances = new ArrayList<>();
-        for (String semantic : ReceivablesConfiguration.ACCOUNTS.stream().sorted().toList()) {
+        var observedAccounts = new java.util.TreeSet<>(ReceivablesConfiguration.ACCOUNTS);
+        if (sub.containsKey(ReceivablesReceiptLoss.ACCOUNT)) {
+            observedAccounts.add(ReceivablesReceiptLoss.ACCOUNT);
+        }
+        for (String semantic : observedAccounts) {
             BigInteger mirrored = sub.getOrDefault(semantic, BigInteger.ZERO);
             BigInteger observed = actual.getOrDefault(semantic, BigInteger.ZERO);
             require(mirrored.equals(observed), "JOURNAL_MISMATCH");

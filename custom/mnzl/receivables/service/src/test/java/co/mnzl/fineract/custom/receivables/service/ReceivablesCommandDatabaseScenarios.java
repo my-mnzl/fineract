@@ -1162,6 +1162,13 @@ final class ReceivablesCommandDatabaseScenarios {
         JsonNode resetPosition = harness.request("GET", accountPath + "/position", null, 200);
         var resetPairing = harness.pairingEvidence.putObject("resetPairing");
         resetPairing.set("measurement", resetMeasurement);
+        resetPairing.set("preCommandLots", harness.pairingEvidence.get("postCommandLots"));
+        resetPairing
+                .set("postCommandLots",
+                        harness.request(
+                                "GET", accountPath + "/developer-lots?businessDate=" + harness.today
+                                        + "&boundarySide=AFTER_EVENTS&eventWatermark=" + resetOperation.path("eventWatermark").asText(),
+                                null, 200));
         resetPairing.set("calculationRequest", preview);
         resetPairing.set("calculationResult", calculated);
         resetPairing.set("command", later);
