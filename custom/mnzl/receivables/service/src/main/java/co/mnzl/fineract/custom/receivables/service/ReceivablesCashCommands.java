@@ -452,7 +452,7 @@ public class ReceivablesCashCommands {
         } else {
             JsonNode source = event.get("cashSource");
             require(text(source, "facilityId").equals(id), "BANK_PROOF_MISMATCH");
-            recordSource(e, source);
+            recordSource(e, source, true);
             if (kind.equals("DRAW")) {
                 delta = minor(event, "principalMinor");
                 require(text(source, "direction").equals("INCOMING") && delta.equals(minor(source, "amountMinor")), "BANK_PROOF_MISMATCH");
