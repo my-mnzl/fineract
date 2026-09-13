@@ -75,7 +75,10 @@ final class ReceivablesCommandDatabaseScenarios {
             date = date.plusDays(1);
         }
         harness.moveDate(date);
-        execute(harness.receiptCommand("absent-receipt", id, "2"));
+        ObjectNode cash = harness.receiptCommand("absent-receipt", id, "2");
+        JsonNode cashBefore = continuationAccountEvidence(id, date.toString());
+        JsonNode cashResult = execute(cash);
+        harness.continuationEvidence.set("cash", continuationOperationEvidence(cash, cashResult, cashBefore, id));
         ObjectNode original = command("COLLECT", "absent-original", id);
         original.set("allocations",
                 harness.json.value(List.of(Map.of("allocationId", "absent-allocation", "cashMovementId", "absent-receipt", "cashflowId",
@@ -103,16 +106,27 @@ final class ReceivablesCommandDatabaseScenarios {
             harness.executeSql("delete from m_mnzl_r_period where record_key=?", "absent-closed-protocol");
         }
         ObjectNode continuation = absentContinuation(original, "absent-continuation");
-        harness.issueHistory(continuation);
+        long originalOperationCount = harness.queryLong("select count(*) from m_mnzl_r_command where operation_id='absent-original'");
+        assertThat(originalOperationCount).isZero();
+        harness.continuationEvidence.put("originalOperationCountBefore", originalOperationCount);
+        harness.continuationEvidence.set("originalCommand", original.deepCopy());
+        harness.continuationEvidence.put("originalCommandJson", savedOriginal);
+        harness.continuationEvidence.put("originalCommandHash", harness.json.hash(original));
+        harness.continuationEvidence.set("authorization", harness.issueHistory(continuation));
+        JsonNode before = continuationAccountEvidence(id, date.toString());
         JsonNode result = execute(continuation);
+        harness.continuationEvidence.set("continuation", continuationOperationEvidence(continuation, result, before, id));
         assertThat(result.path("businessDate").asText()).isEqualTo(date.toString());
         assertThat(harness.json.write(original)).isEqualTo(savedOriginal);
-        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", original, 409).path("code").asText())
-                .isEqualTo("IDEMPOTENCY_CONFLICT");
+        JsonNode consumedOriginal = harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", original, 409);
+        assertThat(consumedOriginal.path("code").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
+        harness.continuationEvidence.set("consumedOriginalOutcome", consumedOriginal);
         ObjectNode alias = original.deepCopy();
         alias.put("operationId", "absent-original-alias");
-        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", alias, 409).path("code").asText())
-                .isEqualTo("IDEMPOTENCY_CONFLICT");
+        JsonNode consumedAlias = harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", alias, 409);
+        assertThat(consumedAlias.path("code").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
+        harness.continuationEvidence.set("consumedAliasCommand", alias);
+        harness.continuationEvidence.set("consumedAliasOutcome", consumedAlias);
         assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("99999");
         ObjectNode usedOriginal = original.deepCopy();
         usedOriginal.put("operationId", "absent-used-original");
@@ -138,6 +152,50 @@ final class ReceivablesCommandDatabaseScenarios {
         reset.put("developerAdjustmentDueDate", date.plusDays(45).toString());
         execute(reset);
         rejectContinuation(absentContinuation(usedOriginal, "absent-intervening"), "ACCOUNT_VERSION_CHANGED");
+    }
+
+    private JsonNode continuationAccountEvidence(String id, String date) throws Exception {
+        ObjectNode evidence = harness.json.object();
+        String root = ReceivablesDatabaseIntegrationTest.PREFIX;
+        String watermark = harness.request("GET", root + "/developer-lots", null, 200).path("eventWatermark").asText();
+        String path = root + "/accounts/" + id;
+        String boundary = "?businessDate=" + date + "&boundarySide=AFTER_EVENTS&eventWatermark=" + watermark;
+        evidence.put("businessDate", date);
+        evidence.put("eventWatermark", watermark);
+        evidence.set("account", account(id));
+        evidence.set("position", harness.request("GET", path + "/position" + boundary, null, 200));
+        evidence.set("schedule", harness.request("GET", path + "/schedule" + boundary, null, 200));
+        var pages = evidence.putArray("transactionPages");
+        String cursor = "";
+        do {
+            JsonNode page = harness.request("GET", path + "/transactions?limit=200" + (cursor.isEmpty() ? "" : "&cursor=" + cursor), null,
+                    200);
+            pages.add(page);
+            cursor = page.path("nextCursor").asText("");
+        } while (!cursor.isEmpty());
+        return evidence;
+    }
+
+    private JsonNode continuationOperationEvidence(ObjectNode command, JsonNode result, JsonNode before, String accountId)
+            throws Exception {
+        ObjectNode evidence = harness.json.object();
+        String root = ReceivablesDatabaseIntegrationTest.PREFIX;
+        String operationId = command.path("operationId").asText();
+        evidence.set("command", command.deepCopy());
+        JsonNode operation = harness.request("GET", root + "/operations/" + operationId, null, 200);
+        assertThat(operation).isEqualTo(result);
+        evidence.set("operation", operation);
+        var events = evidence.putArray("events");
+        for (JsonNode eventId : operation.path("financialEventIds")) {
+            events.add(harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?", eventId.asText())));
+        }
+        evidence.set("journals",
+                harness.request("GET",
+                        root + "/journals?operationIds=" + operationId + "&eventWatermark=" + operation.path("eventWatermark").asText(),
+                        null, 200));
+        evidence.set("before", before);
+        evidence.set("after", continuationAccountEvidence(accountId, command.path("businessDate").asText()));
+        return evidence;
     }
 
     private ObjectNode absentContinuation(ObjectNode original, String operation) {

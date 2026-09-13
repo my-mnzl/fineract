@@ -75,6 +75,7 @@ class ReceivablesDatabaseIntegrationTest {
     final ObjectNode pairingEvidence = json.object();
     final ObjectNode reportingEvidence = json.object();
     final ObjectNode receiptLossEvidence = json.object();
+    final ObjectNode continuationEvidence = json.object();
     final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
     final Map<String, Long> accounts = new LinkedHashMap<>();
     private final LocalDate startDate = LocalDate.now(ZoneOffset.UTC);
@@ -139,6 +140,7 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.set("developerEffectPairing", pairingEvidence);
                 evidence.set("helReportingPairing", reportingEvidence);
                 evidence.set("receiptLossPairing", receiptLossEvidence);
+                evidence.set("absentCollectionPairing", continuationEvidence);
                 evidence.set("purchasedPopulationPairing", purchasedPopulationPairing);
                 evidence.put("nativeJournalReadbackMatched", journalsMatched);
                 evidence.put("ordinaryProductRegressionPassed", ordinaryPassed);
