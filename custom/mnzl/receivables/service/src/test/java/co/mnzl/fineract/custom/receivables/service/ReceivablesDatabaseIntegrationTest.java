@@ -374,12 +374,12 @@ class ReceivablesDatabaseIntegrationTest {
         forecast.put("stage", "STAGE_1");
         forecast.put("contentHash", "0".repeat(64));
         List<JsonNode> recoveries = new ArrayList<>();
+        boolean dueAdvanceForecast = List.of("developer-impaired-account", "payable-cash-after-due").contains(id);
         for (JsonNode flow : flows) {
             ObjectNode recovery = json.object();
             recovery.set("sourceCashflowId", flow.get("cashflowId"));
             LocalDate forecastDate = LocalDate.parse(flow.path("dueDate").asText());
-            LocalDate firstClose = (List.of("developer-impaired-account", "payable-cash-after-due").contains(id) ? today : startDate)
-                    .plusDays(45).withDayOfMonth(1).plusMonths(1);
+            LocalDate firstClose = (dueAdvanceForecast ? today : startDate).plusDays(45).withDayOfMonth(1).plusMonths(1);
             recovery.put("date", forecastDate.isBefore(firstClose) ? firstClose.plusDays(1).toString() : forecastDate.toString());
             recovery.set("amountMinor", flow.get("amountMinor"));
             recovery.put("payer", "BORROWER");
@@ -388,13 +388,15 @@ class ReceivablesDatabaseIntegrationTest {
         ObjectNode scenario = json.object();
         scenario.put("scenarioId", "contractual");
         scenario.put("probability", "1");
-        if (today.equals(startDate) || id.equals("developer-impaired-account")) {
+        if (today.equals(startDate) || dueAdvanceForecast) {
             scenario.put("defaultDate", today.plusDays(45).toString());
         } else {
             scenario.putNull("defaultDate");
         }
         scenario.set("recoveries", json.value(recoveries));
         forecast.set("scenarios", json.value(List.of(scenario)));
+        forecast.remove("contentHash");
+        forecast.put("contentHash", json.hash(forecast));
         book.set("riskForecast", forecast);
         bookingCommands.put(id, book);
         return request("POST", PREFIX + "/commands", book, 200);
