@@ -1058,6 +1058,8 @@ final class ReceivablesCommandDatabaseScenarios {
         ObjectNode borrowerForecast = forecast(id, "developer-proof-stage-three", List.of()).put("stage", "STAGE_3").put("forecastVersion",
                 "2");
         ((ObjectNode) borrowerForecast.path("scenarios").get(0)).put("defaultDate", harness.today.toString());
+        borrowerForecast.remove("contentHash");
+        borrowerForecast.put("contentHash", harness.json.hash(borrowerForecast));
         borrowerImpairment.set("forecast", borrowerForecast);
         borrowerImpairment.set("qualitativeFindingIds", harness.json.value(List.of("default-confirmed")));
         borrowerImpairment.set("cureEvidenceIds", harness.json.value(List.of()));
