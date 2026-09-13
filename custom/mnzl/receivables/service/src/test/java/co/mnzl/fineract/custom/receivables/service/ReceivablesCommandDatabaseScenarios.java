@@ -1158,8 +1158,23 @@ final class ReceivablesCommandDatabaseScenarios {
         JsonNode calculated = harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/calculate", preview, 200);
         ObjectNode wrongForecast = later.deepCopy().put("expectedRiskForecastHash", "0".repeat(64));
         harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", wrongForecast, 409);
-        execute(later);
+        JsonNode resetOperation = execute(later);
         JsonNode resetPosition = harness.request("GET", accountPath + "/position", null, 200);
+        var resetPairing = harness.pairingEvidence.putObject("resetPairing");
+        resetPairing.set("measurement", resetMeasurement);
+        resetPairing.set("calculationRequest", preview);
+        resetPairing.set("calculationResult", calculated);
+        resetPairing.set("command", later);
+        resetPairing.set("operation", resetOperation);
+        resetPairing.set("postCommandPosition", resetPosition);
+        resetPairing.set("event", harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?",
+                resetOperation.path("financialEventIds").get(0).asText())));
+        resetPairing.set("journals",
+                harness.request("GET",
+                        ReceivablesDatabaseIntegrationTest.PREFIX
+                                + "/journals?operationIds=developer-impairment-later-effect&eventWatermark="
+                                + resetOperation.path("eventWatermark").asText(),
+                        null, 200));
         assertThat(resetPosition.path("lossAllowanceMinor")).isEqualTo(resetPosition.path("amortizedCostMinor"));
         assertThat(resetPosition.path("netCarryingMinor").asText()).isEqualTo("0");
         for (String field : List.of("amortizedCostMinor", "lossAllowanceMinor", "netCarryingMinor", "grossYield", "netEir")) {
