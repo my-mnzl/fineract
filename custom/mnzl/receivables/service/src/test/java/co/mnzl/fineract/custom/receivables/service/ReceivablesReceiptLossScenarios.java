@@ -189,7 +189,7 @@ final class ReceivablesReceiptLossScenarios {
                         "amountMinor", "50000")));
         ObjectNode partial = loss.deepCopy();
         ((ObjectNode) partial.get("bankDebit")).put("amountMinor", "25000");
-        assertThat(post(ROOT + "/commands", authorize(partial, id + "-partial"), 409).path("code").asText())
+        assertThat(post(ROOT + "/commands", authorize(partial, id + "-partial"), 422).path("code").asText())
                 .isEqualTo("BANK_PROOF_MISMATCH");
         ObjectNode unseparated = loss.deepCopy();
         ((ObjectNode) unseparated.get("lossApproval")).put("financeApproverId", "legal");
