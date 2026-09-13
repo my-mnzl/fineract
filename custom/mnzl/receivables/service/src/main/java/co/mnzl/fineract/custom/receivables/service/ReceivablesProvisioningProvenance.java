@@ -55,7 +55,17 @@ public class ReceivablesProvisioningProvenance implements ProvisioningJournalEnt
         for (Component component : components) {
             require(component.historyId() == historyId && component.officeId() == officeId && component.currency().equals(currency)
                     && (debit ? component.expenseAccountId() : component.liabilityAccountId()) == accountId, "JOURNAL_MISMATCH");
-            sources.add(json.value(component));
+            var source = sources.addObject();
+            source.put("id", Long.toString(component.id()));
+            source.put("historyId", Long.toString(component.historyId()));
+            source.put("productId", Long.toString(component.productId()));
+            source.put("officeId", Long.toString(component.officeId()));
+            source.put("categoryId", Long.toString(component.categoryId()));
+            source.put("criteriaId", Long.toString(component.criteriaId()));
+            source.put("currency", component.currency());
+            source.put("liabilityAccountId", Long.toString(component.liabilityAccountId()));
+            source.put("expenseAccountId", Long.toString(component.expenseAccountId()));
+            source.put("reservedAmount", component.reservedAmount().toPlainString());
             total = total.add(component.reservedAmount());
         }
         require(!components.isEmpty() && total.compareTo(amount) == 0, "JOURNAL_MISMATCH");

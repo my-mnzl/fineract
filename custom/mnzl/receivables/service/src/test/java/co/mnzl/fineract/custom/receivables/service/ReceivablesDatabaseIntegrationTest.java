@@ -72,6 +72,7 @@ class ReceivablesDatabaseIntegrationTest {
     private String databasePassword;
     private long ordinaryProductId;
     private long helPaymentTypeId;
+    final ObjectNode pairingEvidence = json.object();
     final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
     final Map<String, Long> accounts = new LinkedHashMap<>();
     private final LocalDate startDate = LocalDate.now(ZoneOffset.UTC);
@@ -117,6 +118,7 @@ class ReceivablesDatabaseIntegrationTest {
                 verifyPurchaseAndIdempotency(purchase);
                 verifyRollback(database);
                 boolean ordinaryPassed = ordinaryRegression();
+                new ReceivablesHelReportingScenarios(this).verify();
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
@@ -130,6 +132,7 @@ class ReceivablesDatabaseIntegrationTest {
                 assertThat(queryLong("select count(*) from m_mnzl_r_event where delivered_at is null")).isGreaterThanOrEqualTo(4);
                 ObjectNode evidence = json.object();
                 evidence.put("database", database);
+                evidence.set("developerEffectPairing", pairingEvidence);
                 evidence.put("nativeJournalReadbackMatched", journalsMatched);
                 evidence.put("ordinaryProductRegressionPassed", ordinaryPassed);
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));
@@ -552,7 +555,7 @@ class ReceivablesDatabaseIntegrationTest {
         assertThat(queryLong("select count(*) from m_mnzl_r_command where operation_id='failed-book'")).isEqualTo(1);
     }
 
-    private void setupOrdinaryProduct() throws Exception {
+    ObjectNode ordinaryProductRequest() {
         ObjectNode product = (ObjectNode) json.read(
                 "{\"name\":\"Ordinary loan regression\",\"shortName\":\"ORD\",\"currencyCode\":\"EGP\",\"locale\":\"en\",\"digitsAfterDecimal\":2,\"inMultiplesOf\":0,\"principal\":1000,\"numberOfRepayments\":3,\"repaymentEvery\":1,\"repaymentFrequencyType\":2,\"interestRatePerPeriod\":2,\"interestRateFrequencyType\":2,\"amortizationType\":1,\"interestType\":0,\"interestCalculationPeriodType\":1,\"inArrearsTolerance\":0,\"transactionProcessingStrategyCode\":\"mifos-standard-strategy\",\"accountingRule\":2,\"isInterestRecalculationEnabled\":false,\"daysInMonthType\":1,\"daysInYearType\":1}");
         for (String field : List.of("fundSourceAccountId", "loanPortfolioAccountId", "transfersInSuspenseAccountId")) {
@@ -565,6 +568,11 @@ class ReceivablesDatabaseIntegrationTest {
         }
         product.put("writeOffAccountId", accounts.get("impairmentExpense"));
         product.put("overpaymentLiabilityAccountId", accounts.get("developerPayable"));
+        return product;
+    }
+
+    private void setupOrdinaryProduct() throws Exception {
+        ObjectNode product = ordinaryProductRequest();
         ObjectNode payment = json.object();
         payment.put("name", "HEL clearing");
         payment.put("description", "Noncash settlement clearing");
@@ -576,20 +584,10 @@ class ReceivablesDatabaseIntegrationTest {
         ordinaryProductId = request("POST", "/loanproducts", product, 200).path("resourceId").asLong();
     }
 
-    private boolean ordinaryRegression() throws Exception {
-        ObjectNode client = json.object();
-        client.put("officeId", 1);
-        client.put("legalFormId", 1);
-        client.put("firstname", "Ordinary");
-        client.put("lastname", "Borrower");
-        client.put("active", true);
-        client.put("activationDate", today.toString());
-        client.put("dateFormat", "yyyy-MM-dd");
-        client.put("locale", "en");
-        long clientId = request("POST", "/clients", client, 200).path("resourceId").asLong();
+    ObjectNode ordinaryLoanRequest(long clientId, long productId) {
         ObjectNode loan = json.object();
         loan.put("clientId", clientId);
-        loan.put("productId", ordinaryProductId);
+        loan.put("productId", productId);
         loan.put("principal", 1000);
         loan.put("numberOfRepayments", 3);
         loan.put("repaymentEvery", 1);
@@ -607,6 +605,21 @@ class ReceivablesDatabaseIntegrationTest {
         loan.put("loanType", "individual");
         loan.put("dateFormat", "yyyy-MM-dd");
         loan.put("locale", "en");
+        return loan;
+    }
+
+    private boolean ordinaryRegression() throws Exception {
+        ObjectNode client = json.object();
+        client.put("officeId", 1);
+        client.put("legalFormId", 1);
+        client.put("firstname", "Ordinary");
+        client.put("lastname", "Borrower");
+        client.put("active", true);
+        client.put("activationDate", today.toString());
+        client.put("dateFormat", "yyyy-MM-dd");
+        client.put("locale", "en");
+        long clientId = request("POST", "/clients", client, 200).path("resourceId").asLong();
+        ObjectNode loan = ordinaryLoanRequest(clientId, ordinaryProductId);
         long id = request("POST", "/loans", loan, 200).path("loanId").asLong();
         ObjectNode approve = json.object();
         approve.put("approvedOnDate", today.toString());

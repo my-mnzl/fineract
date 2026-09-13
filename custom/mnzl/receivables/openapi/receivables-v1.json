@@ -15417,80 +15417,14 @@
         ],
         "additionalProperties": false
       },
-      "nativeHelExcludedJournal": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "nativeJournalId",
-          "nativeGlAccountId",
-          "officeId",
-          "currency",
-          "postingDate",
-          "side",
-          "amountMinor",
-          "nativeEntityId",
-          "nativeTransactionId",
-          "reversalJournalId"
-        ],
-        "properties": {
-          "nativeJournalId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "nativeGlAccountId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "officeId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "currency": {
-            "type": "string",
-            "const": "EGP"
-          },
-          "postingDate": {
-            "$ref": "#/components/schemas/financialDate"
-          },
-          "side": {
-            "type": "string",
-            "enum": [
-              "DEBIT",
-              "CREDIT"
-            ]
-          },
-          "amountMinor": {
-            "$ref": "#/components/schemas/version"
-          },
-          "nativeEntityId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "nativeTransactionId": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/id"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "reversalJournalId": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/id"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
       "nativeHelProvisionExclusion": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "reason",
-          "originalJournal",
-          "reversalJournal",
+          "cancellationProofHash",
+          "journalCount",
+          "netAmountMinor",
           "availableFromDate",
           "contentHash"
         ],
@@ -15498,18 +15432,21 @@
           "reason": {
             "const": "UNKNOWN_PRODUCT_ATTRIBUTION_EXACTLY_CANCELLED"
           },
-          "originalJournal": {
-            "$ref": "#/components/schemas/nativeHelExcludedJournal"
-          },
-          "reversalJournal": {
-            "$ref": "#/components/schemas/nativeHelExcludedJournal"
-          },
           "availableFromDate": {
             "type": "string",
             "format": "date"
           },
           "contentHash": {
             "type": "string"
+          },
+          "cancellationProofHash": {
+            "type": "string"
+          },
+          "journalCount": {
+            "const": "2"
+          },
+          "netAmountMinor": {
+            "const": "0"
           }
         }
       }

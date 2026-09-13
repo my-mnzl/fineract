@@ -217,15 +217,26 @@ public class ReceivablesHelReporting {
         manifest.put("journalManifestHash", rowManifest(evidence.journals(), "nativeJournalId"));
         manifest.set("nativeAccountMapping", evidence.mapping());
         manifest.set("productPool", pool);
-        manifest.set("provisionExclusions", evidence.provisionExclusions());
+        var exclusions = manifest.putArray("provisionExclusions");
+        for (JsonNode raw : evidence.provisionExclusions()) {
+            var exclusion = exclusions.addObject();
+            exclusion.set("reason", raw.get("reason"));
+            exclusion.put("cancellationProofHash", text(raw, "contentHash"));
+            exclusion.put("journalCount", "2");
+            exclusion.put("netAmountMinor", "0");
+            exclusion.set("availableFromDate", raw.get("availableFromDate"));
+            exclusion.put("contentHash", json.hash(exclusion));
+        }
         LocalDate provisionFloor = evidence.provisionHistoryFloor();
         LocalDate registeredDate = LocalDate.parse(text(registration, "registeredBusinessDate"));
         manifest.put("journalHistoryAvailableFromDate",
                 provisionFloor != null && provisionFloor.isAfter(registeredDate) ? provisionFloor.toString() : registeredDate.toString());
         manifest.put("contentHash", json.hash(manifest));
         json.validate("nativeHelReportingSnapshot", json.write(manifest));
-        store.insert("hel_reporting_capture", captureKey, Map.of("scope_key", scope, "registration_key", registrationKey, "snapshot_id",
-                text(input, "snapshotId"), "request_hash", json.hash(input), "capture_json", json.write(manifest)));
+        store.insert("hel_reporting_capture", captureKey,
+                Map.of("scope_key", scope, "registration_key", registrationKey, "snapshot_id", text(input, "snapshotId"), "request_hash",
+                        json.hash(input), "capture_json", json.write(manifest), "provision_exclusions_json",
+                        json.write(evidence.provisionExclusions())));
         return manifest;
     }
 

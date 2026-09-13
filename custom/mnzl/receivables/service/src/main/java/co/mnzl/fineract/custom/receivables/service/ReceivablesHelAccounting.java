@@ -137,7 +137,6 @@ public class ReceivablesHelAccounting {
                         ? LocalDate.parse(string(sourceRow, "entry_date")).plusDays(1)
                         : LocalDate.parse(string(reversal, "entry_date")).plusDays(1);
                 historyFloor = historyFloor == null || floor.isAfter(historyFloor) ? floor : historyFloor;
-                require(!date.isBefore(historyFloor), "RECOVERY_REQUIRED");
                 if (original == null) {
                     var exclusion = exclusions.addObject();
                     exclusion.put("reason", "UNKNOWN_PRODUCT_ATTRIBUTION_EXACTLY_CANCELLED");

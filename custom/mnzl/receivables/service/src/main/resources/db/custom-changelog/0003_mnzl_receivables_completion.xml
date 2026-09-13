@@ -80,6 +80,7 @@ WHERE e.operation_key=a.operation_key AND s.event_key=e.record_key AND s.subject
 <column name="registration_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
 <column name="snapshot_id" type="VARCHAR(200)"><constraints nullable="false"/></column>
 <column name="request_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+<column name="provision_exclusions_json" type="CLOB"><constraints nullable="false"/></column>
 <column name="capture_json" type="CLOB"><constraints nullable="false"/></column>
 </createTable>
 <createTable tableName="m_mnzl_r_hel_reporting_member">
