@@ -2047,6 +2047,305 @@
         },
         "description": "Complete scoped event membership and currently observed deterministic R-event GL proof in one repeatable-read snapshot. Ordinary HEL loan journals are excluded. Gross debit/credit totals and debit-minus-credit net retain zero-net reversal activity. At most 100000 candidate rows per event/registry/actual population; larger reads fail without partial proof. Canonical commitment formulas are documented in custom/mnzl/receivables/README.md."
       }
+    },
+    "/configuration/active": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeConfigurationActive"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/configuration/revisions": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeConfiguration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeConfigurationRevision"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/configuration/activations": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeConfigurationActivationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeConfigurationActivation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/configuration/runtime": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeConfigurationRuntime"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12357,7 +12656,8 @@
             "$ref": "#/components/schemas/financierScope"
           },
           "accountMappingRevisionId": {
-            "$ref": "#/components/schemas/id"
+            "$ref": "#/components/schemas/id",
+            "description": "Immutable identity of the complete normalized native configuration, including policy and calculator compatibility. Change this ID for any configuration change."
           },
           "productId": {
             "$ref": "#/components/schemas/id"
@@ -12758,6 +13058,146 @@
           "eventManifest",
           "observedGl",
           "proofHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeConfigurationActive": {
+        "type": "object",
+        "properties": {
+          "configuration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/nativeConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contentHash": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "configuration",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeConfigurationRevision": {
+        "type": "object",
+        "properties": {
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "STAGED",
+              "ACTIVE",
+              "RETIRED"
+            ]
+          }
+        },
+        "required": [
+          "accountMappingRevisionId",
+          "contentHash",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "nativeConfigurationActivationRequest": {
+        "type": "object",
+        "properties": {
+          "activationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "expectedActiveAccountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "activationId",
+          "accountMappingRevisionId",
+          "contentHash",
+          "expectedActiveAccountMappingRevisionId"
+        ],
+        "additionalProperties": false
+      },
+      "nativeConfigurationActivation": {
+        "type": "object",
+        "properties": {
+          "activationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "previousAccountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "activationId",
+          "previousAccountMappingRevisionId",
+          "accountMappingRevisionId",
+          "contentHash",
+          "activatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "nativeConfigurationRuntime": {
+        "type": "object",
+        "properties": {
+          "configurationLifecycleVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "calculationVersion": {
+            "type": "string",
+            "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+          },
+          "productPolicyCode": {
+            "type": "string",
+            "const": "EG_RECEIVABLES_V1"
+          },
+          "sourceRevision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "openApiSha256": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "configurationLifecycleVersion",
+          "calculationVersion",
+          "productPolicyCode",
+          "sourceRevision",
+          "openApiSha256"
         ],
         "additionalProperties": false
       }

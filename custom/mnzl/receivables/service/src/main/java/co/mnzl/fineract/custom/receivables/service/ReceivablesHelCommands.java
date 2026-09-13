@@ -22,6 +22,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesException.r
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.minor;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.number;
+import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
 import co.mnzl.fineract.custom.receivables.nativeinstrument.NativeHelBridge;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -36,6 +37,7 @@ public class ReceivablesHelCommands {
 
     private final NativeHelBridge bridge;
     private final ReceivablesStore store;
+    private final ReceivablesConfiguration configuration;
     private final ReceivablesJson json;
     private final ReceivablesCashCommands cash;
 
@@ -49,7 +51,7 @@ public class ReceivablesHelCommands {
         require(number(loan, "product_id") == number(e.configuration, "hel_product_id"), "FINERACT_CAPABILITY_MISSING");
         var feeIds = new ArrayList<Long>();
         e.command.get("financedFeeIds").forEach(id -> feeIds.add(Long.parseLong(id.asText())));
-        long clearing = number(store.require("account_map", ReceivablesStore.key(e.scope, "map", "helSettlementClearing")), "native_gl_id");
+        long clearing = configuration.mappings(e.scope, string(e.configuration, "mapping_revision")).get("helSettlementClearing");
         var funded = bridge.fund(text(e.command, "loanExternalId"), e.date, minor(e.command, "expectedPrincipalMinor"),
                 minor(e.command, "expectedFinancedFeesMinor"), feeIds, number(e.configuration, "hel_payment_type_id"), clearing,
                 "R" + e.operationKey);

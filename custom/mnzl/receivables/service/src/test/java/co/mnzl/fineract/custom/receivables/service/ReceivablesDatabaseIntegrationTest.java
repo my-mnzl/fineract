@@ -123,6 +123,7 @@ class ReceivablesDatabaseIntegrationTest {
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
                 new ReceivablesPeriodProofScenarios(this).verify();
+                new ReceivablesConfigurationScenarios(this).verify();
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
                         "select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id where l.native_gl_id<>j.account_id or cast(l.amount_minor as decimal(19,0))<>j.amount*100") == 0;
@@ -147,15 +148,17 @@ class ReceivablesDatabaseIntegrationTest {
                         "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
                         "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees",
                         "persisted-native-configuration-readback", "native-hel-historical-repayment-snapshot",
-                        "stage-three-writeoff-later-recovery", "recovery-payer-and-exact-transaction-readback",
-                        "developer-lot-impairment-after-due", "missing-and-expired-lot-forecasts-block-close",
-                        "offsetting-missing-native-journals-rejected", "unregistered-native-transaction-rejected",
-                        "bound-historical-grant-substitution-rejected", "bound-historical-grant-atomic-retry",
-                        "legacy-grant-new-effects-rejected", "historical-grant-issuer-policy-preserved",
-                        "office-closure-inclusive-posting-boundary", "office-closure-native-first-serialization",
-                        "office-closure-snapshot-before-close", "office-closure-durable-replay",
-                        "period-proof-population-and-gross-controls", "period-proof-zero-and-hel-exclusion",
-                        "period-proof-missing-extra-and-cross-date", "period-proof-event-integrity")));
+                        "configuration-legacy-migration-preserves-payloads", "configuration-activation-cas-and-exact-replay",
+                        "configuration-freezes-used-routing", "configuration-historical-proof", "stage-three-writeoff-later-recovery",
+                        "recovery-payer-and-exact-transaction-readback", "developer-lot-impairment-after-due",
+                        "missing-and-expired-lot-forecasts-block-close", "offsetting-missing-native-journals-rejected",
+                        "unregistered-native-transaction-rejected", "bound-historical-grant-substitution-rejected",
+                        "bound-historical-grant-atomic-retry", "legacy-grant-new-effects-rejected",
+                        "historical-grant-issuer-policy-preserved", "office-closure-inclusive-posting-boundary",
+                        "office-closure-native-first-serialization", "office-closure-snapshot-before-close",
+                        "office-closure-durable-replay", "period-proof-population-and-gross-controls",
+                        "period-proof-zero-and-hel-exclusion", "period-proof-missing-extra-and-cross-date",
+                        "period-proof-event-integrity")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -174,18 +177,26 @@ class ReceivablesDatabaseIntegrationTest {
         };
     }
 
-    JsonNode request(String method, String path, JsonNode payload, int status) throws Exception {
+    JsonNode request(String method, String path, JsonNode payload, int... statuses) throws Exception {
+        return requestMapping(method, path, payload,
+                payload != null && payload.has("accountMappingRevisionId") ? payload.path("accountMappingRevisionId").asText()
+                        : "mapping-1",
+                statuses);
+    }
+
+    JsonNode requestMapping(String method, String path, JsonNode payload, String mapping, int... statuses) throws Exception {
         var builder = HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(90))
                 .header("Authorization",
                         "Basic " + Base64.getEncoder().encodeToString(authentication.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .header("Fineract-Platform-TenantId", activeTenant).header("Content-Type", "application/json")
                 .header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", activeFinancier).header("X-MNZL-Environment", "test")
-                .header("X-MNZL-Account-Mapping", "mapping-1");
+                .header("X-MNZL-Account-Mapping", mapping);
         var response = http.send(builder
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))
                 .build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).withFailMessage("%s %s: %s", method, path, response.body()).isEqualTo(status);
+        assertThat(response.statusCode()).withFailMessage("%s %s: %s", method, path, response.body())
+                .isIn(java.util.Arrays.stream(statuses).boxed().toList());
         return json.read(response.body());
     }
 
@@ -271,6 +282,12 @@ class ReceivablesDatabaseIntegrationTest {
         configuration.put("officeId", "1");
         configuration.put("integrationUserId", "1");
         setupOrdinaryProduct();
+        for (JsonNode setting : request("GET", "/configurations", null, 200).path("globalConfiguration")) {
+            if (setting.path("name").asText().equals("paymenttype-applicable-for-disbursement-charges")) {
+                request("PUT", "/configurations/" + setting.path("id").asLong(), json.read("{\"enabled\":true}"), 200);
+            }
+        }
+
         configuration.put("helPaymentTypeId", Long.toString(helPaymentTypeId));
         configuration.put("helProductId", Long.toString(ordinaryProductId));
         configuration.put("bankAccountReference", "test-bank");
@@ -415,6 +432,20 @@ class ReceivablesDatabaseIntegrationTest {
             try (var rows = statement.executeQuery()) {
                 assertThat(rows.next()).isTrue();
                 return rows.getString(1);
+            }
+        }
+    }
+
+    void migrateLegacyConfiguration() throws Exception {
+        executeSql("drop table m_mnzl_r_configuration_activation");
+        executeSql("drop table m_mnzl_r_configuration_revision");
+        executeSql("delete from DATABASECHANGELOG where id='mnzl-receivables-configuration-revisions-3'");
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword)) {
+            var database = liquibase.database.DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new liquibase.database.jvm.JdbcConnection(connection));
+            try (var migration = new liquibase.Liquibase("db/custom-changelog/0003_mnzl_receivables_configuration_revisions.xml",
+                    new liquibase.resource.ClassLoaderResourceAccessor(), database)) {
+                migration.update(new liquibase.Contexts());
             }
         }
     }
@@ -659,11 +690,6 @@ class ReceivablesDatabaseIntegrationTest {
         assertThat(queryLong("select sum(case when j.type_enum=2 then j.amount*100 else -j.amount*100 end) "
                 + "from acc_gl_journal_entry j join m_loan_transaction t on t.id=j.loan_transaction_id where t.loan_id=" + helLoan
                 + " and j.account_id=" + accounts.get("helSettlementClearing"))).isEqualTo(-100000);
-        for (JsonNode configuration : request("GET", "/configurations", null, 200).path("globalConfiguration")) {
-            if (configuration.path("name").asText().equals("paymenttype-applicable-for-disbursement-charges")) {
-                request("PUT", "/configurations/" + configuration.path("id").asLong(), json.read("{\"enabled\":true}"), 200);
-            }
-        }
         ObjectNode charge = (ObjectNode) json.read(
                 "{\"name\":\"Financed origination\",\"currencyCode\":\"EGP\",\"amount\":10,\"chargeAppliesTo\":1,\"chargeTimeType\":1,\"chargeCalculationType\":1,\"chargePaymentMode\":0,\"active\":true,\"penalty\":false,\"locale\":\"en\"}");
         long chargeId = request("POST", "/charges", charge, 200).path("resourceId").asLong();

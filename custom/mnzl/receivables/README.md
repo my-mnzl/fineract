@@ -112,3 +112,49 @@ Each candidate event, registry and actual-journal SQL query fetches at most 1000
 rows. More than 100000 candidates, or more than 100000 included event lines, fails
 with `INVALID_DATA`; no partial/truncated proof is returned. This initial bound
 applies to scoped candidates through the watermark, not just the requested month.
+
+## Managed native configuration
+
+`accountMappingRevisionId` identifies the entire immutable native configuration,
+including policy and calculator compatibility. Every content change requires a new
+ID, even when the physical GL mapping stays the same. Configuration hashes use JCS
+with `accountMap` sorted by `accountKey`; reordering mappings is not a change.
+
+Use `GET /configuration/active` to plan against the current configuration/hash, or
+its explicit null result before bootstrap. Existing `POST /configuration` bootstraps
+an active configuration and remains exact-replay-only. Stage subsequent snapshots
+with `POST /configuration/revisions`, then activate with
+`POST /configuration/activations`, supplying the target hash, unique activation ID
+and expected active revision. Reuse the activation ID and identical payload after
+an uncertain response. Replays return their recorded outcome without reverting a
+later activation. Retired revisions cannot reactivate; rollback uses a fresh ID.
+
+Activation serializes with financial commands and fails while a close is PREPARING.
+Scope and office are fixed at bootstrap. Once the book has any commands, physical
+GLs, purchased product, bank reference and HEL settlement routing cannot change.
+Configured HEL requires an ordinary loan product, a noncash payment channel mapped
+to settlement clearing, and paymenttype-applicable-for-disbursement-charges enabled.
+
+`GET /configuration` with a historical mapping header returns the immutable snapshot
+under the current principal's authorization. Commands keep their original JSON and
+hashes: exact completed replay precedes active-revision validation, while an old
+unexecuted approval cannot run under a newly active configuration. Historical
+proofs and HEL journals resolve their original revision, not the current GL map.
+
+`GET /configuration/runtime` exposes the lifecycle version and build-time native
+source/OpenAPI hashes separately from declared `calculatorBuild` compatibility.
+An application image release alone does not change calculator compatibility.
+
+For source-archive builds without Git metadata, supply the exact source commit with
+`-PreceivablesSourceRevision=<40 lowercase hexadecimal commit SHA>` or
+`RECEIVABLES_SOURCE_REVISION`. The Gradle property takes precedence over the environment
+variable; otherwise the build reads `git rev-parse HEAD`. Missing or invalid provenance
+fails the metadata-generation task with instructions. This revision describes the source
+artifact and must not be substituted with the configurable `calculatorBuild` value.
+
+Bootstrap, staging and activation requests emit `mnzl.receivables.configuration` JSON
+log events with actor ID, hashed authenticated tenant and scope, revision/activation identifiers, outcome,
+rejection code and latency. Each event describes one HTTP attempt after transaction
+completion; activation retries retain the original `activatedAt`. `expectedActiveRevision`
+is the caller's precondition, while `sourceRevision` is the recorded predecessor on
+success. Logs exclude configuration bodies and financial contents.

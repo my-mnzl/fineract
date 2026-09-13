@@ -31,9 +31,13 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import java.util.function.BiFunction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -147,8 +151,102 @@ public class ReceivablesWriteApiResource {
     @POST
     @Path("/configuration")
     public String configure(@Context HttpHeaders headers, String request) {
-        authorizeRequest(headers, request);
-        return json.write(configuration.configure(request));
+        return configurationAttempt("BOOTSTRAP", headers, request, (input, requestedScope) -> {
+            authorizeRequest(headers, request);
+            return configuration.configure(request);
+        });
+    }
+
+    @GET
+    @Path("/configuration/active")
+    public String activeConfiguration(@Context HttpHeaders headers) {
+        return json.write(configuration.activeConfiguration(scope(headers)));
+    }
+
+    @POST
+    @Path("/configuration/revisions")
+    public String stage(@Context HttpHeaders headers, String request) {
+        return configurationAttempt("STAGE", headers, request, (input, requestedScope) -> {
+            authorizeRequest(headers, request);
+            return configuration.stage(request);
+        });
+    }
+
+    @POST
+    @Path("/configuration/activations")
+    public String activate(@Context HttpHeaders headers, String request) {
+        return configurationAttempt("ACTIVATE", headers, request, (input, requestedScope) -> {
+            require(text(input, "accountMappingRevisionId").equals(headers.getHeaderString("X-MNZL-Account-Mapping")),
+                    "FINERACT_CAPABILITY_MISSING");
+            return configuration.activate(requestedScope, request);
+        });
+    }
+
+    /** Log one HTTP attempt after the transactional service has committed or rolled back, including exact retries. */
+    private String configurationAttempt(String action, HttpHeaders headers, String request,
+            BiFunction<JsonNode, JsonNode, JsonNode> operation) {
+        long started = System.nanoTime();
+        var event = json.object().put("event", "mnzl.receivables.configuration").put("action", action).put("outcome", "FAILED")
+                .put("rejectionCode", "INTERNAL_ERROR");
+        event.putNull("actorId").putNull("tenantHash").putNull("scopeHash").putNull("activationId").putNull("expectedActiveRevision")
+                .putNull("sourceRevision").putNull("targetRevision");
+        try {
+            event.put("actorId", security.authenticatedUser().getId());
+            event.put("tenantHash", ReceivablesJson.hashText(configuration.tenantId()));
+            JsonNode input = json.read(request);
+            require(input != null && input.isObject(), "INVALID_DATA");
+            event.put("activationId", telemetryId(input, "activationId"));
+            event.put("expectedActiveRevision", telemetryId(input, "expectedActiveAccountMappingRevisionId"));
+            event.put("targetRevision", telemetryId(input, "accountMappingRevisionId"));
+            var requestedScope = scope(headers);
+            event.put("scopeHash", json.hash(requestedScope));
+            var response = operation.apply(input, requestedScope);
+            // The service proxy returns only after transaction completion. Retries retain the original activation
+            // timestamp.
+            event.put("sourceRevision", telemetryId(response, "previousAccountMappingRevisionId"));
+            event.put("activatedAt", telemetryId(response, "activatedAt"));
+            event.put("revisionState", telemetryId(response, "state"));
+            String result = json.write(response);
+            event.put("outcome", "SUCCEEDED").putNull("rejectionCode");
+            return result;
+        } catch (ReceivablesException exception) {
+            event.put("outcome", "REJECTED").put("rejectionCode", exception.code());
+            throw exception;
+        } catch (NoAuthorizationException | AccessDeniedException | AuthenticationException exception) {
+            event.put("outcome", "REJECTED").put("rejectionCode", "ACCESS_DENIED");
+            throw exception;
+        } finally {
+            event.put("latencyMs", (System.nanoTime() - started) / 1_000_000);
+            log.info("MNZL receivables configuration {}", json.write(event));
+        }
+    }
+
+    /** Keep opaque identifiers useful without allowing arbitrary payload text or unbounded values into logs. */
+    private static String telemetryId(JsonNode input, String field) {
+        var value = input.path(field);
+        if (!value.isTextual()) {
+            return null;
+        }
+        String id = value.asText();
+        return id.matches("[A-Za-z0-9][A-Za-z0-9._:/@-]{0,199}") ? id : "sha256:" + ReceivablesJson.hashText(id);
+    }
+
+    @GET
+    @Path("/configuration/runtime")
+    public String runtime() {
+        security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES",
+                java.util.List.of("READ_MNZL_RECEIVABLES", "CONFIGURE_MNZL_RECEIVABLES"));
+        var properties = new java.util.Properties();
+        try (var stream = getClass().getResourceAsStream("/receivables-runtime.properties")) {
+            require(stream != null, "FINERACT_CAPABILITY_MISSING");
+            properties.load(stream);
+        } catch (java.io.IOException exception) {
+            throw new ReceivablesException("FINERACT_CAPABILITY_MISSING", exception);
+        }
+        return json.write(json.object().put("configurationLifecycleVersion", "1")
+                .put("calculationVersion", ReceivablesConfiguration.CALCULATION).put("productPolicyCode", ReceivablesConfiguration.POLICY)
+                .put("sourceRevision", properties.getProperty("sourceRevision"))
+                .put("openApiSha256", properties.getProperty("openApiSha256")));
     }
 
     @POST
