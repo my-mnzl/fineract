@@ -333,7 +333,8 @@ public class ReceivablesAccountCommands {
 
     private JsonNode latestForecast(String accountKey) {
         var rows = store.jdbc().queryForList(
-                "select snapshot_json from m_mnzl_r_risk_forecast where account_key=? order by as_of_date desc,forecast_version desc limit 1",
+                "select f.snapshot_json from m_mnzl_r_risk_forecast f left join m_mnzl_r_event e on e.operation_key=f.operation_key "
+                        + "where f.account_key=? order by f.as_of_date desc,f.forecast_version desc,e.sequence_id desc limit 1",
                 accountKey);
         require(!rows.isEmpty(), "SOURCE_CHANGED");
         return json.read(string(rows.getFirst(), "snapshot_json"));
@@ -480,6 +481,9 @@ public class ReceivablesAccountCommands {
         String key = string(account, "record_key");
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
+        JsonNode forecast = latestForecast(key);
+        require(e.command.path("expectedRiskForecastHash").isTextual()
+                && json.hash(forecast).equals(e.command.path("expectedRiskForecastHash").asText()), "SOURCE_CHANGED");
         var state = measurement.state(account);
         Position before = ReceivablesMath.position(state, e.date);
         var reset = ReceivableEvents.reset(state, e.date, decimal(e.command, "corridorRate").add(decimal(e.command, "spread")));
@@ -487,20 +491,10 @@ public class ReceivablesAccountCommands {
             return;
         }
         require(reset.lot() == null || reset.lot().dueDate().equals(date(e.command, "developerAdjustmentDueDate")), "SOURCE_CHANGED");
-        var flows = new ArrayList<Cashflow>(reset.futureSegment().cashflows());
-        for (Leg leg : before.legs()) {
-            if (leg.discountDays() == 0 && leg.outstandingMinor().signum() > 0) {
-                flows.add(new Cashflow(leg.cashflow().cashflowId(), leg.cashflow().dueDate(), leg.outstandingMinor()));
-            }
-        }
-        Segment next = new Segment(e.date, flows, reset.futureSegment().grossBasisMinor().add(before.pastDueMinor()),
-                reset.futureSegment().netBasisMinor().add(before.pastDueMinor()), reset.futureSegment().grossYield(),
-                reset.futureSegment().netEir());
-        Map<String, BigInteger> outstanding = new LinkedHashMap<>();
-        flows.forEach(f -> outstanding.put(f.cashflowId(), f.amountMinor()));
-        Position after = ReceivablesMath.position(next, e.date, outstanding);
-        measurement.saveState(e.scope, key, e.operationKey, new MeasurementState(next, after, outstanding),
-                string(e.configuration, "calculator_build"));
+        var resetState = measurement.resetState(before, reset.futureSegment());
+        Segment next = resetState.segment();
+        Position after = resetState.boundaryPosition();
+        measurement.saveState(e.scope, key, e.operationKey, resetState, string(e.configuration, "calculator_build"));
         store.update("account", key,
                 Map.of("gross_minor", after.grossPurchaseBasisMinor().toString(), "net_minor", after.amortizedCostMinor().toString()));
         if (reset.deltaMinor().signum() > 0) {
@@ -511,7 +505,7 @@ public class ReceivablesAccountCommands {
         if (reset.lot() != null) {
             createLot(e, key, reset.lot(), ":reset");
         }
-        BigInteger allowance = measurement.allowance(after, next, latestForecast(key));
+        BigInteger allowance = measurement.allowance(after, next, forecast);
         pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")), id, deal, "IMPAIRMENT");
         store.update("account", key, Map.of("allowance_minor", allowance.toString()));
     }

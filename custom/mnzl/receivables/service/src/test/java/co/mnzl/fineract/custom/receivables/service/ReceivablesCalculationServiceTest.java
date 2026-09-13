@@ -216,7 +216,24 @@ class ReceivablesCalculationServiceTest {
         request.put("corridorRate", "0.30");
         request.put("spread", "0");
         request.put("adjustmentDueDate", "2030-04-01");
+        ObjectNode resetForecast = json.object();
+        resetForecast.put("forecastId", "reset-forecast");
+        resetForecast.put("forecastVersion", "1");
+        resetForecast.put("asOfDate", "2030-01-01");
+        resetForecast.put("validThroughDate", "2030-01-31");
+        resetForecast.put("stage", "STAGE_3");
+        resetForecast.put("contentHash", "0".repeat(64));
+        resetForecast.set("scenarios", json
+                .value(List.of(Map.of("scenarioId", "default", "probability", "1", "defaultDate", "2030-01-01", "recoveries", List.of()))));
+        request.set("riskForecast", resetForecast);
+        ObjectNode resetBefore = (ObjectNode) request.get("position");
+        resetBefore.put("stage", "STAGE_3");
+        resetBefore.set("lossAllowanceMinor", resetBefore.get("amortizedCostMinor"));
+        resetBefore.put("netCarryingMinor", "0");
         JsonNode result = calculate(request);
+        assertThat(result.path("positionAfter").path("netCarryingMinor").asText()).isEqualTo("0");
+        assertThat(result.path("positionAfter").path("lossAllowanceMinor"))
+                .isEqualTo(result.path("positionAfter").path("amortizedCostMinor"));
         var purchase = measurement.purchase(basis, "account-1");
         var expected = ReceivableEvents.reset(purchase.segment(), purchase.segment().startDate(), Map.of(), new BigDecimal("0.30"));
         assertThat(result.path("grossBasisChangeMinor").asText()).isEqualTo(expected.deltaMinor().toString());

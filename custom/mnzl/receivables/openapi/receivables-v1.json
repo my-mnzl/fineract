@@ -4199,6 +4199,9 @@
               },
               "adjustmentDueDate": {
                 "$ref": "#/components/schemas/financialDate"
+              },
+              "riskForecast": {
+                "$ref": "#/components/schemas/riskForecast"
               }
             },
             "required": [
@@ -4216,7 +4219,8 @@
               "corridorObservationId",
               "corridorRate",
               "spread",
-              "adjustmentDueDate"
+              "adjustmentDueDate",
+              "riskForecast"
             ],
             "additionalProperties": false
           },
@@ -5529,6 +5533,10 @@
               },
               "developerAdjustmentDueDate": {
                 "$ref": "#/components/schemas/financialDate"
+              },
+              "expectedRiskForecastHash": {
+                "$ref": "#/components/schemas/sha256",
+                "description": "JCS SHA-256 of the full approved risk forecast, including its contentHash, frozen by the measurement read. Required for new execution; omitted legacy commands may only replay an existing exact committed operation."
               }
             },
             "required": [
@@ -8245,6 +8253,10 @@
                       },
                       "developerAdjustmentDueDate": {
                         "$ref": "#/components/schemas/financialDate"
+                      },
+                      "expectedRiskForecastHash": {
+                        "$ref": "#/components/schemas/sha256",
+                        "description": "JCS SHA-256 of the full approved risk forecast, including its contentHash, frozen by the measurement read. Required for new execution; omitted legacy commands may only replay an existing exact committed operation."
                       }
                     },
                     "required": [
@@ -10690,6 +10702,13 @@
           },
           "eventWatermark": {
             "$ref": "#/components/schemas/version"
+          },
+          "riskForecast": {
+            "$ref": "#/components/schemas/riskForecast"
+          },
+          "riskForecastHash": {
+            "$ref": "#/components/schemas/sha256",
+            "description": "JCS SHA-256 of the full riskForecast object, including its contentHash. Forecast selection uses the same committed event watermark and boundary as the measurement."
           }
         },
         "required": [

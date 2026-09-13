@@ -215,7 +215,7 @@ class ReceivablesDatabaseIntegrationTest {
         return scope;
     }
 
-    private ObjectNode versions() {
+    ObjectNode versions() {
         ObjectNode value = json.object();
         value.put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V1");
         value.put("productPolicyCode", "EG_RECEIVABLES_V1");
@@ -225,9 +225,15 @@ class ReceivablesDatabaseIntegrationTest {
         return value;
     }
 
-    ObjectNode command(String type, String operation, String subject, String kind) {
+    ObjectNode command(String type, String operation, String subject, String kind) throws Exception {
         ObjectNode command = json.object();
         command.put("commandType", type);
+        if (type.equals("RESET_RATE")) {
+            String accountKey = ReceivablesStore.key(json.hash(scope(false)), "account", subject);
+            String forecast = queryText("select snapshot_json from m_mnzl_r_risk_forecast where account_key=? "
+                    + "order by as_of_date desc,forecast_version desc limit 1", accountKey);
+            command.put("expectedRiskForecastHash", json.hash(json.read(forecast)));
+        }
         command.put("executionMode", "CURRENT");
         command.putNull("executionAuthorization");
         command.put("accountMappingRevisionId", "mapping-1");

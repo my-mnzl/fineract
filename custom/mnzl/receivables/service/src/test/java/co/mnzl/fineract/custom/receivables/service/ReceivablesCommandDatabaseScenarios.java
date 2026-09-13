@@ -1136,10 +1136,34 @@ final class ReceivablesCommandDatabaseScenarios {
         later.put("corridorRate", "0.33");
         later.put("spread", "0");
         later.set("developerAdjustmentDueDate", harness.bookingCommands.get(id).path("basis").path("cashflows").get(1).get("dueDate"));
+        JsonNode resetMeasurement = harness.request("GET", accountPath + "/measurement" + postCut, null, 200);
+        assertThat(resetMeasurement.path("riskForecastHash").asText()).isEqualTo(harness.json.hash(borrowerForecast));
+        later.set("expectedRiskForecastHash", resetMeasurement.get("riskForecastHash"));
+        ObjectNode preview = harness.versions();
+        preview.put("calculationType", "RESET");
+        preview.set("position", resetMeasurement.get("position"));
+        preview.set("measurementLegs", resetMeasurement.get("measurementLegs"));
+        preview.set("riskForecast", resetMeasurement.get("riskForecast"));
+        var remaining = harness.json.array();
+        resetMeasurement.path("measurementLegs").forEach(leg -> remaining.add(leg.get("cashflow")));
+        preview.set("remainingCashflows", remaining);
+        preview.set("effectiveDate", later.get("businessDate"));
+        for (String field : List.of("corridorObservationId", "corridorRate", "spread")) {
+            preview.set(field, later.get(field));
+        }
+        preview.set("adjustmentDueDate", later.get("developerAdjustmentDueDate"));
+        preview.put("basisHash", harness.json.hash(preview));
+        JsonNode calculated = harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/calculate", preview, 200);
+        ObjectNode wrongForecast = later.deepCopy().put("expectedRiskForecastHash", "0".repeat(64));
+        harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", wrongForecast, 409);
         execute(later);
         JsonNode resetPosition = harness.request("GET", accountPath + "/position", null, 200);
         assertThat(resetPosition.path("lossAllowanceMinor")).isEqualTo(resetPosition.path("amortizedCostMinor"));
         assertThat(resetPosition.path("netCarryingMinor").asText()).isEqualTo("0");
+        for (String field : List.of("amortizedCostMinor", "lossAllowanceMinor", "netCarryingMinor", "grossYield", "netEir")) {
+            assertThat(resetPosition.path(field)).as(field).isEqualTo(calculated.path("positionAfter").path(field));
+        }
+        assertThat(harness.request("GET", accountPath + "/measurement" + postCut, null, 200)).isEqualTo(resetMeasurement);
         assertThat(harness.request("GET", proofPath, null, 200)).isEqualTo(proof);
         assertThat(execute(impairment)).isEqualTo(operation);
         assertThat(harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/transactions", null, 200)
