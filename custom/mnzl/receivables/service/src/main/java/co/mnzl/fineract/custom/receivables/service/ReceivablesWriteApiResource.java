@@ -27,6 +27,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -172,6 +173,20 @@ public class ReceivablesWriteApiResource {
         require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
                 "OWNERSHIP_CONFLICT");
         return json.write(configuration.authorizeWorkout(request));
+    }
+
+    @POST
+    @Path("/workout-authorizations/v2")
+    public String authorizeWorkoutV2(@Context HttpHeaders headers, String request) {
+        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
+                "OWNERSHIP_CONFLICT");
+        return json.write(configuration.authorizeWorkoutV2(request));
+    }
+
+    @POST
+    @Path("/workout-authorizations/v2/{authorizationId}/revoke")
+    public String revokeWorkoutV2(@Context HttpHeaders headers, @PathParam("authorizationId") String authorizationId) {
+        return json.write(configuration.revokeWorkoutV2(scope(headers), authorizationId));
     }
 
 }

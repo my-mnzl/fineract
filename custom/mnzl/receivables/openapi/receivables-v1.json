@@ -2047,6 +2047,141 @@
         },
         "description": "Complete scoped event membership and currently observed deterministic R-event GL proof in one repeatable-read snapshot. Ordinary HEL loan journals are excluded. Gross debit/credit totals and debit-minus-credit net retain zero-net reversal activity. At most 100000 candidate rows per event/registry/actual population; larger reads fail without partial proof. Canonical commitment formulas are documented in custom/mnzl/receivables/README.md."
       }
+    },
+    "/workout-authorizations/v2": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/nativeWorkoutAuthorizationV2"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeWorkoutAuthorizationV2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/workout-authorizations/v2/{authorizationId}/revoke": {
+      "post": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "authorizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/nativeWorkoutRevocation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12758,6 +12893,104 @@
           "eventManifest",
           "observedGl",
           "proofHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeWorkoutAuthorizationV2": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "approvedWorkoutCaseId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "approvedConsiderationMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "BUYBACK",
+              "RELEASE",
+              "EXCHANGE",
+              "MODIFICATION",
+              "WRITE_OFF"
+            ]
+          },
+          "legalEvidenceIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "replacementAccountId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replacementSourceHash": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvedBy": {
+            "$ref": "#/components/schemas/id"
+          },
+          "commandPayloadHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "scope",
+          "approvedWorkoutCaseId",
+          "accountId",
+          "businessDate",
+          "approvedConsiderationMinor",
+          "classification",
+          "legalEvidenceIds",
+          "replacementAccountId",
+          "replacementSourceHash",
+          "approvedBy",
+          "commandPayloadHash"
+        ],
+        "additionalProperties": false
+      },
+      "nativeWorkoutRevocation": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "approvedWorkoutCaseId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "revoked": {
+            "const": true
+          }
+        },
+        "required": [
+          "scope",
+          "approvedWorkoutCaseId",
+          "revoked"
         ],
         "additionalProperties": false
       }

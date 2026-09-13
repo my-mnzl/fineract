@@ -267,12 +267,31 @@ final class ReceivablesCommandDatabaseScenarios {
             approval.put("replacementAccountId", kind.equals("EXCHANGE") ? replacement : null);
             approval.put("replacementSourceHash", hash);
             approval.put("approvedBy", checkerId);
+            approval.put("commandPayloadHash", harness.json.hash(c));
             harness.authentication = "workout-checker:IsolatedChecker123!";
             try {
-                harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations", approval, 200);
+                harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 409);
             } finally {
                 harness.authentication = "mifos:password";
             }
+            approval.put("approvedBy", "1");
+            harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200);
+            assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200))
+                    .isEqualTo(approval);
+            ObjectNode changed = c.deepCopy();
+            changed.put("modifiedScheduleVersionId", "substituted-schedule");
+            assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", changed, 409).path("code").asText())
+                    .isEqualTo("APPROVAL_SCOPE_CHANGED");
+            String revokePath = ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2/" + id + "-approval/revoke";
+            assertThat(harness.request("POST", revokePath, null, 200).path("revoked").asBoolean()).isTrue();
+            assertThat(harness.request("POST", revokePath, null, 200).path("revoked").asBoolean()).isTrue();
+            harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200);
+            assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", c, 409).path("code").asText())
+                    .isEqualTo("APPROVAL_SCOPE_CHANGED");
+            c.put("approvedWorkoutCaseId", id + "-replacement-approval");
+            approval.set("approvedWorkoutCaseId", c.get("approvedWorkoutCaseId"));
+            approval.put("commandPayloadHash", harness.json.hash(c));
+            harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200);
             long bank = glBalance("bank");
             long loss = glBalance("modificationGainLoss");
             execute(c);
@@ -312,6 +331,7 @@ final class ReceivablesCommandDatabaseScenarios {
         c.set("modifiedCashflows", harness.json.value(flows));
         c.set("riskForecast", forecast(id, "modified-forecast", flows).put("stage", "STAGE_2"));
         c.set("legalEvidenceIds", harness.json.value(List.of("signed-modification")));
+        issueWorkout(c);
         execute(c);
         JsonNode modified = account(id);
         assertThat(modified.path("position").path("stage").asText()).isEqualTo("STAGE_2");
@@ -341,6 +361,7 @@ final class ReceivablesCommandDatabaseScenarios {
         c.set("modifiedCashflows", harness.json.value(List.of()));
         c.set("riskForecast", forecast(id, "written-off-forecast", List.of()));
         c.set("legalEvidenceIds", harness.json.value(List.of("approved-writeoff")));
+        issueWorkout(c);
         execute(c);
         assertThat(account(id).path("closureReason").asText()).isEqualTo("WRITE_OFF");
         assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("0");
@@ -407,6 +428,23 @@ final class ReceivablesCommandDatabaseScenarios {
         ObjectNode c = harness.command(type, operation, account, "RECEIVABLE");
         c.put("expectedVersion", harness.version(account));
         return c;
+    }
+
+    private void issueWorkout(ObjectNode command) throws Exception {
+        command.put("approvedWorkoutCaseId", command.path("operationId").asText() + "-approval");
+        ObjectNode approval = harness.json.object();
+        approval.set("scope", command.get("scope"));
+        approval.set("approvedWorkoutCaseId", command.get("approvedWorkoutCaseId"));
+        approval.set("accountId", command.get("subjectId"));
+        approval.set("businessDate", command.get("businessDate"));
+        approval.set("approvedConsiderationMinor", command.get("approvedConsiderationMinor"));
+        approval.set("classification", command.get("classification"));
+        approval.set("legalEvidenceIds", command.get("legalEvidenceIds"));
+        approval.putNull("replacementAccountId");
+        approval.putNull("replacementSourceHash");
+        approval.put("approvedBy", "1");
+        approval.put("commandPayloadHash", harness.json.hash(command));
+        harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/workout-authorizations/v2", approval, 200);
     }
 
     private JsonNode execute(ObjectNode command) throws Exception {

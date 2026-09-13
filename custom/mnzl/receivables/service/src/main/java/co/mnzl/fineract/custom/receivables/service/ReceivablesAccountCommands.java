@@ -796,6 +796,9 @@ public class ReceivablesAccountCommands {
         String deal = string(account, "deal_id");
         Position before = measurement.position(account, e.date);
         String classification = text(e.command, "classification");
+        configuration.requireWorkout(e,
+                classification.equals("DERECOGNITION") ? text(e.command.get("legalOutcome"), "kind") : classification,
+                minor(e.command, "approvedConsiderationMinor"));
         var oldAllocations = new ArrayList<Allocation>();
         for (var leg : store.children("leg", "account_key", key)) {
             if (outstanding(leg).signum() > 0) {
@@ -862,7 +865,6 @@ public class ReceivablesAccountCommands {
         require(outcome != null, "APPROVAL_SCOPE_CHANGED");
         String kind = text(outcome, "kind");
         BigInteger consideration = minor(e.command, "approvedConsiderationMinor");
-        configuration.requireWorkout(e, kind, consideration);
         String id = string(account, "external_id");
         String deal = string(account, "deal_id");
         e.nativeTransactions.add(Long.toString(nativeBridge.adjustFace(number(account, "native_loan_id"), e.date,
