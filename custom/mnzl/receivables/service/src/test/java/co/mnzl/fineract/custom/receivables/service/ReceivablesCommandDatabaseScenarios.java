@@ -490,6 +490,28 @@ final class ReceivablesCommandDatabaseScenarios {
         String eventId = original.path("financialEventIds").get(0).asText();
         String eventText = harness.queryText("select event_json from m_mnzl_r_event where record_key='" + eventId + "'");
         JsonNode event = harness.json.read(eventText);
+        var originalDate = harness.today;
+        var correctionDate = originalDate.withDayOfMonth(1).plusMonths(1);
+        String historicalPath = ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/position?businessDate=" + originalDate
+                + "&boundarySide=AFTER_EVENTS&eventWatermark=" + original.path("eventWatermark").asText();
+        JsonNode historicalPosition = harness.request("GET", historicalPath, null, 200);
+        String sourceBefore = harness.queryText("select source_json from m_mnzl_r_cash_source where cash_movement_id='due-receipt'");
+        long bankBefore = glBalance("bank");
+        String scopeKey = harness.queryText("select scope_key from m_mnzl_r_account where external_id='account-1'");
+        // Isolated period-lock fixture; the actual prepare/finalize close protocol is exercised separately.
+        harness.executeSql(
+                "insert into m_mnzl_r_period(record_key,scope_key,period_id,boundary_date,status,version,event_watermark,"
+                        + "cutoff_hash,reconciliation_id,snapshot_json) values(?,?,?,?,?,?,?,?,?,?)",
+                "correction-closed-boundary", scopeKey, originalDate.toString().substring(0, 7), correctionDate, "CLOSED", 2,
+                original.path("eventWatermark").asLong(), harness.json.hash(historicalPosition), "isolated-closed-boundary",
+                harness.json.write(historicalPosition));
+        harness.moveDate(correctionDate);
+        ObjectNode backdated = collect.deepCopy();
+        backdated.put("operationId", "correction-backdated");
+        backdated.put("idempotencyKey", "correction-backdated");
+        backdated.put("expectedVersion", harness.version(id));
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", backdated, 409).path("code").asText())
+                .isEqualTo("PERIOD_CLOSED");
         List<String> lineIds = new ArrayList<>();
         for (JsonNode line : event.path("journalLines")) {
             if (line.path("component").asText().equals("CASH")
@@ -511,7 +533,7 @@ final class ReceivablesCommandDatabaseScenarios {
         c.put("executionMode", "CORRECTION");
         c.set("executionAuthorization", authorization);
         c.put("originalEventId", eventId);
-        c.put("originalValueDate", harness.today.toString());
+        c.put("originalValueDate", originalDate.toString());
         c.set("sourceLineIds", harness.json.value(lineIds));
         c.put("replacementCommandOperationId", "correction:replacement");
         c.put("correctionEvidenceId", "bank-correction");
@@ -520,9 +542,45 @@ final class ReceivablesCommandDatabaseScenarios {
         replacement.set("allocations", harness.json.value(List.of(allocation)));
         replacement.set("riskForecastAfter",
                 forecast(id, "correction-forecast", List.of(harness.bookingCommands.get(id).path("basis").path("cashflows").get(1))));
+        for (JsonNode scenario : replacement.path("riskForecastAfter").path("scenarios")) {
+            for (JsonNode recovery : scenario.path("recoveries")) {
+                if (java.time.LocalDate.parse(recovery.path("date").asText()).isBefore(harness.today)) {
+                    ((ObjectNode) recovery).put("date", harness.today.toString());
+                }
+            }
+        }
         c.set("replacementCommand", replacement);
         harness.issueHistory(c);
-        execute(c);
+        JsonNode corrected = execute(c);
+        JsonNode correctedEvent = harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?",
+                corrected.path("financialEventIds").get(0).asText()));
+        assertThat(correctedEvent.path("businessDate").asText()).isEqualTo(correctionDate.toString());
+        assertThat(correctedEvent.path("postingPeriod").asText()).isEqualTo(correctionDate.toString().substring(0, 7));
+        assertThat(correctedEvent.path("originalValueDate").asText()).isEqualTo(originalDate.toString());
+        assertThat(correctedEvent.path("correctionOfEventId").asText()).isEqualTo(eventId);
+        assertThat(correctedEvent.path("reversalOfEventId").asText()).isEqualTo(eventId);
+        assertThat(harness.request("GET", historicalPath, null, 200)).isEqualTo(historicalPosition);
+        assertThat(harness.queryText("select snapshot_json from m_mnzl_r_period where record_key='correction-closed-boundary'"))
+                .isEqualTo(harness.json.write(historicalPosition));
+        assertThat(harness.queryText("select source_json from m_mnzl_r_cash_source where cash_movement_id='due-receipt'"))
+                .isEqualTo(sourceBefore);
+        assertThat(glBalance("bank")).isEqualTo(bankBefore);
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_journal_line l join m_mnzl_r_event e on e.record_key=l.event_key "
+                + "join m_mnzl_r_command c on c.record_key=e.operation_key where c.operation_id='correction' and l.semantic_account='bank'"))
+                .isZero();
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_journal_line l join acc_gl_journal_entry j on j.id=l.native_journal_id "
+                + "join m_mnzl_r_event e on e.record_key=l.event_key join m_mnzl_r_command c on c.record_key=e.operation_key where c.operation_id='correction' and j.entry_date<>'"
+                + correctionDate + "'")).isZero();
+        assertThat(harness.queryText("select value_date from m_mnzl_r_collection where allocation_id='correction-replacement-allocation'"))
+                .isEqualTo(originalDate.toString());
+        assertThat(account(id).path("position").path("stage")).isEqualTo(replacement.path("riskForecastAfter").path("stage"));
+        assertThat(account(id).path("position").path("businessDate").asText()).isEqualTo(correctionDate.toString());
+        var unpaidDue = java.time.LocalDate
+                .parse(harness.bookingCommands.get(id).path("basis").path("cashflows").get(1).path("dueDate").asText());
+        assertThat(account(id).path("position").path("daysPastDue").asLong())
+                .isEqualTo(Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(unpaidDue, correctionDate)));
+        controls(id);
+        harness.executeSql("delete from m_mnzl_r_period where record_key=?", "correction-closed-boundary");
         assertThat(harness.queryText("select event_json from m_mnzl_r_event where record_key='" + eventId + "'")).isEqualTo(eventText);
         assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("99999");
         assertThat(harness.queryLong("select count(*) from m_loan_transaction where id="
