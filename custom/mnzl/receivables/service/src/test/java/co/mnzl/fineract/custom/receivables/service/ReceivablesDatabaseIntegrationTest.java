@@ -73,6 +73,7 @@ class ReceivablesDatabaseIntegrationTest {
     private long ordinaryProductId;
     private long helPaymentTypeId;
     final ObjectNode pairingEvidence = json.object();
+    final ObjectNode reportingEvidence = json.object();
     final Map<String, ObjectNode> bookingCommands = new LinkedHashMap<>();
     final Map<String, Long> accounts = new LinkedHashMap<>();
     private final LocalDate startDate = LocalDate.now(ZoneOffset.UTC);
@@ -133,6 +134,7 @@ class ReceivablesDatabaseIntegrationTest {
                 ObjectNode evidence = json.object();
                 evidence.put("database", database);
                 evidence.set("developerEffectPairing", pairingEvidence);
+                evidence.set("helReportingPairing", reportingEvidence);
                 evidence.put("nativeJournalReadbackMatched", journalsMatched);
                 evidence.put("ordinaryProductRegressionPassed", ordinaryPassed);
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));

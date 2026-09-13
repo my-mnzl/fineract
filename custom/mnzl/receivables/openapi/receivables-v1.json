@@ -15049,7 +15049,8 @@
             "type": "string",
             "enum": [
               "NO_POSTED_PROVISIONING",
-              "RECONCILED_NATIVE_PRODUCT_COMPONENTS"
+              "RECONCILED_NATIVE_PRODUCT_COMPONENTS",
+              "PROVEN_CANCELLED_PROVISIONING_NET_ZERO"
             ]
           },
           "contentHash": {

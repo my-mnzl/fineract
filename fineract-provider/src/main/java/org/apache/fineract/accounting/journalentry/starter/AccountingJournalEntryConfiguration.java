@@ -18,8 +18,8 @@
  */
 package org.apache.fineract.accounting.journalentry.starter;
 
-import org.apache.fineract.accounting.common.ProvisioningJournalEntryObserver;
 import org.apache.fineract.accounting.closure.domain.GLClosureRepository;
+import org.apache.fineract.accounting.common.ProvisioningJournalEntryObserver;
 import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccountRepositoryWrapper;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepository;
 import org.apache.fineract.accounting.glaccount.service.GLAccountReadPlatformService;

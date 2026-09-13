@@ -191,7 +191,9 @@ public class ReceivablesHelReporting {
         pool.put("recordedProductAllowanceMinor", evidence.allowance().toString());
         pool.put("netEarningCarryingMinor", gross.subtract(evidence.allowance()).toString());
         pool.put("allowanceBasis",
-                evidence.provisionJournalCount() == 0 ? "NO_POSTED_PROVISIONING" : "RECONCILED_NATIVE_PRODUCT_COMPONENTS");
+                evidence.provisionJournalCount() == 0
+                        ? evidence.provisionExclusions().isEmpty() ? "NO_POSTED_PROVISIONING" : "PROVEN_CANCELLED_PROVISIONING_NET_ZERO"
+                        : "RECONCILED_NATIVE_PRODUCT_COMPONENTS");
         pool.put("contentHash", json.hash(pool));
         var manifest = json.object();
         manifest.put("schemaVersion", "1");

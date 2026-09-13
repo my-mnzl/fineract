@@ -70,6 +70,22 @@ final class ReceivablesHelReportingScenarios {
             hash(member);
         }
         assertThat(initial.path("memberManifestHash").asText()).isEqualTo(manifest(members, "nativeLoanId"));
+        assertThat(members).anySatisfy(member -> {
+            assertThat(member.path("disbursementState").asText()).isEqualTo("DISBURSED");
+            BigDecimal gross = new BigDecimal(member.path("earningCarrying").path("grossEarningCarryingMinor").asText());
+            BigDecimal contractual = new BigDecimal(member.path("loan").path("summary").path("totalOutstanding").asText())
+                    .movePointRight(2);
+            assertThat(gross).isLessThan(contractual);
+        });
+        long independentLoan = harness.queryLong("select min(l.id) from m_loan l where l.product_id=" + product
+                + " and l.loan_status_id=300 and not exists (select 1 from m_mnzl_r_hel_funding f where f.loan_id=l.id)");
+        long beforeHistory = harness.queryLong("select count(*) from m_mnzl_r_hel_snapshot where loan_id=" + independentLoan);
+        ObjectNode repayment = dated("transactionDate");
+        repayment.put("transactionAmount", 1);
+        harness.request("POST", "/loans/" + independentLoan + "/transactions?command=repayment", repayment, 200);
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_hel_snapshot where loan_id=" + independentLoan))
+                .isGreaterThan(beforeHistory);
+        assertThat(harness.request("GET", ROOT + "/snapshots/reporting-initial", null, 200)).isEqualTo(initial);
         JsonNode firstPage = harness.request("GET", ROOT + "/snapshots/reporting-initial/members?limit=1", null, 200);
         String initialCursor = firstPage.path("nextCursor").asText();
         assertThat(initialCursor).isNotBlank();
@@ -162,6 +178,14 @@ final class ReceivablesHelReportingScenarios {
         assertThat(knownReversal.path("provisionExclusions").isEmpty()).isTrue();
         assertThat(capture("reporting-canceled-unknown")).isEqualTo(canceled);
         hash(knownReversal);
+        harness.reportingEvidence.set("registrationResult", registered);
+        harness.reportingEvidence.set("initialMembers", json.value(members));
+        harness.reportingEvidence.set("postedSnapshot", posted);
+        harness.reportingEvidence.set("postedJournals", json.value(journals));
+        harness.reportingEvidence.set("canceledUnknownSnapshot", canceled);
+        harness.reportingEvidence.set("knownReversalSnapshot", knownReversal);
+        harness.reportingEvidence.set("knownReversalJournals", json.value(
+                journals("reporting-known-reversal", LocalDate.parse(initial.path("registeredBusinessDate").asText()), harness.today)));
     }
 
     private ObjectNode dated(String field) {
