@@ -62,7 +62,9 @@ def sourceRevision = providers.gradleProperty('receivablesSourceRevision')
         revision
     }
 def generateReceivablesRuntime = tasks.register('generateReceivablesRuntime') {
+    def licenseHeader = rootProject.layout.projectDirectory.file('APACHE_LICENSETEXT.md')
     inputs.file('../openapi/receivables-v1.json')
+    inputs.file(licenseHeader)
     inputs.property('sourceRevision', sourceRevision)
     outputs.dir(runtimeMetadata)
     doLast {
@@ -70,7 +72,8 @@ def generateReceivablesRuntime = tasks.register('generateReceivablesRuntime') {
         directory.mkdirs()
         def schema = file('../openapi/receivables-v1.json').bytes
         def hash = java.security.MessageDigest.getInstance('SHA-256').digest(schema).encodeHex().toString()
-        new File(directory, 'receivables-runtime.properties').text = "sourceRevision=${sourceRevision.get()}\nopenApiSha256=${hash}\n"
+        def header = licenseHeader.asFile.readLines('UTF-8').collect { it.isEmpty() ? '#' : "# ${it}" }.join('\n')
+        new File(directory, 'receivables-runtime.properties').setText("#\n${header}\n#\n\nsourceRevision=${sourceRevision.get()}\nopenApiSha256=${hash}\n", 'UTF-8')
     }
 }
 // Task-backed resources carry the producer dependency into processResources, sourcesJar and other consumers.
