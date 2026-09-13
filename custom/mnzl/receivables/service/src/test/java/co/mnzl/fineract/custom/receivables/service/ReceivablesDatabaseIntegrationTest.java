@@ -124,6 +124,7 @@ class ReceivablesDatabaseIntegrationTest {
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
                 new ReceivablesReceiptLossScenarios(this).verify();
+                JsonNode purchasedPopulationPairing = new ReceivablesPurchasedPopulationEvidence(this).capture();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
@@ -138,6 +139,7 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.set("developerEffectPairing", pairingEvidence);
                 evidence.set("helReportingPairing", reportingEvidence);
                 evidence.set("receiptLossPairing", receiptLossEvidence);
+                evidence.set("purchasedPopulationPairing", purchasedPopulationPairing);
                 evidence.put("nativeJournalReadbackMatched", journalsMatched);
                 evidence.put("ordinaryProductRegressionPassed", ordinaryPassed);
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));
