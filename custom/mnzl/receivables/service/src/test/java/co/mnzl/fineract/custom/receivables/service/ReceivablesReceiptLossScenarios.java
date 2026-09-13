@@ -81,10 +81,10 @@ final class ReceivablesReceiptLossScenarios {
         reset.put("developerAdjustmentDueDate", due.toString());
         post(ROOT + "/commands", reset, 200);
         h.moveDate(due);
-        ObjectNode receipt = h.receiptCommand(id + "-cash", id, "50000");
+        ObjectNode receipt = h.receiptCommand(id + "-receipt", id, "50000");
         post(ROOT + "/commands", receipt, 200);
         ObjectNode collect = command("COLLECT", id + "-collect", id);
-        collect.set("allocations", h.json.value(List.of(Map.of("allocationId", id + "-allocation", "cashMovementId", id + "-cash",
+        collect.set("allocations", h.json.value(List.of(Map.of("allocationId", id + "-allocation", "cashMovementId", id + "-receipt",
                 "cashflowId", id + "-0", "installmentId", id + "-0", "instrumentId", id + "-cheque", "amountMinor", "50000"))));
         JsonNode collected = post(ROOT + "/commands", collect, 200);
         ObjectNode downstream;
@@ -164,7 +164,7 @@ final class ReceivablesReceiptLossScenarios {
         JsonNode originalEvent = event(collected);
         JsonNode downstreamEvent = event(transferred);
         loss.set("originalCollectionEventHash", originalEvent.get("contentHash"));
-        loss.put("originalBankSourceId", id + "-cash-bank");
+        loss.put("originalBankSourceId", id + "-receipt-bank");
         loss.put("originalBankSourceHash", h.json.hash(receipt.get("source")));
         loss.put("downstreamOperationId", id + "-transfer");
         loss.set("downstreamCommandHash", transferred.get("payloadHash"));
@@ -196,7 +196,7 @@ final class ReceivablesReceiptLossScenarios {
         assertThat(post(ROOT + "/commands", authorize(unseparated, id + "-roles"), 409).path("code").asText())
                 .isEqualTo("APPROVAL_SCOPE_CHANGED");
         ObjectNode alreadyOwned = loss.deepCopy();
-        ((ObjectNode) alreadyOwned.get("bankDebit")).put("bankSourceId", id + "-cash-bank");
+        ((ObjectNode) alreadyOwned.get("bankDebit")).put("bankSourceId", id + "-receipt-bank");
         assertThat(post(ROOT + "/commands", authorize(alreadyOwned, id + "-owned"), 409).path("code").asText())
                 .isEqualTo("IDEMPOTENCY_CONFLICT");
         authorize(loss, id + "-approved");
