@@ -48,7 +48,7 @@ public class ReceivablesAbsentCollection {
         if (!e.command.has("absentCommandContinuation")) {
             return;
         }
-        require(text(e.command, "commandType").equals("COLLECT") && !text(e.command, "executionMode").equals("CURRENT"),
+        require(text(e.command, "commandType").equals("COLLECT") && text(e.command, "executionMode").equals("CORRECTION"),
                 "APPROVAL_SCOPE_CHANGED");
         JsonNode continuation = e.command.get("absentCommandContinuation");
         JsonNode original = json.validate("financialCommand", text(continuation, "originalCommandJson"));

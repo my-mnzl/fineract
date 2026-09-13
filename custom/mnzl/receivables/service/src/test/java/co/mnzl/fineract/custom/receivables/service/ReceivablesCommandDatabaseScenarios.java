@@ -81,14 +81,27 @@ final class ReceivablesCommandDatabaseScenarios {
                         id + "-0", "installmentId", id + "-0", "instrumentId", "absent-cheque", "amountMinor", "1"))));
         String savedOriginal = harness.json.write(original);
         harness.moveDate(date.plusDays(1));
-        ObjectNode continuation = original.deepCopy();
-        continuation.put("operationId", "absent-continuation");
-        continuation.put("idempotencyKey", "absent-continuation");
-        continuation.put("executionMode", "CORRECTION");
-        continuation.set("executionAuthorization", harness.json.value(Map.of("authorizationId", "absent-authorization", "scopeHash",
-                "0".repeat(64), "approvedBy", "1", "effectiveFrom", date.toString(), "effectiveThrough", date.toString())));
-        continuation.set("absentCommandContinuation",
-                harness.json.value(Map.of("originalCommandJson", savedOriginal, "originalCommandHash", harness.json.hash(original))));
+        ObjectNode wrongHash = absentContinuation(original, "absent-wrong-hash");
+        ((ObjectNode) wrongHash.get("absentCommandContinuation")).put("originalCommandHash", "f".repeat(64));
+        rejectContinuation(wrongHash, "SOURCE_CHANGED");
+        ObjectNode changed = absentContinuation(original, "absent-changed-financial");
+        ((ObjectNode) changed.get("allocations").get(0)).put("amountMinor", "2");
+        rejectContinuation(changed, "SOURCE_CHANGED");
+        ObjectNode reconstruction = absentContinuation(original, "absent-reconstruction");
+        reconstruction.put("executionMode", "RECONSTRUCTION");
+        rejectContinuation(reconstruction, "APPROVAL_SCOPE_CHANGED");
+        String scopeKey = harness.queryText("select scope_key from m_mnzl_r_account where external_id='absent-collection-account'");
+        harness.executeSql(
+                "insert into m_mnzl_r_period(record_key,scope_key,period_id,boundary_date,status,version,event_watermark,"
+                        + "cutoff_hash,reconciliation_id,snapshot_json) values(?,?,?,?,?,?,?,?,?,?)",
+                "absent-closed-protocol", scopeKey, date.toString().substring(0, 7), date.plusDays(1), "CLOSED", 1, 0, "0".repeat(64),
+                "protocol", "{}");
+        try {
+            rejectContinuation(absentContinuation(original, "absent-closed"), "PERIOD_CLOSED");
+        } finally {
+            harness.executeSql("delete from m_mnzl_r_period where record_key=?", "absent-closed-protocol");
+        }
+        ObjectNode continuation = absentContinuation(original, "absent-continuation");
         harness.issueHistory(continuation);
         JsonNode result = execute(continuation);
         assertThat(result.path("businessDate").asText()).isEqualTo(date.toString());
@@ -100,6 +113,50 @@ final class ReceivablesCommandDatabaseScenarios {
         assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", alias, 409).path("code").asText())
                 .isEqualTo("IDEMPOTENCY_CONFLICT");
         assertThat(account(id).path("position").path("contractualOutstandingMinor").asText()).isEqualTo("99999");
+        ObjectNode usedOriginal = original.deepCopy();
+        usedOriginal.put("operationId", "absent-used-original");
+        usedOriginal.put("idempotencyKey", "absent-used-original");
+        usedOriginal.put("expectedVersion", harness.version(id));
+        rejectContinuation(absentContinuation(usedOriginal, "absent-used"), "SOURCE_CHANGED");
+        ObjectNode committedOriginal = usedOriginal.deepCopy();
+        committedOriginal.put("operationId", "absent-continuation");
+        rejectContinuation(absentContinuation(committedOriginal, "absent-already-committed"), "IDEMPOTENCY_CONFLICT");
+        harness.moveDate(date);
+        ObjectNode reverse = command("REVERSE_COLLECTION", "absent-reverse", id);
+        reverse.put("originalOperationId", "absent-continuation");
+        reverse.set("nativeTransactionId", result.path("nativeTransactionIds").get(0));
+        reverse.set("allocationIds", harness.json.value(List.of("absent-allocation")));
+        reverse.put("reasonCode", "bank-return");
+        execute(reverse);
+        usedOriginal.put("expectedVersion", harness.version(id));
+        rejectContinuation(absentContinuation(usedOriginal, "absent-reversed-source"), "SOURCE_CHANGED");
+        ObjectNode reset = command("RESET_RATE", "absent-intervening-reset", id);
+        reset.put("corridorObservationId", "absent-intervening-rate");
+        reset.put("corridorRate", "0.30");
+        reset.put("spread", "0");
+        reset.put("developerAdjustmentDueDate", date.plusDays(45).toString());
+        execute(reset);
+        rejectContinuation(absentContinuation(usedOriginal, "absent-intervening"), "ACCOUNT_VERSION_CHANGED");
+    }
+
+    private ObjectNode absentContinuation(ObjectNode original, String operation) {
+        ObjectNode continuation = original.deepCopy();
+        continuation.put("operationId", operation);
+        continuation.put("idempotencyKey", operation);
+        continuation.put("executionMode", "CORRECTION");
+        continuation.set("executionAuthorization",
+                harness.json.value(
+                        Map.of("authorizationId", operation + "-approval", "scopeHash", "0".repeat(64), "approvedBy", "1", "effectiveFrom",
+                                original.path("businessDate").asText(), "effectiveThrough", original.path("businessDate").asText())));
+        continuation.set("absentCommandContinuation", harness.json
+                .value(Map.of("originalCommandJson", harness.json.write(original), "originalCommandHash", harness.json.hash(original))));
+        return continuation;
+    }
+
+    private void rejectContinuation(ObjectNode command, String code) throws Exception {
+        harness.issueHistory(command);
+        assertThat(harness.request("POST", ReceivablesDatabaseIntegrationTest.PREFIX + "/commands", command, 409).path("code").asText())
+                .isEqualTo(code);
     }
 
     private void impairmentForecastTransitions() throws Exception {
@@ -584,6 +641,8 @@ final class ReceivablesCommandDatabaseScenarios {
                     harness.json.value(List.of(Map.of("allocationId", operation + "-allocation", "kind", "DEVELOPER_PAYMENT", "dealId",
                             "deal", "accountId", id, "beneficiaryReferenceId", "developer", "amountMinor", amount))));
             cash.set("source", source);
+            cash.set("affectedAccountVersions",
+                    harness.json.value(List.of(Map.of("accountId", id, "expectedVersion", harness.version(id)))));
             execute(cash);
             ObjectNode payment = command("SETTLE_DEVELOPER_ADJUSTMENT", operation + "-settle", id);
             payment.put("method", "CASH");
@@ -708,9 +767,35 @@ final class ReceivablesCommandDatabaseScenarios {
         ObjectNode payment = command("SETTLE_DEVELOPER_ADJUSTMENT", "due-developer-settle", id);
         payment.put("method", "CASH");
         payment.put("cashMovementId", "due-developer-cash");
-        payment.set("lots", harness.json
-                .value(List.of(Map.of("lotId", "substitution-reset:reset", "amountMinor", Long.toString(transferredLotAmount)))));
-        execute(payment);
+        long firstAmount = transferredLotAmount / 2;
+        payment.set("lots",
+                harness.json.value(List.of(Map.of("lotId", "substitution-reset:reset", "amountMinor", Long.toString(firstAmount)))));
+        JsonNode first = execute(payment);
+        payment = command("SETTLE_DEVELOPER_ADJUSTMENT", "due-developer-settle-remainder", id);
+        payment.put("method", "CASH");
+        payment.put("cashMovementId", "due-developer-cash");
+        payment.set("lots", harness.json.value(
+                List.of(Map.of("lotId", "substitution-reset:reset", "amountMinor", Long.toString(transferredLotAmount - firstAmount)))));
+        JsonNode second = execute(payment);
+        String base = ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/developer-lot-allocations";
+        String cut = "?businessDate=" + harness.today + "&boundarySide=AFTER_EVENTS&eventWatermark="
+                + second.path("eventWatermark").asText();
+        JsonNode page = harness.request("GET", base + cut + "&limit=1", null, 200);
+        assertThat(page.path("items")).hasSize(1);
+        assertThat(page.path("nextCursor").isTextual()).isTrue();
+        JsonNode tail = harness.request("GET", base + cut + "&limit=1&cursor=" + page.path("nextCursor").asText(), null, 200);
+        assertThat(tail.path("items")).hasSize(1);
+        assertThat(tail.path("nextCursor").isNull()).isTrue();
+        assertThat(page.path("items").get(0).path("amountMinor").asLong() + tail.path("items").get(0).path("amountMinor").asLong())
+                .isEqualTo(transferredLotAmount);
+        String earlier = "?businessDate=" + harness.today + "&boundarySide=AFTER_EVENTS&eventWatermark="
+                + first.path("eventWatermark").asText();
+        assertThat(harness.request("GET", base + earlier, null, 200).path("items")).hasSize(1);
+        assertThat(harness.request("GET", base + earlier + "&cursor=" + page.path("nextCursor").asText(), null, 409).path("code").asText())
+                .isEqualTo("SOURCE_CHANGED");
+        JsonNode lots = harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/developer-lots" + cut,
+                null, 200);
+        assertThat(lots.path("items")).allSatisfy(lot -> assertThat(lot.path("accountId").asText()).isEqualTo(id));
         JsonNode controls = controls(id);
         assertThat(balance(controls, "installmentDues")).isEqualTo(60000);
         assertThat(balance(controls, "contractualReceivable")).isEqualTo(60000);
@@ -857,11 +942,17 @@ final class ReceivablesCommandDatabaseScenarios {
         reset.put("spread", "0");
         reset.put("developerAdjustmentDueDate", harness.today.plusDays(45).toString());
         execute(reset);
+        ObjectNode secondReset = command("RESET_RATE", "developer-impaired-second-reset", id);
+        secondReset.put("corridorObservationId", "developer-impaired-second-rate");
+        secondReset.put("corridorRate", "0.32");
+        secondReset.put("spread", "0");
+        secondReset.put("developerAdjustmentDueDate", harness.today.plusDays(60).toString());
+        execute(secondReset);
         harness.moveDate(harness.today.plusDays(46));
         JsonNode lot = null;
         for (JsonNode value : harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/developer-lots", null, 200)
                 .path("items")) {
-            if (value.path("accountId").asText().equals(id)) {
+            if (value.path("lotId").asText().equals("developer-impaired-reset:reset")) {
                 lot = value;
             }
         }
@@ -876,7 +967,28 @@ final class ReceivablesCommandDatabaseScenarios {
         impairment.put("expectedCarryingMinor", Long.toString(lot.path("outstandingMinor").asLong() + lot.path("settledMinor").asLong()));
         impairment.set("expectedAnnualNominalRate", lot.get("annualNominalRate"));
         impairment.set("forecast", forecast);
-        execute(impairment);
+        JsonNode operation = execute(impairment);
+        String proofPath = ReceivablesDatabaseIntegrationTest.PREFIX + "/operations/developer-lot-impairment/developer-effect-proof";
+        JsonNode proof = harness.request("GET", proofPath, null, 200);
+        assertThat(proof.path("commandPayloadHash")).isEqualTo(operation.path("payloadHash"));
+        assertThat(proof.path("eventWatermark")).isEqualTo(operation.path("eventWatermark"));
+        JsonNode prior = proof.path("frames").path("priorPosted").get(0);
+        JsonNode accrued = proof.path("frames").path("afterAccrual").get(0);
+        JsonNode impaired = proof.path("frames").path("afterRequestedEffect").get(0);
+        assertThat(prior.path("accountPosition").path("businessDate")).isNotEqualTo(accrued.path("accountPosition").path("businessDate"));
+        assertThat(accrued.path("accountPosition").path("notYetDueMinor").asLong()).isPositive();
+        assertThat(accrued.path("lots")).hasSize(2);
+        assertThat(impaired.path("accountPosition")).isEqualTo(accrued.path("accountPosition"));
+        assertThat(proof.path("ordinaryAccrual").path("grossDebitMinor").asLong()).isPositive();
+        assertThat(proof.path("requestedEffect").path("grossDebitMinor").asLong()).isPositive();
+        ObjectNode later = command("RESET_RATE", "developer-impairment-later-effect", id);
+        later.put("corridorObservationId", "developer-impairment-later-rate");
+        later.put("corridorRate", "0.33");
+        later.put("spread", "0");
+        later.put("developerAdjustmentDueDate", harness.today.plusDays(30).toString());
+        execute(later);
+        assertThat(harness.request("GET", proofPath, null, 200)).isEqualTo(proof);
+        assertThat(execute(impairment)).isEqualTo(operation);
         assertThat(harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/accounts/" + id + "/transactions", null, 200)
                 .path("items")).anySatisfy(tx -> {
                     assertThat(tx.path("operationId").asText()).isEqualTo("developer-lot-impairment");

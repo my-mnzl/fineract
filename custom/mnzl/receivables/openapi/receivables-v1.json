@@ -2219,6 +2219,356 @@
           }
         }
       }
+    },
+    "/accounts/{id}/developer-lots": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "boundarySide",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/boundarySide"
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/accountDeveloperLotsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/accounts/{id}/developer-lot-allocations": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/financialDate"
+            }
+          },
+          {
+            "name": "boundarySide",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/boundarySide"
+            }
+          },
+          {
+            "name": "eventWatermark",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/version"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/developerLotAllocationsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/operations/{operationId}/developer-effect-proof": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/developerEffectProof"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10124,6 +10474,10 @@
             "items": {
               "$ref": "#/components/schemas/blockerCode"
             }
+          },
+          "developerEffectProofVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [
@@ -13024,7 +13378,8 @@
             "$ref": "#/components/schemas/id"
           },
           "revoked": {
-            "const": true
+            "const": true,
+            "type": "boolean"
           }
         },
         "required": [
@@ -13064,6 +13419,386 @@
           "originalCommandHash"
         ],
         "additionalProperties": false
+      },
+      "developerLotAllocationRead": {
+        "type": "object",
+        "properties": {
+          "allocationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "lotId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "operationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "evidenceRef": {
+            "$ref": "#/components/schemas/id"
+          },
+          "eventSequence": {
+            "$ref": "#/components/schemas/version"
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "method": {
+            "enum": [
+              "CASH",
+              "SETOFF"
+            ]
+          },
+          "cashMovementId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "allocationId",
+          "lotId",
+          "accountId",
+          "operationId",
+          "eventId",
+          "evidenceRef",
+          "eventSequence",
+          "amountMinor",
+          "businessDate",
+          "method",
+          "cashMovementId",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "accountDeveloperLotsPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/developerLotRead"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "selectionHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "scope",
+          "businessDate",
+          "boundarySide",
+          "eventWatermark",
+          "items",
+          "nextCursor",
+          "accountId",
+          "selectionHash"
+        ],
+        "additionalProperties": false
+      },
+      "developerLotAllocationsPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/financierScope"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/developerLotAllocationRead"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "selectionHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "scope",
+          "businessDate",
+          "boundarySide",
+          "eventWatermark",
+          "items",
+          "nextCursor",
+          "accountId",
+          "selectionHash"
+        ],
+        "additionalProperties": false
+      },
+      "developerEffectAccountFrame": {
+        "type": "object",
+        "properties": {
+          "accountPosition": {
+            "$ref": "#/components/schemas/position"
+          },
+          "lots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "$ref": "#/components/schemas/developerLotRead"
+                },
+                "forecastHash": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/sha256"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "position",
+                "forecastHash"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "accountPosition",
+          "lots",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "developerEffectPhase": {
+        "type": "object",
+        "properties": {
+          "journalLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/journalLine"
+            }
+          },
+          "grossDebitMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossCreditMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "journalLines",
+          "grossDebitMinor",
+          "grossCreditMinor",
+          "contentHash"
+        ],
+        "additionalProperties": false
+      },
+      "developerEffectProof": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "commandType": {
+            "type": "string",
+            "enum": [
+              "SET_DEVELOPER_IMPAIRMENT",
+              "SETTLE_DEVELOPER_ADJUSTMENT",
+              "RECORD_CASH_MOVEMENT"
+            ]
+          },
+          "lotId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "commandPayloadHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "accountVersions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "priorVersion": {
+                  "$ref": "#/components/schemas/version"
+                },
+                "resultingVersion": {
+                  "$ref": "#/components/schemas/version"
+                }
+              },
+              "required": [
+                "accountId",
+                "priorVersion",
+                "resultingVersion"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "eventWatermark": {
+            "$ref": "#/components/schemas/version"
+          },
+          "eventContentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "frames": {
+            "type": "object",
+            "properties": {
+              "priorPosted": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/developerEffectAccountFrame"
+                }
+              },
+              "afterAccrual": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/developerEffectAccountFrame"
+                }
+              },
+              "afterRequestedEffect": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/developerEffectAccountFrame"
+                }
+              }
+            },
+            "required": [
+              "priorPosted",
+              "afterAccrual",
+              "afterRequestedEffect"
+            ],
+            "additionalProperties": false
+          },
+          "ordinaryAccrual": {
+            "$ref": "#/components/schemas/developerEffectPhase"
+          },
+          "requestedEffect": {
+            "$ref": "#/components/schemas/developerEffectPhase"
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "tenantId",
+          "scope",
+          "commandType",
+          "lotId",
+          "operationId",
+          "commandPayloadHash",
+          "accountVersions",
+          "businessDate",
+          "boundarySide",
+          "accountMappingRevisionId",
+          "eventId",
+          "eventWatermark",
+          "eventContentHash",
+          "frames",
+          "ordinaryAccrual",
+          "requestedEffect",
+          "contentHash"
+        ],
+        "additionalProperties": false,
+        "description": "Immutable native execution frames and exhaustive actual journal partitions for a developer operation. Prior posted positions retain their actual dates. Frame account versions precede final command bookkeeping; accountVersions carries exact resulting committed versions. Missing proof for legacy operations is unavailable, never reconstructed from current state."
       }
     }
   }

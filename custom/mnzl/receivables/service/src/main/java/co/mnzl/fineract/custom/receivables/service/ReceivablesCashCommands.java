@@ -376,6 +376,7 @@ public class ReceivablesCashCommands {
             var fields = new LinkedHashMap<String, Object>();
             fields.put("scope_key", e.scope);
             fields.put("lot_key", string(row, "record_key"));
+            fields.put("account_key", string(row, "account_key"));
             fields.put("operation_key", e.operationKey);
             fields.put("cash_source_key",
                     method.equals("CASH") ? ReceivablesStore.key(e.scope, "cash", text(e.command, "cashMovementId")) : null);

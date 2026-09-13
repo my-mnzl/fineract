@@ -44,6 +44,8 @@ public class ReceivablesReadApiResource {
     private final ReceivablesJson json;
     private final ReceivablesHelHistory helHistory;
     private final ReceivablesPeriodProof periodProof;
+    private final ReceivablesDeveloperReadService developerReads;
+    private final ReceivablesDeveloperEffectProof developerEffectProof;
 
     private JsonNode scope(HttpHeaders headers) {
         return reads.authorize(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
@@ -79,6 +81,12 @@ public class ReceivablesReadApiResource {
     @Path("/operations/{id}")
     public String operation(@Context HttpHeaders headers, @PathParam("id") String id) {
         return json.write(reads.operation(scope(headers), id, false));
+    }
+
+    @GET
+    @Path("/operations/{id}/developer-effect-proof")
+    public String developerEffectProof(@Context HttpHeaders headers, @PathParam("id") String id) {
+        return json.write(developerEffectProof.read(scope(headers), id));
     }
 
     @GET
@@ -156,6 +164,24 @@ public class ReceivablesReadApiResource {
             @QueryParam("limit") @DefaultValue("100") int limit) {
         JsonNode scope = scope(headers);
         return json.write(reads.snapshots(scope, boundary(scope, date, side, maximum), "LOT", cursor, limit));
+    }
+
+    @GET
+    @Path("/accounts/{id}/developer-lots")
+    public String accountLots(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
+            @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum, @QueryParam("cursor") String cursor,
+            @QueryParam("limit") @DefaultValue("100") int limit) {
+        JsonNode scope = scope(headers);
+        return json.write(developerReads.page(scope, id, boundary(scope, date, side, maximum), cursor, limit, false));
+    }
+
+    @GET
+    @Path("/accounts/{id}/developer-lot-allocations")
+    public String accountLotAllocations(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
+            @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum, @QueryParam("cursor") String cursor,
+            @QueryParam("limit") @DefaultValue("100") int limit) {
+        JsonNode scope = scope(headers);
+        return json.write(developerReads.page(scope, id, boundary(scope, date, side, maximum), cursor, limit, true));
     }
 
     @GET

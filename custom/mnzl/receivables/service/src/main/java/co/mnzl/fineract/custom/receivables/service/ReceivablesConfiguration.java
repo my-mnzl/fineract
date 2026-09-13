@@ -234,6 +234,7 @@ public class ReceivablesConfiguration {
         result.put("calculatorBuild", string(config, "calculator_build"));
         result.put("accountMappingRevisionId", string(config, "mapping_revision"));
         result.put("eventVersion", "flex.receivables.financial-event.v1");
+        result.put("developerEffectProofVersion", "1");
         result.put("productCode", "MNZL_PURCHASED_RECEIVABLE");
         result.put("scheduleCode", "MNZL_FIXED_RECEIVABLE");
         result.put("chargeStrategyCode", "MNZL_NO_BORROWER_CHARGES");

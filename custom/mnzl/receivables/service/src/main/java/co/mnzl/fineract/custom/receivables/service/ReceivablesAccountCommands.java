@@ -669,25 +669,28 @@ public class ReceivablesAccountCommands {
         reconcileNative(store.require("account", key), measurement.position(store.require("account", key), e.date), e.date);
     }
 
-    public void settleDeveloper(ReceivablesExecution e) {
+    public void prepareDeveloperSettlement(ReceivablesExecution e) {
         Set<String> accrued = new HashSet<>();
         for (JsonNode requested : e.command.get("lots")) {
             var lot = store.require("developer_lot", ReceivablesStore.key(e.scope, "lot", text(requested, "lotId")));
             String accountKey = string(lot, "account_key");
             if (accrued.add(accountKey)) {
-                var account = store.require("account", accountKey);
-                require(json.read(string(account, "scope_json")).equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
-                if (text(e.command, "executionMode").equals("RECONSTRUCTION")) {
-                    long current = store.jdbc().queryForObject(
-                            "select count(*) from m_mnzl_r_command where subject_key=? and request_json like ? and record_key<>?",
-                            Long.class, ReceivablesStore.key(e.scope, "RECEIVABLE", string(account, "external_id")),
-                            "%\"executionMode\":\"CURRENT\"%", e.operationKey);
-                    require(current == 0, "APPROVAL_SCOPE_CHANGED");
-                }
-                accrue(e, account);
+                accrueDeveloperAccount(e, accountKey);
             }
         }
-        cash.settleDeveloper(e);
+    }
+
+    public void accrueDeveloperAccount(ReceivablesExecution e, String accountKey) {
+        var account = store.require("account", accountKey);
+        require(json.read(string(account, "scope_json")).equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
+        if (text(e.command, "executionMode").equals("RECONSTRUCTION")) {
+            long current = store.jdbc().queryForObject(
+                    "select count(*) from m_mnzl_r_command where subject_key=? and request_json like ? and record_key<>?", Long.class,
+                    ReceivablesStore.key(e.scope, "RECEIVABLE", string(account, "external_id")), "%\"executionMode\":\"CURRENT\"%",
+                    e.operationKey);
+            require(current == 0, "APPROVAL_SCOPE_CHANGED");
+        }
+        accrue(e, account);
     }
 
     public void substitute(ReceivablesExecution e) {

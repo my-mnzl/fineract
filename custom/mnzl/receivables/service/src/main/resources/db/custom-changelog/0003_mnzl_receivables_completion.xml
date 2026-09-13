@@ -33,4 +33,34 @@
 </createTable>
 <addUniqueConstraint tableName="m_mnzl_r_consumed_intent" columnNames="scope_key,original_idempotency_hash" constraintName="uq_r_consumed_intent_idempotency"/>
 </changeSet>
+<changeSet id="mnzl-receivables-developer-statement-ownership-3" author="mnzl">
+<addColumn tableName="m_mnzl_r_state_snapshot"><column name="account_key" type="VARCHAR(64)"/></addColumn>
+<addColumn tableName="m_mnzl_r_lot_allocation"><column name="account_key" type="VARCHAR(64)"/></addColumn>
+<sql dbms="mysql,mariadb"><![CDATA[
+UPDATE m_mnzl_r_state_snapshot s JOIN m_mnzl_r_account a
+ON a.scope_key=s.scope_key AND BINARY a.external_id=BINARY JSON_UNQUOTE(JSON_EXTRACT(s.snapshot_json,'$.accountId'))
+SET s.account_key=a.record_key WHERE s.subject_kind='LOT';
+UPDATE m_mnzl_r_lot_allocation a JOIN m_mnzl_r_event e ON e.operation_key=a.operation_key
+JOIN m_mnzl_r_state_snapshot s ON s.event_key=e.record_key AND s.subject_key=a.lot_key AND s.subject_kind='LOT'
+SET a.account_key=s.account_key;
+]]></sql>
+<sql dbms="postgresql"><![CDATA[
+UPDATE m_mnzl_r_state_snapshot s SET account_key=a.record_key FROM m_mnzl_r_account a
+WHERE a.scope_key=s.scope_key AND a.external_id=CAST(s.snapshot_json AS json)->>'accountId' AND s.subject_kind='LOT';
+UPDATE m_mnzl_r_lot_allocation a SET account_key=s.account_key FROM m_mnzl_r_event e,m_mnzl_r_state_snapshot s
+WHERE e.operation_key=a.operation_key AND s.event_key=e.record_key AND s.subject_key=a.lot_key AND s.subject_kind='LOT';
+]]></sql>
+<createIndex tableName="m_mnzl_r_state_snapshot" indexName="ix_r_snapshot_account"><column name="account_key"/><column name="subject_key"/></createIndex>
+<createIndex tableName="m_mnzl_r_lot_allocation" indexName="ix_r_lot_allocation_account"><column name="scope_key"/><column name="account_key"/><column name="record_key"/></createIndex>
+</changeSet>
+<changeSet id="mnzl-receivables-developer-statement-ownership-check-3" author="mnzl">
+<preConditions onFail="HALT" onError="HALT">
+<sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_mnzl_r_state_snapshot WHERE subject_kind='LOT' AND account_key IS NULL</sqlCheck>
+<sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_mnzl_r_lot_allocation WHERE account_key IS NULL</sqlCheck>
+</preConditions>
+<addNotNullConstraint tableName="m_mnzl_r_lot_allocation" columnName="account_key" columnDataType="VARCHAR(64)"/>
+</changeSet>
+<changeSet id="mnzl-receivables-developer-impairment-proof-3" author="mnzl">
+<addColumn tableName="m_mnzl_r_command"><column name="effect_proof_json" type="CLOB"/></addColumn>
+</changeSet>
 </databaseChangeLog>

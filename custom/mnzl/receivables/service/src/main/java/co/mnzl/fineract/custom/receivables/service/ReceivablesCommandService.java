@@ -50,6 +50,7 @@ public class ReceivablesCommandService {
     private final ReceivablesCloseCommands close;
     private final ReceivablesHelCommands hel;
     private final ReceivablesAbsentCollection absentCollection;
+    private final ReceivablesDeveloperEffectProof developerEffectProof;
     private final PlatformSecurityContext security;
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
@@ -97,23 +98,20 @@ public class ReceivablesCommandService {
         switch (text(command, "commandType")) {
             case "FUND_HEL_TO_SETTLEMENT_CLEARING" -> hel.fund(execution);
             case "ALLOCATE_HEL_DEVELOPER_ADVANCE" -> hel.allocateAdvance(execution);
-            case "RECORD_CASH_MOVEMENT" -> cash.recordCash(execution);
+            case "RECORD_CASH_MOVEMENT" -> developerEffectProof.execute(execution);
             case "RECORD_FUNDING_EVENT" -> cash.recordFunding(execution);
             case "BOOK_PURCHASE" -> accounts.book(execution);
             case "COLLECT" -> accounts.collect(execution, false);
             case "REVERSE_COLLECTION" -> accounts.reverse(execution);
             case "RESET_RATE" -> accounts.reset(execution);
-            case "SETTLE_DEVELOPER_ADJUSTMENT" -> accounts.settleDeveloper(execution);
+            case "SETTLE_DEVELOPER_ADJUSTMENT" -> developerEffectProof.execute(execution);
             case "SETTLE_RECEIVABLE" -> accounts.settle(execution, false);
             case "RECOURSE_RECOVERY" -> accounts.recourse(execution);
             case "SUBSTITUTE_RECEIVABLE" -> accounts.substitute(execution);
             case "WORKOUT" -> accounts.workout(execution);
             case "SET_IMPAIRMENT" -> accounts.impair(execution);
             case "RECOVER_WRITTEN_OFF" -> accounts.recoverWrittenOff(execution);
-            case "SET_DEVELOPER_IMPAIRMENT" -> {
-                accounts.account(execution);
-                cash.impairDeveloper(execution);
-            }
+            case "SET_DEVELOPER_IMPAIRMENT" -> developerEffectProof.execute(execution);
             case "CLOSE_PERIOD" -> close.close(execution);
             case "CORRECT_EVENT" -> close.correct(execution);
             default -> throw new ReceivablesException("INVALID_DATA");
@@ -236,6 +234,7 @@ public class ReceivablesCommandService {
         snapshot(e);
         long watermark = number(store.require("event", e.eventKey), "sequence_id");
         close.afterEvent(e, watermark);
+        developerEffectProof.persist(e, payloadHash, event, journalLines, watermark);
         var result = json.object();
         for (String key : List.of("operationId", "commandType", "subjectKind", "subjectId", "scope", "businessDate", "expectedVersion",
                 "affectedAccountVersions", "executionScopeHash", "actorId", "approverIds")) {
@@ -259,22 +258,7 @@ public class ReceivablesCommandService {
         for (String key : e.lotKeys) {
             var lot = store.require("developer_lot", key);
             var account = store.require("account", string(lot, "account_key"));
-            var value = json.object();
-            value.put("lotId", string(lot, "lot_id"));
-            value.put("accountId", string(account, "external_id"));
-            value.put("dealId", string(account, "deal_id"));
-            value.put("sourceEventId", ReceivablesStore.key(e.scope, "event", string(lot, "operation_key")));
-            value.put("effectiveDate", string(lot, "effective_date"));
-            value.put("dueDate", string(lot, "due_date"));
-            value.put("direction", string(lot, "direction"));
-            value.put("originalAmountMinor", string(lot, "initial_minor"));
-            value.put("settledMinor", string(lot, "settled_minor"));
-            value.put("accruedUnwindMinor", ReceivablesMeasurement.amount(lot, "carrying_minor")
-                    .subtract(ReceivablesMeasurement.amount(lot, "initial_minor")).toString());
-            value.put("outstandingMinor", ReceivablesMeasurement.amount(lot, "carrying_minor")
-                    .subtract(ReceivablesMeasurement.amount(lot, "settled_minor")).toString());
-            value.put("allowanceMinor", string(lot, "allowance_minor"));
-            value.put("annualNominalRate", string(lot, "rate"));
+            var value = ReceivablesDeveloperState.lot(json, lot, account);
             saveSnapshot(e, "LOT", key, value);
         }
         for (String key : e.facilityKeys) {
@@ -294,9 +278,10 @@ public class ReceivablesCommandService {
     }
 
     private void saveSnapshot(ReceivablesExecution e, String kind, String subject, JsonNode value) {
-        store.insert("state_snapshot", ReceivablesStore.key(e.scope, "snapshot", e.eventKey + ":" + subject),
-                Map.of("scope_key", e.scope, "subject_kind", kind, "subject_key", subject, "event_key", e.eventKey, "business_date", e.date,
-                        "snapshot_json", json.write(value)));
+        var fields = new LinkedHashMap<String, Object>(Map.of("scope_key", e.scope, "subject_kind", kind, "subject_key", subject,
+                "event_key", e.eventKey, "business_date", e.date, "snapshot_json", json.write(value)));
+        fields.put("account_key", kind.equals("LOT") ? e.accountKey(text(value, "accountId")) : null);
+        store.insert("state_snapshot", ReceivablesStore.key(e.scope, "snapshot", e.eventKey + ":" + subject), fields);
     }
 
 }
