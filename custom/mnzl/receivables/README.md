@@ -44,18 +44,20 @@ custom period guards remain in force; exact persisted replay precedes the new lo
 
 Closure creation and deletion increment `m_office.accounting_closure_version` while
 holding the office lock. The physical epoch is intentionally unmapped in the office
-entity so ordinary office edits cannot overwrite it. Under PostgreSQL repeatable
-read, a command whose snapshot predates a committed closure cannot lock that changed
-office row: it aborts with a serialization conflict and no financial effects. A fresh
-retry observes the closure and rejects the closed posting date. MariaDB and MySQL
-use a current locking closure read. A command that acquires the office lock first
-finishes atomically before closure creation proceeds. Comment-only closure updates
-and ordinary office lookups retain their existing behavior.
+entity so ordinary office edits cannot overwrite it. Financial commands use
+`READ_COMMITTED` under the scope and office locks, so a command waiting for a
+committed closure reads the new closure and rejects the closed posting date with
+`PERIOD_CLOSED`. A command that acquires the office lock first finishes atomically
+before closure creation proceeds. This also lets concurrent identical commands read
+the winner's durable result after waiting for the scope lock. Standalone reads and
+period proofs retain `REPEATABLE_READ`; internal close reads join the existing locked
+command transaction. Comment-only closure updates and ordinary office lookups retain
+their existing behavior.
 
 The real database matrix checks closed/equal/open date boundaries, exact replay after
-closure, native-first serialization, and a snapshot established before a competing
-closure commits. It checks PostgreSQL SQLSTATE `40001`, unchanged financial counts
-after rejection, and fresh-retry `PERIOD_CLOSED` on all three databases.
+closure, native-first serialization, and a command that reads before a competing
+closure commits. It checks `PERIOD_CLOSED`, unchanged financial counts after rejection,
+and identical fresh-retry rejection on all three databases.
 
 ## Observed posted-period proof
 
