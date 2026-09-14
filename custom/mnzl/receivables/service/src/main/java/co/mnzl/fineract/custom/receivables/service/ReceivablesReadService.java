@@ -128,6 +128,7 @@ public class ReceivablesReadService {
         var account = accountRow(scope, id);
         ObjectNode result = json.object();
         result.put("externalId", id);
+        result.put("acquisitionId", acquisitionId(account));
         if (account.get("closure_reason") == null) {
             result.putNull("closureReason");
         } else {
@@ -368,6 +369,7 @@ public class ReceivablesReadService {
             item.put("nativeLoanId", Long.toString(number(row, "native_loan_id")));
             item.set("scope", json.read(string(row, "scope_json")));
             item.put("dealId", string(row, "deal_id"));
+            item.put("acquisitionId", acquisitionId(row));
             item.set("status", p.get("nativeLoanStatus"));
             item.put("createdAt", instant(row.get("created_at")));
             item.set("accountVersion", p.get("accountVersion"));
@@ -535,15 +537,30 @@ public class ReceivablesReadService {
     }
 
     public JsonNode controls(JsonNode scope, Boundary boundary, String dealId, String accountId) {
+        return controls(scope, boundary, dealId, accountId, null);
+    }
+
+    public JsonNode controls(JsonNode scope, Boundary boundary, String dealId, String accountId, String acquisitionId) {
+        String acquisitionKey = acquisitionId == null ? null : ReceivablesStore.key(key(scope), "acquisition", acquisitionId);
+        if (acquisitionKey != null) {
+            var acquisition = store.find("acquisition", acquisitionKey);
+            if (acquisition == null) {
+                throw new NotFoundException();
+            }
+            require(dealId == null || dealId.equals(string(acquisition, "deal_id")), "INVALID_DATA");
+            require(accountId == null || acquisitionKey.equals(accountRow(scope, accountId).get("acquisition_key")), "INVALID_DATA");
+        }
         Map<String, ObjectNode> positions = issuedPositions(scope, boundary);
         List<Map<String, Object>> accounts = store.scoped("account", key(scope)).stream()
                 .filter(row -> (dealId == null || dealId.equals(string(row, "deal_id")))
                         && (accountId == null || accountId.equals(string(row, "external_id")))
+                        && (acquisitionKey == null || acquisitionKey.equals(row.get("acquisition_key")))
                         && positions.containsKey(string(row, "external_id")))
                 .toList();
         if (accountId != null && accounts.isEmpty()) {
             throw new NotFoundException();
         }
+        Set<String> memberIds = accounts.stream().map(row -> string(row, "external_id")).collect(java.util.stream.Collectors.toSet());
         BigInteger nativeFace = BigInteger.ZERO;
         BigInteger subledgerFace = BigInteger.ZERO;
         List<String> activeIds = new ArrayList<>();
@@ -565,6 +582,10 @@ public class ReceivablesReadService {
         if (accountId != null) {
             filter += " and l.account_key=?";
             args.add(ReceivablesStore.key(key(scope), "account", accountId));
+        }
+        if (acquisitionKey != null) {
+            filter += " and l.account_key in (select record_key from m_mnzl_r_account where acquisition_key=?)";
+            args.add(acquisitionKey);
         }
         var rows = store.jdbc().queryForList(
                 "select l.*,j.amount actual_amount,j.type_enum actual_side,j.account_id actual_gl,j.currency_code,j.transaction_id actual_source "
@@ -599,7 +620,7 @@ public class ReceivablesReadService {
                 journalIds.computeIfAbsent(semantic, ignored -> new ArrayList<>()).add(Long.toString(number(row, "native_journal_id")));
             }
         }
-        if (accountId == null) {
+        if (accountId == null && acquisitionId == null) {
             String semantic = "helSettlementClearing";
             var fundingRows = store.jdbc().queryForList(
                     "select h.* from m_mnzl_r_hel_funding h join m_mnzl_r_event e on e.operation_key=h.operation_key "
@@ -643,7 +664,8 @@ public class ReceivablesReadService {
         }
         for (var snapshot : snapshotRows(scope, boundary, "LOT")) {
             JsonNode lot = json.read(string(snapshot, "snapshot_json"));
-            if ((accountId == null || accountId.equals(text(lot, "accountId"))) && (dealId == null || dealId.equals(text(lot, "dealId")))) {
+            if ((accountId == null || accountId.equals(text(lot, "accountId"))) && (dealId == null || dealId.equals(text(lot, "dealId")))
+                    && (acquisitionId == null || memberIds.contains(text(lot, "accountId")))) {
                 boolean payable = text(lot, "direction").equals("PAYABLE");
                 BigInteger outstanding = new BigInteger(text(lot, "outstandingMinor"));
                 positionControls.merge(payable ? "developerPayable" : "developerReceivable", payable ? outstanding.negate() : outstanding,
@@ -652,7 +674,7 @@ public class ReceivablesReadService {
                         BigInteger::add);
             }
         }
-        if (accountId == null && dealId == null) {
+        if (accountId == null && dealId == null && acquisitionId == null) {
             positionControls.put("fundingPrincipal", BigInteger.ZERO);
             positionControls.put("fundingInterestPayable", BigInteger.ZERO);
             for (var snapshot : snapshotRows(scope, boundary, "FUNDING")) {
@@ -688,6 +710,10 @@ public class ReceivablesReadService {
         if (accountId != null) {
             result.put("accountId", accountId);
         }
+        if (acquisitionId != null) {
+            result.put("acquisitionId", acquisitionId);
+            result.put("attribution", "ACQUISITION_ACCOUNTS");
+        }
         result.put("businessDate", boundary.date().toString());
         result.put("boundarySide", boundary.side());
         result.put("eventWatermark", Long.toString(boundary.watermark()));
@@ -709,11 +735,12 @@ public class ReceivablesReadService {
         List<String> facilities = new ArrayList<>();
         for (var snapshot : snapshotRows(scope, boundary, "LOT")) {
             JsonNode lot = json.read(string(snapshot, "snapshot_json"));
-            if ((accountId == null || accountId.equals(text(lot, "accountId"))) && (dealId == null || dealId.equals(text(lot, "dealId")))) {
+            if ((accountId == null || accountId.equals(text(lot, "accountId"))) && (dealId == null || dealId.equals(text(lot, "dealId")))
+                    && (acquisitionId == null || memberIds.contains(text(lot, "accountId")))) {
                 lots.add(text(lot, "lotId"));
             }
         }
-        if (accountId == null && dealId == null) {
+        if (accountId == null && dealId == null && acquisitionId == null) {
             for (var snapshot : snapshotRows(scope, boundary, "FUNDING")) {
                 facilities.add(text(json.read(string(snapshot, "snapshot_json")), "facilityId"));
             }
@@ -724,6 +751,11 @@ public class ReceivablesReadService {
         result.put("subledgerContractualOutstandingMinor", subledgerFace.toString());
         result.put("snapshotHash", json.hash(result));
         return result;
+    }
+
+    private String acquisitionId(Map<String, Object> account) {
+        return account.get("acquisition_key") == null ? null
+                : string(store.require("acquisition", string(account, "acquisition_key")), "external_id");
     }
 
     private String key(JsonNode scope) {

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+    <changeSet id="mnzl-acquisition-groups-7" author="mnzl">
+        <createTable tableName="m_mnzl_r_acquisition">
+            <column name="record_key" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_r_acquisition"/></column>
+            <column name="scope_key" type="VARCHAR(64)"><constraints nullable="false"/></column>
+            <column name="external_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="deal_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="developer_ref" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="source_ref" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="effective_date" type="DATE"><constraints nullable="false"/></column>
+            <column name="created_at" type="TIMESTAMP(6)"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="m_mnzl_r_acquisition" columnNames="scope_key,external_id" constraintName="uk_r_acquisition_scope_id"/>
+        <createIndex tableName="m_mnzl_r_acquisition" indexName="ix_r_acquisition_scope_deal"><column name="scope_key"/><column name="deal_id"/></createIndex>
+        <addColumn tableName="m_mnzl_r_account">
+            <column name="acquisition_key" type="VARCHAR(64)"/>
+            <column name="replaces_account_key" type="VARCHAR(64)"/>
+            <column name="original_account_id" type="VARCHAR(255)"/>
+            <column name="purchase_face_minor" type="VARCHAR(100)"/>
+            <column name="purchase_gross_minor" type="VARCHAR(100)"/>
+            <column name="purchase_fee_minor" type="VARCHAR(100)"/>
+            <column name="purchase_cash_minor" type="VARCHAR(100)"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="m_mnzl_r_account" baseColumnNames="acquisition_key" referencedTableName="m_mnzl_r_acquisition" referencedColumnNames="record_key" constraintName="fk_r_account_acquisition"/>
+        <addForeignKeyConstraint baseTableName="m_mnzl_r_account" baseColumnNames="replaces_account_key" referencedTableName="m_mnzl_r_account" referencedColumnNames="record_key" constraintName="fk_r_account_predecessor"/>
+        <createIndex tableName="m_mnzl_r_account" indexName="ix_r_account_acquisition"><column name="acquisition_key"/><column name="record_key"/></createIndex>
+    </changeSet>
+</databaseChangeLog>

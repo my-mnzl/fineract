@@ -542,7 +542,39 @@ final class ReceivablesCommandDatabaseScenarios {
         c.set("developerAdjustmentAllocationIds", harness.json.value(List.of("substitution-reset:reset")));
         c.set("replacementRiskForecast", forecast(id, "substitution-forecast", flows).put("stage", "STAGE_2"));
         c.set("assignmentEvidenceIds", harness.json.value(List.of("signed-assignment")));
+        String acquisitionId = account(id).path("acquisitionId").asText();
+        JsonNode originalAcquisition = harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/acquisitions/" + acquisitionId,
+                null, 200);
+        JsonNode controlsBefore = harness.request("GET",
+                ReceivablesDatabaseIntegrationTest.PREFIX + "/controls?acquisitionId=" + acquisitionId, null, 200);
         execute(c);
+        assertThat(harness.request("GET",
+                ReceivablesDatabaseIntegrationTest.PREFIX + "/controls?acquisitionId=" + acquisitionId + "&businessDate="
+                        + controlsBefore.path("businessDate").asText() + "&eventWatermark="
+                        + controlsBefore.path("eventWatermark").asText(),
+                null, 200)).isEqualTo(controlsBefore);
+        assertThat(account(replacement).path("acquisitionId").asText()).isEqualTo(acquisitionId);
+        JsonNode acquisition = harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/acquisitions/" + acquisitionId, null,
+                200);
+        for (String field : List.of("originalFaceMinor", "originalGrossPurchasePriceMinor", "originalIntegralFeeMinor",
+                "originalPurchaseCashMinor", "originalAccountCount")) {
+            assertThat(acquisition.path(field)).isEqualTo(originalAcquisition.path(field));
+        }
+        assertThat(acquisition.path("replacementAccountCount").asInt())
+                .isEqualTo(originalAcquisition.path("replacementAccountCount").asInt() + 1);
+        JsonNode members = harness.request("GET",
+                ReceivablesDatabaseIntegrationTest.PREFIX + "/acquisitions/" + acquisitionId + "/accounts", null, 200);
+        for (JsonNode member : members.path("items")) {
+            if (replacement.equals(member.path("accountId").asText())) {
+                assertThat(member.path("replacesAccountId").asText()).isEqualTo(id);
+                assertThat(member.path("originalAccountId").asText()).isEqualTo(id);
+            }
+        }
+        JsonNode groupedControls = harness.request("GET",
+                ReceivablesDatabaseIntegrationTest.PREFIX + "/controls?acquisitionId=" + acquisitionId, null, 200);
+        for (JsonNode balance : groupedControls.path("balances")) {
+            assertThat(balance.path("differenceMinor").asText()).isEqualTo("0");
+        }
         JsonNode after = account(replacement).path("position");
         assertThat(after.path("contractualOutstandingMinor").asText()).isEqualTo("120000");
         assertThat(after.path("stage").asText()).isEqualTo("STAGE_2");

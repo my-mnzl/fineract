@@ -124,6 +124,7 @@ class ReceivablesDatabaseIntegrationTest {
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify();
                 new ReceivablesPeriodProofScenarios(this).verify();
                 new ReceivablesHistoricalPurchaseScenarios(this).verify();
+                new ReceivablesAcquisitionScenarios(this).verify();
                 new ReceivablesConfigurationScenarios(this).verify();
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
@@ -315,6 +316,14 @@ class ReceivablesDatabaseIntegrationTest {
     }
 
     JsonNode purchase(String id, String first, String second) throws Exception {
+        return purchase(id, first, second, "acquisition-" + today);
+    }
+
+    JsonNode purchase(String id, String first, String second, String acquisitionId) throws Exception {
+        return request("POST", PREFIX + "/commands", preparePurchase(id, first, second, acquisitionId), 200);
+    }
+
+    ObjectNode preparePurchase(String id, String first, String second, String acquisitionId) throws Exception {
         ObjectNode basis = versions();
         basis.put("settlementDate", today.toString());
         basis.put("corridorObservationId", "rate");
@@ -369,6 +378,8 @@ class ReceivablesDatabaseIntegrationTest {
         ObjectNode book = command("BOOK_PURCHASE", id + "-book", id, "RECEIVABLE");
         book.put("accountId", id);
         book.put("dealId", "deal");
+        book.set("acquisition", json.value(Map.of("id", acquisitionId, "developerReferenceId", "developer", "sourceReferenceId",
+                "offer-" + today, "effectiveDate", today.toString())));
         book.put("customerReferenceId", id + "-customer");
         book.set("acquisitionClearingAllocationIds", json.value(List.of(id + "-advance")));
         book.set("basis", basis);
@@ -404,7 +415,7 @@ class ReceivablesDatabaseIntegrationTest {
         forecast.set("scenarios", json.value(List.of(scenario)));
         book.set("riskForecast", forecast);
         bookingCommands.put(id, book);
-        return request("POST", PREFIX + "/commands", book, 200);
+        return book;
     }
 
     long queryLong(String sql) throws Exception {
@@ -489,7 +500,7 @@ class ReceivablesDatabaseIntegrationTest {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (String table : List.of("m_client", "m_loan", "m_loan_transaction", "acc_gl_journal_entry", "m_mnzl_r_account",
                 "m_mnzl_r_command", "m_mnzl_r_event", "m_mnzl_r_segment", "m_mnzl_r_journal_line", "m_mnzl_r_cash_source",
-                "m_mnzl_r_cash_allocation")) {
+                "m_mnzl_r_cash_allocation", "m_mnzl_r_acquisition")) {
             counts.put(table, queryLong("select count(*) from " + table));
         }
         return counts;
@@ -579,6 +590,7 @@ class ReceivablesDatabaseIntegrationTest {
         cash.set("source", source);
         request("POST", PREFIX + "/commands", cash, 200);
         failed.set("acquisitionClearingAllocationIds", json.value(List.of("rollback-advance")));
+        ((ObjectNode) failed.get("acquisition")).put("id", "rollback-acquisition");
         Map<String, Long> before = counts();
         if (database.equals("postgresql")) {
             executeSql(
@@ -782,6 +794,7 @@ class ReceivablesDatabaseIntegrationTest {
         try {
             assertThat(request("GET", "/currencies", null, 200).path("selectedCurrencyOptions").isArray()).isTrue();
             request("GET", "/loans/" + firstLoan, null, 404);
+            request("GET", PREFIX + "/acquisitions/closing-one/accounts", null, 409);
             assertThat(request("GET", PREFIX + "/accounts/account-1", null, 409).path("code").asText()).isEqualTo("RECOVERY_REQUIRED");
         } finally {
             activeTenant = "default";

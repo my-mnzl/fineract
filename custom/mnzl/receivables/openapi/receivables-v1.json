@@ -1790,6 +1790,13 @@
             "schema": {
               "$ref": "#/components/schemas/version"
             }
+          },
+          {
+            "name": "acquisitionId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
           }
         ],
         "responses": {
@@ -2322,6 +2329,303 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/nativeConfigurationRuntime"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/acquisitions": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/sha256"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "dealId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "developerReferenceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/acquisitionsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/acquisitions/{acquisitionId}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "acquisitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/acquisitionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "403": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "404": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "409": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "422": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          },
+          "503": {
+            "description": "Invalid input, denied scope, missing object, version/state conflict, financial rejection or retryable infrastructure failure, respectively."
+          }
+        }
+      }
+    },
+    "/acquisitions/{acquisitionId}/accounts": {
+      "get": {
+        "parameters": [
+          {
+            "name": "Fineract-Platform-TenantId",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "X-MNZL-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Financier",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Environment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "X-MNZL-Account-Mapping",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          {
+            "name": "acquisitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/sha256"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/acquisitionMembersPage"
                 }
               }
             }
@@ -4381,6 +4685,9 @@
               },
               "riskForecast": {
                 "$ref": "#/components/schemas/riskForecast"
+              },
+              "acquisition": {
+                "$ref": "#/components/schemas/acquisitionReference"
               }
             },
             "required": [
@@ -4406,7 +4713,8 @@
               "customerReferenceId",
               "acquisitionClearingAllocationIds",
               "basis",
-              "riskForecast"
+              "riskForecast",
+              "acquisition"
             ],
             "additionalProperties": false
           },
@@ -7097,6 +7405,9 @@
                       },
                       "riskForecast": {
                         "$ref": "#/components/schemas/riskForecast"
+                      },
+                      "acquisition": {
+                        "$ref": "#/components/schemas/acquisitionReference"
                       }
                     },
                     "required": [
@@ -7122,7 +7433,8 @@
                       "customerReferenceId",
                       "acquisitionClearingAllocationIds",
                       "basis",
-                      "riskForecast"
+                      "riskForecast",
+                      "acquisition"
                     ],
                     "additionalProperties": false
                   },
@@ -9464,6 +9776,9 @@
                   "reason"
                 ],
                 "additionalProperties": false
+              },
+              "acquisition": {
+                "$ref": "#/components/schemas/acquisitionReference"
               }
             },
             "required": [
@@ -9488,7 +9803,8 @@
               "dealId",
               "customerReferenceId",
               "basis",
-              "acknowledgment"
+              "acknowledgment",
+              "acquisition"
             ],
             "additionalProperties": false
           },
@@ -10346,6 +10662,16 @@
           },
           "schedule": {
             "$ref": "#/components/schemas/schedule"
+          },
+          "acquisitionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -10401,6 +10727,16 @@
           },
           "lastMovementDate": {
             "$ref": "#/components/schemas/financialDate"
+          },
+          "acquisitionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -10588,6 +10924,10 @@
           "historicalPurchaseVersion": {
             "type": "string",
             "const": "1"
+          },
+          "acquisitionGroupingVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [
@@ -10733,6 +11073,13 @@
             "items": {
               "$ref": "#/components/schemas/id"
             }
+          },
+          "acquisitionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "attribution": {
+            "type": "string",
+            "const": "ACQUISITION_ACCOUNTS"
           }
         },
         "required": [
@@ -13662,6 +14009,256 @@
           "integralFeeMinor",
           "netPurchaseCashMinor",
           "accountId"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionReference": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/id"
+          },
+          "developerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "sourceReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "effectiveDate": {
+            "$ref": "#/components/schemas/financialDate"
+          }
+        },
+        "required": [
+          "id",
+          "developerReferenceId",
+          "sourceReferenceId",
+          "effectiveDate"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionPageRequest": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "limit"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionsQuery": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "developerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "limit"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionSummary": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/id"
+          },
+          "developerReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "sourceReferenceId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "effectiveDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "originalAccountCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "replacementAccountCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "activeAccountCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "originalFaceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "originalGrossPurchasePriceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "originalIntegralFeeMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "originalPurchaseCashMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "currentContractualOutstandingMinor": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "id",
+          "developerReferenceId",
+          "sourceReferenceId",
+          "effectiveDate",
+          "dealId",
+          "originalAccountCount",
+          "replacementAccountCount",
+          "activeAccountCount",
+          "originalFaceMinor",
+          "originalGrossPurchasePriceMinor",
+          "originalIntegralFeeMinor",
+          "originalPurchaseCashMinor",
+          "currentContractualOutstandingMinor"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionsPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/acquisitionSummary"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionMember": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeLoanId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeClientId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "CLOSED",
+              "WRITTEN_OFF",
+              "ASSIGNED_OUT"
+            ]
+          },
+          "acquisitionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "replacesAccountId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "originalAccountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "activationDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "contractualOutstandingMinor": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "accountId",
+          "nativeLoanId",
+          "nativeClientId",
+          "status",
+          "acquisitionId",
+          "replacesAccountId",
+          "originalAccountId",
+          "activationDate",
+          "contractualOutstandingMinor"
+        ],
+        "additionalProperties": false
+      },
+      "acquisitionMembersPage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "items": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/acquisitionMember"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
         ],
         "additionalProperties": false
       }

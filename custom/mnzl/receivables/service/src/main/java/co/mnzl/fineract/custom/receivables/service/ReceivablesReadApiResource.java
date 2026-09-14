@@ -44,6 +44,7 @@ public class ReceivablesReadApiResource {
     private final ReceivablesJson json;
     private final ReceivablesHelHistory helHistory;
     private final ReceivablesPeriodProof periodProof;
+    private final ReceivablesAcquisitions acquisitions;
 
     private JsonNode scope(HttpHeaders headers) {
         return reads.authorize(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
@@ -91,6 +92,27 @@ public class ReceivablesReadApiResource {
     @Path("/hel-funding/allocations/{id}")
     public String helAllocation(@Context HttpHeaders headers, @PathParam("id") String id) {
         return json.write(reads.operation(scope(headers), id, false));
+    }
+
+    @GET
+    @Path("/acquisitions")
+    public String acquisitions(@Context HttpHeaders headers, @QueryParam("dealId") String deal,
+            @QueryParam("developerReferenceId") String developer, @QueryParam("cursor") String cursor,
+            @QueryParam("limit") @DefaultValue("100") int limit) {
+        return json.write(acquisitions.acquisitions(reads.scopeKey(scope(headers)), deal, developer, cursor, limit));
+    }
+
+    @GET
+    @Path("/acquisitions/{id}")
+    public String acquisition(@Context HttpHeaders headers, @PathParam("id") String id) {
+        return json.write(acquisitions.acquisition(reads.scopeKey(scope(headers)), id));
+    }
+
+    @GET
+    @Path("/acquisitions/{id}/accounts")
+    public String acquisitionAccounts(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("cursor") String cursor,
+            @QueryParam("limit") @DefaultValue("100") int limit) {
+        return json.write(acquisitions.accounts(reads.scopeKey(scope(headers)), id, cursor, limit));
     }
 
     @GET
@@ -170,9 +192,10 @@ public class ReceivablesReadApiResource {
     @GET
     @Path("/controls")
     public String controls(@Context HttpHeaders headers, @QueryParam("businessDate") String date, @QueryParam("boundarySide") String side,
-            @QueryParam("eventWatermark") String maximum, @QueryParam("dealId") String deal, @QueryParam("accountId") String account) {
+            @QueryParam("eventWatermark") String maximum, @QueryParam("dealId") String deal, @QueryParam("accountId") String account,
+            @QueryParam("acquisitionId") String acquisition) {
         JsonNode scope = scope(headers);
-        return json.write(reads.controls(scope, boundary(scope, date, side, maximum), deal, account));
+        return json.write(reads.controls(scope, boundary(scope, date, side, maximum), deal, account, acquisition));
     }
 
     @GET

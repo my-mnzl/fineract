@@ -68,6 +68,7 @@ public class ReceivablesAccountCommands {
     private final NativeReceivableBridge nativeBridge;
     private final ReceivablesCashCommands cash;
     private final ReceivablesConfiguration configuration;
+    private final ReceivablesAcquisitions acquisitions;
 
     public void book(ReceivablesExecution e) {
         boolean historical = "BOOK_HISTORICAL_PURCHASE".equals(text(e.command, "commandType"));
@@ -83,6 +84,7 @@ public class ReceivablesAccountCommands {
         require((historical || text(e.command.get("riskForecast"), "stage").equals("STAGE_1"))
                 && basis.get("acceptedAccountPrices").size() > 0, "INVALID_DATA");
         Purchase purchase = measurement.purchase(basis, id);
+        String acquisitionKey = acquisitions.register(e);
         if (!historical) {
             cash.consumeAllocations(e, e.command.get("acquisitionClearingAllocationIds"), purchase.netPurchaseCashMinor(),
                     "ACQUISITION_ADVANCE", text(e.command, "dealId"));
@@ -105,6 +107,12 @@ public class ReceivablesAccountCommands {
         fields.put("scope_key", e.scope);
         fields.put("external_id", id);
         fields.put("deal_id", text(e.command, "dealId"));
+        fields.put("acquisition_key", acquisitionKey);
+        fields.put("original_account_id", id);
+        fields.put("purchase_face_minor", purchase.contractualFaceMinor().toString());
+        fields.put("purchase_gross_minor", position.grossPurchaseBasisMinor().toString());
+        fields.put("purchase_fee_minor", position.deferredIntegralFeeMinor().toString());
+        fields.put("purchase_cash_minor", purchase.netPurchaseCashMinor().toString());
         fields.put("customer_ref", text(e.command, "customerReferenceId"));
         fields.put("native_loan_id", nativeBook.loanId());
         fields.put("native_client_id", client);
@@ -763,6 +771,7 @@ public class ReceivablesAccountCommands {
         var row = new LinkedHashMap<String, Object>(old);
         row.remove("record_key");
         row.put("external_id", newId);
+        row.put("replaces_account_key", oldKey);
         row.put("customer_ref", text(e.command, "replacementCustomerReferenceId"));
         row.put("native_loan_id", booking.loanId());
         row.put("native_client_id", client);
@@ -942,6 +951,7 @@ public class ReceivablesAccountCommands {
         var row = new LinkedHashMap<String, Object>(account);
         row.remove("record_key");
         row.put("external_id", newId);
+        row.put("replaces_account_key", string(account, "record_key"));
         row.put("native_loan_id", booking.loanId());
         row.put("activation_date", e.date);
         row.put("last_effective_date", e.date);
