@@ -35,7 +35,7 @@ class ReceivablesHistoricalPurchaseTest {
     void pendingAssessmentBlocksCloseForExposureButNotFullyCollectedAccounts() throws Exception {
         var store = mock(ReceivablesStore.class);
         var json = new ReceivablesJson();
-        var accounts = spy(new ReceivablesAccountCommands(store, json, null, null, null, null));
+        var accounts = spy(new ReceivablesAccountCommands(store, json, null, null, null, null, null));
         var e = new ReceivablesExecution(json.object().put("operationId", "close").put("businessDate", "2026-09-14"), "scope", Map.of());
         Map<String, Object> pending = Map.of("record_key", "account", "face_minor", "100", "risk_assessment_status", "PENDING");
         when(store.require("account", "account")).thenReturn(pending);
@@ -60,6 +60,7 @@ class ReceivablesHistoricalPurchaseTest {
                         "subjectId":"account","subjectKind":"RECEIVABLE","affectedAccountVersions":[],
                         "executionScopeHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                         "actorId":"employee","approverIds":[],"approvalEvidenceIds":[],"accountId":"account","dealId":"deal","customerReferenceId":"customer",
+                        "acquisition":{"id":"acquisition","developerReferenceId":"developer","sourceReferenceId":"record","effectiveDate":"2026-09-06"},
                         "basis":{"calculationVersion":"EG_RECEIVABLES_ACT360_DAILY_V1","productPolicyCode":"EG_RECEIVABLES_V1","schemaVersion":"1","policyRevisionId":"policy","calculatorBuild":"build",
                         "settlementDate":"2026-09-06","corridorObservationId":"historical-rate","corridorRate":"0.2","spread":"0.021","feeRate":"0.01","sourceVersion":"1",
                         "sourceHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","acceptedAccountPrices":[],

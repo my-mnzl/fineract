@@ -203,3 +203,56 @@ Position events freeze both risk status and unreconciled cost, so past reads do
 not change when assessment or payment evidence arrives. Controls expose pending
 assessment accounts and the unreconciled purchase total. Existing event/command
 JSON and hashes are never rewritten by the additive migration.
+
+## Acquisition grouping
+
+Capabilities advertise `acquisitionGroupingVersion: "1"`. New `BOOK_PURCHASE`
+and `BOOK_HISTORICAL_PURCHASE` commands require `acquisition` containing `id`,
+`developerReferenceId`, `sourceReferenceId` and `effectiveDate`. The ID represents
+one executed closing, independently of the wider `dealId` and shared purchased
+receivable product. Two closings on the same date remain separate. The effective
+date must equal the booking/settlement date, and the developer must match the
+command scope. Reusing the ID requires the same deal and all metadata.
+
+The first member creates the scoped acquisition record inside the existing
+financial transaction and scope lock. Later members reuse it; failed native
+booking rolls back both new membership and a newly created acquisition. Account
+rows retain original purchase face, gross cost, integral fee and net cash.
+Substitutions and workout exchanges inherit the acquisition, retain the original
+account ID and link their immediate predecessor. They do not add to original
+purchase totals; settled, replaced and written-off members remain discoverable.
+
+The existing scoped READ permission and mapping headers authorize:
+
+- `GET /acquisitions`, optionally filtered by `dealId` or `developerReferenceId`;
+- `GET /acquisitions/{id}` for immutable metadata and booked-member totals;
+- `GET /acquisitions/{id}/accounts` for native loan/client IDs and lineage.
+
+List endpoints accept `limit` from 1 to 200 (default 100) and opaque `nextCursor`
+values returned by prior pages. Pages describe current membership, not a frozen
+multi-request snapshot. Detail totals use current persisted account positions;
+original cost totals include only original members and never replacement cost.
+Summary reads accumulate bounded batches across the requested acquisition page
+using exact integer arithmetic; they do not load each group's full member set.
+Ordinary account and account-list reads expose `acquisitionId`.
+
+`GET /controls?acquisitionId=...` returns `attribution: ACQUISITION_ACCOUNTS`.
+It includes member positions, historical member-attributed journal lines and
+member developer-lot snapshots at the requested date/watermark. Unallocated
+deal-level bank movements, funding facilities and independent HEL funding
+journals are excluded. These are account-attributed controls, not a proof of the
+entire deal's bank/funding balances. Optional deal/account filters must agree
+with the acquisition. Historical attribution survives substitution because both
+predecessor and successor retain their immutable acquisition membership.
+Unregistered native journal checks cover events attributed to the selected
+cohort by immutable event data, including events whose registry lines are all
+missing. A mixed-account event is checked as one accounting transaction; an
+unregistered row there fails every participating cohort. Unrelated events do
+not invalidate the selected acquisition's controls.
+
+The additive migration leaves pre-existing accounts ungrouped (`acquisitionId:
+null`); it does not infer closings from dates or deals. New bookings require the
+new command shape. Previously saved booking payloads without `acquisition` fail
+schema validation, including replay through `/commands`; their persisted
+receipts remain available through `/operations/{id}`. Re-enter obsolete data
+through the corrected workflow rather than inventing acquisition metadata.

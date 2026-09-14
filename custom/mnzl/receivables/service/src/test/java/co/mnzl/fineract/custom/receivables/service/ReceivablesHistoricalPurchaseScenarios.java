@@ -64,6 +64,9 @@ final class ReceivablesHistoricalPurchaseScenarios {
         var second = CompletableFuture.supplyAsync(() -> execute(book));
         JsonNode receipt = first.get();
         assertThat(second.get()).isEqualTo(receipt);
+        assertThat(harness.request("GET", BASE + "/acquisitions/historical-acquisition", null, 200).path("originalAccountCount").asInt())
+                .isEqualTo(1);
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_acquisition where external_id='historical-acquisition'")).isEqualTo(1);
         assertThat(harness.queryLong("select count(*) from m_mnzl_r_account where external_id='historical-account'")).isEqualTo(1);
         assertThat(harness.queryLong("select count(*) from m_mnzl_r_cash_source")).isEqualTo(before.get("m_mnzl_r_cash_source"));
         assertThat(harness.queryLong(
@@ -108,6 +111,9 @@ final class ReceivablesHistoricalPurchaseScenarios {
         assertThat(harness.queryLong("select count(*) from acc_gl_journal_entry")).isEqualTo(journalCount);
         assertThat(harness.queryLong("select count(*) from m_loan")).isEqualTo(loanCount);
         assertThat(position(harness.today, null).path("unreconciledPurchaseMinor").asText()).isEqualTo("0");
+        JsonNode acquisition = harness.request("GET", BASE + "/acquisitions/historical-acquisition", null, 200);
+        assertThat(acquisition.path("originalPurchaseCashMinor").asText()).isEqualTo(net.toString());
+        assertThat(acquisition.path("originalAccountCount").asInt()).isEqualTo(1);
         assertThat(position(acquisitionDate, watermark)).isEqualTo(pending);
         ObjectNode assess = harness.command("SET_IMPAIRMENT", "historical-assess", ID, "RECEIVABLE");
         assess.put("expectedVersion", "3");
@@ -160,6 +166,8 @@ final class ReceivablesHistoricalPurchaseScenarios {
         ObjectNode book = harness.command("BOOK_HISTORICAL_PURCHASE", "historical-book", ID, "RECEIVABLE");
         book.put("accountId", ID);
         book.put("dealId", "historical-deal");
+        book.set("acquisition", harness.json.value(Map.of("id", "historical-acquisition", "developerReferenceId", "developer",
+                "sourceReferenceId", "historical-record", "effectiveDate", harness.today.toString())));
         book.put("customerReferenceId", "historical-customer");
         book.set("basis", basis);
         book.put("basisHash", harness.json.hash(basis));
