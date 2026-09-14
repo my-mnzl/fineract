@@ -71,7 +71,7 @@ final class ReceivablesAcquisitionScenarios {
         for (JsonNode balance : controls.path("balances")) {
             assertThat(balance.path("differenceMinor").asText()).isEqualTo("0");
         }
-        harness.request("GET", BASE + "/controls?acquisitionId=closing-one&accountId=group-other", null, 409);
+        harness.request("GET", BASE + "/controls?acquisitionId=closing-one&accountId=group-other", null, 400);
         harness.request("GET", BASE + "/acquisitions/missing/accounts", null, 404);
         assertThat(get("/acquisitions?dealId=missing").path("items").size()).isZero();
         var collision = harness.preparePurchase("group-conflict", "50000", "50000", "closing-one");
