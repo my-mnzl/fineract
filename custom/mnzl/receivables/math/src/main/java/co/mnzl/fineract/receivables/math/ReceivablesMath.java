@@ -218,7 +218,8 @@ public final class ReceivablesMath {
     }
 
     public record PriceAmounts(BigDecimal unroundedGrossPrice, BigInteger contractualFaceMinor, BigInteger grossPurchasePriceMinor,
-            BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor) {}
+            BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor) {
+    }
 
     /** Shared monetary pricing; estimates do not need analytical yield solvers. */
     public static PriceAmounts priceAmounts(LocalDate date, List<Cashflow> flows, BigDecimal quotedRate, BigDecimal feeRate) {
