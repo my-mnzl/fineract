@@ -75,6 +75,7 @@ final class ReceivablesHistoricalPurchaseScenarios {
         assertThat(pending.path("riskAssessmentStatus").asText()).isEqualTo("PENDING");
         assertThat(pending.path("lossAllowanceMinor").asText()).isEqualTo("0");
         assertThat(pending.path("unreconciledPurchaseMinor").asText()).isEqualTo(net.toString());
+        verifyInvestmentRead();
         String watermark = harness.request("GET", BASE + "/capabilities", null, 200).path("currentEventWatermark").asText();
         var committed = harness.counts();
         assertThat(execute(book)).isEqualTo(receipt);
@@ -186,6 +187,39 @@ final class ReceivablesHistoricalPurchaseScenarios {
         } catch (Exception failure) {
             throw new IllegalStateException(failure);
         }
+    }
+
+    private void verifyInvestmentRead() throws Exception {
+        long loanId = harness.queryLong("select native_loan_id from m_mnzl_r_account where external_id='historical-account'");
+        var before = harness.counts();
+        String authentication = harness.authentication;
+        try {
+            // This employee is not the scope integration user; ordinary loan visibility authorizes the new route.
+            harness.authentication = "workout-checker:IsolatedChecker123!";
+            String path = "/loans/" + loanId + "/mnzl-investment";
+            JsonNode summary = harness.request("GET", path, null, 200);
+            assertThat(summary.path("applicable").asBoolean()).isTrue();
+            assertThat(summary.has("projection")).isFalse();
+            assertThat(summary.path("position").path("riskAssessmentStatus").asText()).isEqualTo("PENDING");
+            assertThat(summary.path("position").path("stage").isNull()).isTrue();
+            JsonNode projected = harness.request("GET", path + "?includeProjections=true", null, 200);
+            assertThat(projected.path("position")).isEqualTo(summary.path("position"));
+            assertThat(projected.path("projection").path("rows").isEmpty()).isFalse();
+            BigInteger recovery = BigInteger.ZERO;
+            for (JsonNode row : projected.path("projection").path("rows")) {
+                recovery = recovery.add(new BigInteger(row.path("investmentRecoveryMinor").asText()));
+                assertThat(
+                        new BigInteger(row.path("openingCarryingMinor").asText()).add(new BigInteger(row.path("eirIncomeMinor").asText()))
+                                .subtract(new BigInteger(row.path("cashReceiptMinor").asText())))
+                        .isEqualTo(new BigInteger(row.path("closingCarryingMinor").asText()));
+            }
+            assertThat(recovery.toString()).isEqualTo(summary.path("position").path("amortizedCostMinor").asText());
+            assertThat(harness.request("GET", BASE + "/accounts/" + ID, null, 409).path("code").asText())
+                    .isEqualTo("FINERACT_CAPABILITY_MISSING");
+        } finally {
+            harness.authentication = authentication;
+        }
+        assertThat(harness.counts()).isEqualTo(before);
     }
 
     private JsonNode position(LocalDate date, String watermark) throws Exception {

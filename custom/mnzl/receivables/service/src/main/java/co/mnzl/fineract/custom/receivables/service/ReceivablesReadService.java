@@ -157,6 +157,29 @@ public class ReceivablesReadService {
         return result;
     }
 
+    /**
+     * Called only after staff permission and loan visibility checks; integration API authorization remains unchanged.
+     */
+    JsonNode investment(JsonNode scope, String id, boolean includeProjections) {
+        var boundary = new Boundary(DateUtils.getBusinessLocalDate(), "AFTER_EVENTS", watermark(scope));
+        var current = (ObjectNode) position(scope, id, boundary);
+        current.put("eventWatermark", Long.toString(boundary.watermark()));
+        if (!current.hasNonNull("riskAssessmentStatus")) {
+            current.put("riskAssessmentStatus", "ASSESSED");
+        }
+        var result = json.object();
+        result.put("applicable", true);
+        result.put("externalReceivableId", id);
+        result.set("currency", json.value(Map.of("code", "EGP", "decimalPlaces", 2)));
+        result.set("position", current);
+        if (includeProjections) {
+            var state = historicalState(accountRow(scope, id), boundary);
+            result.set("projection",
+                    json.value(ReceivablesInvestmentProjection.project(state, boundary.date(), text(current, "nativeLoanStatus"))));
+        }
+        return result;
+    }
+
     public JsonNode measurement(JsonNode scope, String id, Boundary boundary) {
         var account = accountRow(scope, id);
         var state = historicalState(account, boundary);
