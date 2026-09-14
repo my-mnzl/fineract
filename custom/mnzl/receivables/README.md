@@ -158,3 +158,21 @@ rejection code and latency. Each event describes one HTTP attempt after transact
 completion; activation retries retain the original `activatedAt`. `expectedActiveRevision`
 is the caller's precondition, while `sourceRevision` is the recorded predecessor on
 success. Logs exclude configuration bodies and financial contents.
+
+## Lightweight pricing estimates
+
+`POST /pricing-calculations` accepts `includeProjections: false` on a `PRICE`
+request and returns `calculationType: PRICE_ESTIMATE`. The response contains the
+validated calculation basis, exact per-account face, gross purchase price,
+integral fee and net cash, plus portfolio totals. It does not include analytical
+yields, balance projections or monthly accounting income. Authentication, native
+scope authorization, build/version validation and the complete basis hash are
+unchanged. Estimates reject accepted-account-price overrides and perform no
+financial writes.
+
+Both estimate and full pricing use `ReceivablesMath.priceAmounts`, including the
+same present-value precision and per-account rounding. Full pricing additionally
+solves yields and builds projections. Omitting `includeProjections` preserves the
+full `PRICE` response. Estimate work checks a five-second deadline between
+accounts and rejects with `PRICING_TIMEOUT` when exceeded; a partial portfolio is
+never returned as complete.

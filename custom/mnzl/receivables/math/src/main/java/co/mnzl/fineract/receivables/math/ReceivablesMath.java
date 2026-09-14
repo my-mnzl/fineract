@@ -217,15 +217,26 @@ public final class ReceivablesMath {
         throw new IllegalArgumentException("Yield precision unavailable");
     }
 
-    public static Purchase price(LocalDate date, List<Cashflow> flows, BigDecimal quotedRate, BigDecimal feeRate) {
+    public record PriceAmounts(BigDecimal unroundedGrossPrice, BigInteger contractualFaceMinor, BigInteger grossPurchasePriceMinor,
+            BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor) {}
+
+    /** Shared monetary pricing; estimates do not need analytical yield solvers. */
+    public static PriceAmounts priceAmounts(LocalDate date, List<Cashflow> flows, BigDecimal quotedRate, BigDecimal feeRate) {
         validateFuture(date, flows);
         require(feeRate.signum() >= 0 && feeRate.compareTo(BigDecimal.ONE) < 0, "Invalid integral fee rate");
         BigDecimal raw = pv(date, flows, quotedRate);
         BigInteger gross = minor(raw);
         BigInteger fee = minor(major(gross).multiply(feeRate, MC));
         BigInteger net = gross.subtract(fee);
-        Segment segment = segment(date, flows, gross, net);
-        return new Purchase(quotedRate, feeRate, raw, face(flows), gross, fee, net, segment);
+        require(net.signum() > 0 && net.compareTo(gross) <= 0, "Invalid gross/net segment bases");
+        return new PriceAmounts(raw, face(flows), gross, fee, net);
+    }
+
+    public static Purchase price(LocalDate date, List<Cashflow> flows, BigDecimal quotedRate, BigDecimal feeRate) {
+        var amounts = priceAmounts(date, flows, quotedRate, feeRate);
+        Segment segment = segment(date, flows, amounts.grossPurchasePriceMinor(), amounts.netPurchaseCashMinor());
+        return new Purchase(quotedRate, feeRate, amounts.unroundedGrossPrice(), amounts.contractualFaceMinor(),
+                amounts.grossPurchasePriceMinor(), amounts.integralFeeMinor(), amounts.netPurchaseCashMinor(), segment);
     }
 
     public static Segment segment(LocalDate date, List<Cashflow> flows, BigInteger gross, BigInteger net) {
