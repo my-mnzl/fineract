@@ -262,6 +262,7 @@ public class LoanProductRelatedDetail {
         detail.daysInYearType = 1;
         detail.loanScheduleType = LoanScheduleType.CUMULATIVE;
         detail.loanScheduleProcessingType = LoanScheduleProcessingType.HORIZONTAL;
+        detail.chargeOffBehaviour = LoanChargeOffBehaviour.REGULAR;
         detail.merchantBuyDownFee = false;
         return detail;
     }

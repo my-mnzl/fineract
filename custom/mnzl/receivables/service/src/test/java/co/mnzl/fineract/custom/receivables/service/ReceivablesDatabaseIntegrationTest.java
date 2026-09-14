@@ -480,6 +480,9 @@ class ReceivablesDatabaseIntegrationTest {
     private void verifyPurchaseAndIdempotency(JsonNode booked) throws Exception {
         JsonNode account = request("GET", PREFIX + "/accounts/account-1", null, 200);
         long loan = Long.parseLong(account.path("nativeLoanId").asText());
+        JsonNode ordinaryLoan = request("GET", "/loans/" + loan + "?associations=repaymentSchedule", null, 200);
+        assertThat(ordinaryLoan.path("chargeOffBehaviour").path("id").asText()).isEqualTo("REGULAR");
+        assertThat(ordinaryLoan.path("summary").path("principalOutstanding").decimalValue()).isEqualByComparingTo("1000.00");
         assertThat(account.path("position").path("contractualOutstandingMinor").asText()).isEqualTo("100000");
         assertThat(queryLong("select count(*) from m_loan_repayment_schedule where loan_id=" + loan + " and principal_amount=0.01"))
                 .isEqualTo(1);
