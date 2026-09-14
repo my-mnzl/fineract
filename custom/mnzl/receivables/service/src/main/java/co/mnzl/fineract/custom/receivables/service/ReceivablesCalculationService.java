@@ -86,12 +86,18 @@ public class ReceivablesCalculationService {
     private void price(JsonNode input, ObjectNode result, JsonNode basis) {
         Map<String, List<JsonNode>> groups = new java.util.TreeMap<>();
         basis.path("cashflows").forEach(flow -> groups.computeIfAbsent(text(flow, "receivableId"), ignored -> new ArrayList<>()).add(flow));
+        if (text(input, "calculationType").equals("PRICE") && !input.path("includeProjections").asBoolean(true)) {
+            estimate(input, result, basis, groups);
+            return;
+        }
         List<ReceivablesMath.Purchase> purchases = new ArrayList<>();
         List<JsonNode> accounts = new ArrayList<>();
         List<JsonNode> allPositions = new ArrayList<>();
         List<JsonNode> allIncome = new ArrayList<>();
+        ObjectNode commonBasis = basis.deepCopy();
+        commonBasis.remove("cashflows");
         for (var group : groups.entrySet()) {
-            ObjectNode accountBasis = basis.deepCopy();
+            ObjectNode accountBasis = commonBasis.deepCopy();
             accountBasis.set("cashflows", json.value(group.getValue()));
             var purchase = measurement.purchase(accountBasis, group.getKey());
             purchases.add(purchase);
@@ -127,6 +133,37 @@ public class ReceivablesCalculationService {
             pricing.set("validationErrors", json.value(List.of()));
             result.set("pricing", pricing);
         }
+    }
+
+    private void estimate(JsonNode input, ObjectNode result, JsonNode basis, Map<String, List<JsonNode>> groups) {
+        require(basis.path("acceptedAccountPrices").isEmpty(), "INVALID_DATA");
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        List<JsonNode> accounts = new ArrayList<>();
+        BigInteger face = BigInteger.ZERO;
+        BigInteger gross = BigInteger.ZERO;
+        BigInteger fee = BigInteger.ZERO;
+        BigInteger net = BigInteger.ZERO;
+        for (var group : groups.entrySet()) {
+            require(System.nanoTime() < deadline && !Thread.currentThread().isInterrupted(), "PRICING_TIMEOUT");
+            var amounts = ReceivablesMath.priceAmounts(date(basis, "settlementDate"), measurement.flows(json.value(group.getValue())),
+                    decimal(basis, "corridorRate").add(decimal(basis, "spread")), decimal(basis, "feeRate"));
+            ObjectNode account = totals(amounts.contractualFaceMinor(), amounts.grossPurchasePriceMinor(), amounts.integralFeeMinor(),
+                    amounts.netPurchaseCashMinor());
+            account.put("accountId", group.getKey());
+            accounts.add(account);
+            face = face.add(amounts.contractualFaceMinor());
+            gross = gross.add(amounts.grossPurchasePriceMinor());
+            fee = fee.add(amounts.integralFeeMinor());
+            net = net.add(amounts.netPurchaseCashMinor());
+        }
+        ObjectNode pricing = json.object();
+        pricing.set("basis", basis);
+        pricing.set("basisHash", input.get("basisHash"));
+        pricing.set("accounts", json.value(accounts));
+        pricing.set("totals", totals(face, gross, fee, net));
+        pricing.set("validationErrors", json.value(List.of()));
+        result.put("calculationType", "PRICE_ESTIMATE");
+        result.set("pricing", pricing);
     }
 
     private record Projection(List<JsonNode> positions, List<JsonNode> income) {

@@ -3357,6 +3357,9 @@
               },
               "basis": {
                 "$ref": "#/components/schemas/calculationBasis"
+              },
+              "includeProjections": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -9418,6 +9421,9 @@
               },
               "basis": {
                 "$ref": "#/components/schemas/calculationBasis"
+              },
+              "includeProjections": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -11452,6 +11458,57 @@
               "closingInterestPayableMinor"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "calculationVersion": {
+                "type": "string",
+                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+              },
+              "productPolicyCode": {
+                "type": "string",
+                "const": "EG_RECEIVABLES_V1"
+              },
+              "schemaVersion": {
+                "type": "string",
+                "const": "1"
+              },
+              "policyRevisionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "calculatorBuild": {
+                "$ref": "#/components/schemas/id"
+              },
+              "basisHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "validationErrors": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/validationError"
+                }
+              },
+              "calculationType": {
+                "type": "string",
+                "const": "PRICE_ESTIMATE"
+              },
+              "pricing": {
+                "$ref": "#/components/schemas/pricingEstimate"
+              }
+            },
+            "required": [
+              "calculationVersion",
+              "productPolicyCode",
+              "schemaVersion",
+              "policyRevisionId",
+              "calculatorBuild",
+              "basisHash",
+              "validationErrors",
+              "calculationType",
+              "pricing"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -13198,6 +13255,70 @@
           "productPolicyCode",
           "sourceRevision",
           "openApiSha256"
+        ],
+        "additionalProperties": false
+      },
+      "pricingEstimate": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/calculationBasis"
+          },
+          "basisHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/pricingEstimateAccount"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/pricingTotals"
+          },
+          "validationErrors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/validationError"
+            }
+          }
+        },
+        "required": [
+          "basis",
+          "basisHash",
+          "accounts",
+          "totals",
+          "validationErrors"
+        ],
+        "additionalProperties": false
+      },
+      "pricingEstimateAccount": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "contractualFaceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossPurchasePriceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "integralFeeMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "netPurchaseCashMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          }
+        },
+        "required": [
+          "contractualFaceMinor",
+          "grossPurchasePriceMinor",
+          "integralFeeMinor",
+          "netPurchaseCashMinor",
+          "accountId"
         ],
         "additionalProperties": false
       }
