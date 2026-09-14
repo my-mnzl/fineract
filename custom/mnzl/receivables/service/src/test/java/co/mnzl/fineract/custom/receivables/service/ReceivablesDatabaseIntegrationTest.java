@@ -121,7 +121,7 @@ class ReceivablesDatabaseIntegrationTest {
                 new ReceivablesCommandDatabaseScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
-                        application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
+                        application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify();
                 new ReceivablesPeriodProofScenarios(this).verify();
                 new ReceivablesHistoricalPurchaseScenarios(this).verify();
                 new ReceivablesConfigurationScenarios(this).verify();
