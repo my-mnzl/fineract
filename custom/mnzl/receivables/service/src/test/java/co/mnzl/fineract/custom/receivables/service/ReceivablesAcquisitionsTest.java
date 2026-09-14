@@ -20,20 +20,29 @@ package co.mnzl.fineract.custom.receivables.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.ws.rs.NotFoundException;
+import java.math.BigInteger;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class ReceivablesAcquisitionsTest {
 
@@ -84,6 +93,44 @@ class ReceivablesAcquisitionsTest {
         assertThatThrownBy(() -> acquisitions.register(otherDeal)).isInstanceOf(ReceivablesException.class).hasMessage("SOURCE_CHANGED");
         assertThat(records).hasSize(1);
         assertThat(records.values().iterator().next()).containsEntry("deal_id", "deal").containsEntry("source_ref", "offer");
+    }
+
+    @Test
+    void pagedMemberBatchesAccumulateAllGroupsWithoutDecimalPrecisionLoss() {
+        String first = acquisitions.register(execution("scope", "first"));
+        String second = acquisitions.register(execution("scope", "second"));
+        var jdbc = mock(JdbcTemplate.class);
+        when(store.jdbc()).thenReturn(jdbc);
+        when(jdbc.queryForList(contains("from m_mnzl_r_acquisition"), any(Object[].class)))
+                .thenReturn(List.of(records.get(first), records.get(second)));
+        String large = "9".repeat(90);
+        List<Map<String, Object>> batch = new ArrayList<>();
+        for (int index = 0; index < 512; index++) {
+            Map<String, Object> member = new HashMap<>();
+            member.put("record_key", String.format("%064x", index + 1));
+            member.put("acquisition_key", index % 2 == 0 ? first : second);
+            member.put("status", "ACTIVE");
+            for (String amount : List.of("purchase_face_minor", "purchase_gross_minor", "purchase_fee_minor", "purchase_cash_minor",
+                    "face_minor")) {
+                member.put(amount, large);
+            }
+            batch.add(member);
+        }
+        var replacement = new HashMap<String, Object>(batch.getFirst());
+        replacement.put("record_key", String.format("%064x", 513));
+        replacement.put("replaces_account_key", batch.getFirst().get("record_key"));
+        when(jdbc.queryForList(contains("from m_mnzl_r_account"), any(Object[].class))).thenReturn(batch, List.of(replacement));
+        JsonNode result = acquisitions.acquisitions("scope", null, null, null, 2);
+        String originals = new BigInteger(large).multiply(BigInteger.valueOf(256)).toString();
+        for (JsonNode item : result.path("items")) {
+            assertThat(item.path("originalAccountCount").asInt()).isEqualTo(256);
+            assertThat(item.path("originalPurchaseCashMinor").asText()).isEqualTo(originals);
+            boolean replaced = item.path("id").asText().equals("first");
+            assertThat(item.path("replacementAccountCount").asInt()).isEqualTo(replaced ? 1 : 0);
+            assertThat(item.path("currentContractualOutstandingMinor").asText())
+                    .isEqualTo(new BigInteger(large).multiply(BigInteger.valueOf(replaced ? 257 : 256)).toString());
+        }
+        verify(jdbc, times(2)).queryForList(contains("from m_mnzl_r_account"), any(Object[].class));
     }
 
     @Test

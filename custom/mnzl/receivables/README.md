@@ -232,6 +232,8 @@ List endpoints accept `limit` from 1 to 200 (default 100) and opaque `nextCursor
 values returned by prior pages. Pages describe current membership, not a frozen
 multi-request snapshot. Detail totals use current persisted account positions;
 original cost totals include only original members and never replacement cost.
+Summary reads accumulate bounded batches across the requested acquisition page
+using exact integer arithmetic; they do not load each group's full member set.
 Ordinary account and account-list reads expose `acquisitionId`.
 
 `GET /controls?acquisitionId=...` returns `attribution: ACQUISITION_ACCOUNTS`.
@@ -242,6 +244,11 @@ journals are excluded. These are account-attributed controls, not a proof of the
 entire deal's bank/funding balances. Optional deal/account filters must agree
 with the acquisition. Historical attribution survives substitution because both
 predecessor and successor retain their immutable acquisition membership.
+Unregistered native journal checks cover events attributed to the selected
+cohort by immutable event data, including events whose registry lines are all
+missing. A mixed-account event is checked as one accounting transaction; an
+unregistered row there fails every participating cohort. Unrelated events do
+not invalidate the selected acquisition's controls.
 
 The additive migration leaves pre-existing accounts ungrouped (`acquisitionId:
 null`); it does not infer closings from dates or deals. New bookings require the

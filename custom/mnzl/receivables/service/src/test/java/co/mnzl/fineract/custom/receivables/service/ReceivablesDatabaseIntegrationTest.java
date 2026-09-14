@@ -463,6 +463,10 @@ class ReceivablesDatabaseIntegrationTest {
                 migration.update(new liquibase.Contexts());
             }
         }
+        // This test mutates a live schema; recycle pooled sessions whose prepared SELECT * metadata predates the DDL.
+        java.lang.management.ManagementFactory.getPlatformMBeanServer().invoke(
+                new javax.management.ObjectName("com.zaxxer.hikari:type=Pool (fineract_default_pool)"), "softEvictConnections",
+                new Object[0], new String[0]);
     }
 
     void migrateLegacyConfiguration() throws Exception {

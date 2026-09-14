@@ -29,6 +29,8 @@ import jakarta.ws.rs.NotFoundException;
 import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -78,7 +80,8 @@ public class ReceivablesAcquisitions {
     }
 
     public JsonNode acquisition(String scope, String id) {
-        return summary(requireAcquisition(scope, id));
+        var acquisition = requireAcquisition(scope, id);
+        return summary(acquisition, totals(List.of(acquisition)).get(string(acquisition, "record_key")));
     }
 
     public JsonNode acquisitions(String scope, String deal, String developer, String cursor, int limit) {
@@ -100,7 +103,8 @@ public class ReceivablesAcquisitions {
         args.add(limit + 1);
         var rows = store.jdbc().queryForList(
                 "select * from m_mnzl_r_acquisition where scope_key=?" + filter + " order by record_key limit ?", args.toArray());
-        return page(rows, limit, this::summary);
+        var totals = totals(rows.stream().limit(limit).toList());
+        return page(rows, limit, row -> summary(row, totals.get(string(row, "record_key"))));
     }
 
     public JsonNode accounts(String scope, String id, String cursor, int limit) {
@@ -120,28 +124,64 @@ public class ReceivablesAcquisitions {
         return page(rows, limit, row -> member(row, id));
     }
 
-    private JsonNode summary(Map<String, Object> acquisition) {
+    private static final int SUMMARY_BATCH_SIZE = 512;
+    private static final Map<String, String> ORIGINAL_AMOUNTS = Map.of("originalFaceMinor", "purchase_face_minor",
+            "originalGrossPurchasePriceMinor", "purchase_gross_minor", "originalIntegralFeeMinor", "purchase_fee_minor",
+            "originalPurchaseCashMinor", "purchase_cash_minor");
+
+    private Map<String, ObjectNode> totals(List<Map<String, Object>> acquisitions) {
+        Map<String, ObjectNode> totals = new LinkedHashMap<>();
+        for (var acquisition : acquisitions) {
+            ObjectNode total = json.object().put("originalAccountCount", 0L).put("replacementAccountCount", 0L)
+                    .put("activeAccountCount", 0L).put("currentContractualOutstandingMinor", "0");
+            ORIGINAL_AMOUNTS.keySet().forEach(field -> total.put(field, "0"));
+            totals.put(string(acquisition, "record_key"), total);
+        }
+        if (totals.isEmpty()) {
+            return totals;
+        }
+        String after = "";
+        while (true) {
+            var args = new ArrayList<Object>(totals.keySet());
+            args.add(after);
+            args.add(SUMMARY_BATCH_SIZE);
+            // A bounded cross-acquisition scan keeps VARCHAR(100) money exact without database DECIMAL limits.
+            var members = store.jdbc().queryForList("select record_key,acquisition_key,replaces_account_key,status,purchase_face_minor,"
+                    + "purchase_gross_minor,purchase_fee_minor,purchase_cash_minor,face_minor from m_mnzl_r_account where acquisition_key in ("
+                    + String.join(",", Collections.nCopies(totals.size(), "?")) + ") and record_key>? order by record_key limit ?",
+                    args.toArray());
+            for (var member : members) {
+                ObjectNode total = totals.get(string(member, "acquisition_key"));
+                boolean original = member.get("replaces_account_key") == null;
+                String count = original ? "originalAccountCount" : "replacementAccountCount";
+                total.put(count, total.path(count).asLong() + 1);
+                if ("ACTIVE".equals(string(member, "status"))) {
+                    total.put("activeAccountCount", total.path("activeAccountCount").asLong() + 1);
+                }
+                if (original) {
+                    ORIGINAL_AMOUNTS.forEach((field, column) -> add(total, field, string(member, column)));
+                }
+                add(total, "currentContractualOutstandingMinor", string(member, "face_minor"));
+            }
+            if (members.size() < SUMMARY_BATCH_SIZE) {
+                return totals;
+            }
+            after = string(members.getLast(), "record_key");
+        }
+    }
+
+    private static void add(ObjectNode total, String field, String value) {
+        total.put(field, new BigInteger(total.path(field).asText()).add(new BigInteger(value)).toString());
+    }
+
+    private JsonNode summary(Map<String, Object> acquisition, ObjectNode total) {
         ObjectNode node = json.object();
         node.put("id", string(acquisition, "external_id"));
         node.put("dealId", string(acquisition, "deal_id"));
         node.put("developerReferenceId", string(acquisition, "developer_ref"));
         node.put("sourceReferenceId", string(acquisition, "source_ref"));
         node.put("effectiveDate", string(acquisition, "effective_date"));
-        var members = store.jdbc().queryForList(
-                "select replaces_account_key,status,purchase_face_minor,purchase_gross_minor,"
-                        + "purchase_fee_minor,purchase_cash_minor,face_minor from m_mnzl_r_account where acquisition_key=?",
-                string(acquisition, "record_key"));
-        long originals = members.stream().filter(row -> row.get("replaces_account_key") == null).count();
-        node.put("originalAccountCount", originals);
-        node.put("replacementAccountCount", members.size() - originals);
-        node.put("activeAccountCount", members.stream().filter(row -> "ACTIVE".equals(string(row, "status"))).count());
-        for (var field : Map.of("originalFaceMinor", "purchase_face_minor", "originalGrossPurchasePriceMinor", "purchase_gross_minor",
-                "originalIntegralFeeMinor", "purchase_fee_minor", "originalPurchaseCashMinor", "purchase_cash_minor").entrySet()) {
-            node.put(field.getKey(), members.stream().filter(row -> row.get("replaces_account_key") == null)
-                    .map(row -> new BigInteger(string(row, field.getValue()))).reduce(BigInteger.ZERO, BigInteger::add).toString());
-        }
-        node.put("currentContractualOutstandingMinor",
-                members.stream().map(row -> new BigInteger(string(row, "face_minor"))).reduce(BigInteger.ZERO, BigInteger::add).toString());
+        node.setAll(total);
         return node;
     }
 

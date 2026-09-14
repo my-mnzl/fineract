@@ -550,13 +550,14 @@ public class ReceivablesReadService {
             require(dealId == null || dealId.equals(string(acquisition, "deal_id")), "INVALID_DATA");
             require(accountId == null || acquisitionKey.equals(accountRow(scope, accountId).get("acquisition_key")), "INVALID_DATA");
         }
-        Map<String, ObjectNode> positions = issuedPositions(scope, boundary);
-        List<Map<String, Object>> accounts = store.scoped("account", key(scope)).stream()
+        var events = eventRows(scope, boundary);
+        Map<String, ObjectNode> positions = issuedPositions(events);
+        List<Map<String, Object>> cohort = store.scoped("account", key(scope)).stream()
                 .filter(row -> (dealId == null || dealId.equals(string(row, "deal_id")))
                         && (accountId == null || accountId.equals(string(row, "external_id")))
-                        && (acquisitionKey == null || acquisitionKey.equals(row.get("acquisition_key")))
-                        && positions.containsKey(string(row, "external_id")))
+                        && (acquisitionKey == null || acquisitionKey.equals(row.get("acquisition_key"))))
                 .toList();
+        List<Map<String, Object>> accounts = cohort.stream().filter(row -> positions.containsKey(string(row, "external_id"))).toList();
         if (accountId != null && accounts.isEmpty()) {
             throw new NotFoundException();
         }
@@ -593,11 +594,28 @@ public class ReceivablesReadService {
                         + "where l.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff() + filter + " order by l.record_key",
                 args.toArray());
         // Independently find native rows in the event's actual accounting transaction, including unregistered extras.
-        Long extra = store.jdbc().queryForObject("select count(*) from acc_gl_journal_entry j join m_mnzl_r_event e "
+        String extraFrom = " from acc_gl_journal_entry j join m_mnzl_r_event e "
                 + "on j.transaction_id=concat('R',substring(e.record_key,1,40)) left join m_mnzl_r_journal_line l on l.native_journal_id=j.id "
-                + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff() + " and l.record_key is null", Long.class,
-                key(scope), boundary.watermark(), boundary.date(), boundary.date());
-        require(extra != null && extra == 0, "JOURNAL_MISMATCH");
+                + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff() + " and l.record_key is null";
+        if (acquisitionId == null) {
+            Long extra = store.jdbc().queryForObject("select count(*)" + extraFrom, Long.class, key(scope), boundary.watermark(),
+                    boundary.date(), boundary.date());
+            require(extra != null && extra == 0, "JOURNAL_MISMATCH");
+        } else {
+            Set<String> cohortIds = cohort.stream().map(row -> string(row, "external_id")).collect(java.util.stream.Collectors.toSet());
+            // Immutable event attribution remains available even if every member registry line was removed.
+            Set<String> cohortEvents = events.stream().filter(row -> attributedTo(json.read(string(row, "event_json")), cohortIds))
+                    .map(row -> string(row, "record_key")).collect(java.util.stream.Collectors.toSet());
+            Boolean matched = store.jdbc().query("select distinct e.record_key" + extraFrom, result -> {
+                while (result.next()) {
+                    if (cohortEvents.contains(result.getString(1))) {
+                        return false;
+                    }
+                }
+                return true;
+            }, key(scope), boundary.watermark(), boundary.date(), boundary.date());
+            require(Boolean.TRUE.equals(matched), "JOURNAL_MISMATCH");
+        }
         Map<String, BigInteger> sub = new HashMap<>();
         Map<String, BigInteger> actual = new HashMap<>();
         Map<String, List<String>> sourceIds = new HashMap<>();
@@ -780,8 +798,26 @@ public class ReceivablesReadService {
     }
 
     private Map<String, ObjectNode> issuedPositions(JsonNode scope, Boundary boundary) {
+        return issuedPositions(eventRows(scope, boundary));
+    }
+
+    private static boolean attributedTo(JsonNode event, Set<String> accounts) {
+        if (accounts.contains(event.path("accountId").asText())) {
+            return true;
+        }
+        for (String field : List.of("journalLines", "positionsAfter")) {
+            for (JsonNode item : event.path(field)) {
+                if (accounts.contains(item.path("accountId").asText())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private Map<String, ObjectNode> issuedPositions(List<Map<String, Object>> events) {
         Map<String, ObjectNode> latest = new LinkedHashMap<>();
-        for (var row : eventRows(scope, boundary)) {
+        for (var row : events) {
             JsonNode event = json.read(string(row, "event_json"));
             event.path("positionsAfter").forEach(position -> latest.put(text(position, "accountId"), (ObjectNode) position));
         }

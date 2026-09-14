@@ -11095,7 +11095,15 @@
           "subledgerContractualOutstandingMinor",
           "snapshotHash"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "dependentRequired": {
+          "acquisitionId": [
+            "attribution"
+          ],
+          "attribution": [
+            "acquisitionId"
+          ]
+        }
       },
       "developerLotRead": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
