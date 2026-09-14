@@ -97,4 +97,19 @@ class ReceivablesConfigurationTest {
         configuration.readConfiguration(scope, "previous");
         verify(user).validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
     }
+
+    @Test
+    void historicalAcknowledgmentIsPermissionProtectedAndBoundToOperatorAndSource() {
+        var command = json.object().put("actorId", "employee").put("basisHash", "basis");
+        command.putObject("basis").put("sourceHash", "source");
+        command.putObject("acknowledgment").put("reason", "Recorded source facts").put("actorId", "employee").put("basisHash", "basis")
+                .put("sourceHash", "source");
+        configuration.validateHistoricalOperator(command);
+        verify(user).validateHasPermissionTo("RECORD_HISTORICAL_MNZL_RECEIVABLES");
+        command.putObject("acknowledgment").put("reason", "Recorded source facts").put("actorId", "other-employee")
+                .put("basisHash", "basis").put("sourceHash", "source");
+        assertThatThrownBy(() -> configuration.validateHistoricalOperator(command)).isInstanceOf(ReceivablesException.class)
+                .hasMessage("APPROVAL_SCOPE_CHANGED");
+    }
+
 }

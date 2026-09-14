@@ -197,7 +197,15 @@ public class ReceivablesMeasurement {
         result.put("nativeLoanId", Long.toString(number(account, "native_loan_id")));
         result.put("nativeLoanStatus", string(account, "status"));
         result.put("accountVersion", Long.toString(number(account, "version")));
-        result.put("stage", string(account, "stage"));
+        if (account.get("stage") == null) {
+            result.putNull("stage");
+        } else {
+            result.put("stage", string(account, "stage"));
+        }
+        result.put("riskAssessmentStatus",
+                account.get("risk_assessment_status") == null ? "ASSESSED" : string(account, "risk_assessment_status"));
+        result.put("unreconciledPurchaseMinor",
+                account.get("unreconciled_purchase_minor") == null ? "0" : string(account, "unreconciled_purchase_minor"));
         MeasurementState state = state(account);
         result.put("grossYield", state.segment().grossYield().rate().toPlainString());
         result.put("netEir", state.segment().netEir().rate().toPlainString());

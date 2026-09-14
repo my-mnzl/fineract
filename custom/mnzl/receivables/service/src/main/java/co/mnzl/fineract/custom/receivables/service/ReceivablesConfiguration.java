@@ -398,6 +398,7 @@ public class ReceivablesConfiguration {
         result.put("calculatorBuild", string(config, "calculator_build"));
         result.put("accountMappingRevisionId", string(config, "mapping_revision"));
         result.put("eventVersion", "flex.receivables.financial-event.v1");
+        result.put("historicalPurchaseVersion", "1");
         result.put("productCode", "MNZL_PURCHASED_RECEIVABLE");
         result.put("scheduleCode", "MNZL_FIXED_RECEIVABLE");
         result.put("chargeStrategyCode", "MNZL_NO_BORROWER_CHARGES");
@@ -451,11 +452,24 @@ public class ReceivablesConfiguration {
                     && !date.isBefore(LocalDate.parse(string(recorded, "effective_from")))
                     && !date.isAfter(LocalDate.parse(string(recorded, "effective_through"))), "APPROVAL_SCOPE_CHANGED");
         }
+        boolean historical = "BOOK_HISTORICAL_PURCHASE".equals(text(command, "commandType"));
+        if (historical) {
+            validateHistoricalOperator(command);
+        }
         boolean prepare = text(command, "commandType").equals("CLOSE_PERIOD") && text(command, "phase").equals("PREPARE");
-        require(!text(command, "actorId").isBlank() && (prepare || command.get("approverIds").size() > 0), "APPROVAL_SCOPE_CHANGED");
+        require(!text(command, "actorId").isBlank() && (prepare || historical || command.get("approverIds").size() > 0),
+                "APPROVAL_SCOPE_CHANGED");
         for (JsonNode approver : command.get("approverIds")) {
             require(!approver.asText().equals(text(command, "actorId")), "APPROVAL_SCOPE_CHANGED");
         }
+    }
+
+    void validateHistoricalOperator(JsonNode command) {
+        security.authenticatedUser().validateHasPermissionTo("RECORD_HISTORICAL_MNZL_RECEIVABLES");
+        JsonNode acknowledgment = command.get("acknowledgment");
+        require(!text(acknowledgment, "reason").isBlank() && text(acknowledgment, "actorId").equals(text(command, "actorId"))
+                && text(acknowledgment, "basisHash").equals(text(command, "basisHash"))
+                && text(acknowledgment, "sourceHash").equals(text(command.get("basis"), "sourceHash")), "APPROVAL_SCOPE_CHANGED");
     }
 
     @Transactional

@@ -121,8 +121,9 @@ class ReceivablesDatabaseIntegrationTest {
                 new ReceivablesCommandDatabaseScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
-                        application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify(database);
+                        application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify();
                 new ReceivablesPeriodProofScenarios(this).verify();
+                new ReceivablesHistoricalPurchaseScenarios(this).verify();
                 new ReceivablesConfigurationScenarios(this).verify();
                 verifyTenantIsolation(application);
                 boolean journalsMatched = queryLong(
@@ -136,8 +137,9 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("nativeLoanTransactions", queryLong("select count(*) from m_loan_transaction"));
                 evidence.put("nativeGlEntries", queryLong("select count(*) from acc_gl_journal_entry"));
                 evidence.put("pendingOutboxEvents", queryLong("select count(*) from m_mnzl_r_event where delivered_at is null"));
-                evidence.set("assertions", json.value(List.of("exact-face-and-small-cheque", "actual-native-journal-readback",
-                        "idempotent-retry", "changed-payload-conflict", "stale-version", "scope-conflict",
+                evidence.set("assertions", json.value(List.of("historical-purchase-without-cash-or-risk",
+                        "historical-partial-reconciliation", "historical-risk-and-funding-snapshots", "exact-face-and-small-cheque",
+                        "actual-native-journal-readback", "idempotent-retry", "changed-payload-conflict", "stale-version", "scope-conflict",
                         "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
                         "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
                         "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
@@ -432,6 +434,22 @@ class ReceivablesDatabaseIntegrationTest {
             try (var rows = statement.executeQuery()) {
                 assertThat(rows.next()).isTrue();
                 return rows.getString(1);
+            }
+        }
+    }
+
+    void migrateLegacyHistoricalPurchases() throws Exception {
+        for (String column : List.of("risk_assessment_status", "historical_purchase_minor", "unreconciled_purchase_minor")) {
+            executeSql("alter table m_mnzl_r_account drop column " + column);
+        }
+        executeSql("delete from m_permission where code='RECORD_HISTORICAL_MNZL_RECEIVABLES'");
+        executeSql("delete from DATABASECHANGELOG where id='mnzl-historical-purchases-5'");
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword)) {
+            var database = liquibase.database.DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new liquibase.database.jvm.JdbcConnection(connection));
+            try (var migration = new liquibase.Liquibase("db/custom-changelog/0005_mnzl_historical_purchases.xml",
+                    new liquibase.resource.ClassLoaderResourceAccessor(), database)) {
+                migration.update(new liquibase.Contexts());
             }
         }
     }

@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -45,7 +44,7 @@ final class ReceivablesOfficeClosureScenarios {
         this.offices = offices;
     }
 
-    void verify(String database) throws Exception {
+    void verify() throws Exception {
         LocalDate initialDate = harness.today;
         verifyBoundaries();
         Advised proxy = (Advised) offices;
@@ -57,29 +56,18 @@ final class ReceivablesOfficeClosureScenarios {
             if (barrier != null && !barrier.after) {
                 barrier.arrive();
             }
-            try {
-                Object result = invocation.proceed();
-                if (barrier != null && barrier.after) {
-                    barrier.arrive();
-                }
-                return result;
-            } catch (Throwable failure) {
-                if (barrier != null) {
-                    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-                        if (cause instanceof SQLException sql) {
-                            barrier.sqlState.set(sql.getSQLState());
-                        }
-                    }
-                }
-                throw failure;
+            Object result = invocation.proceed();
+            if (barrier != null && barrier.after) {
+                barrier.arrive();
             }
+            return result;
         };
         proxy.addAdvice(0, interceptor);
         try {
             harness.moveDate(harness.today.plusDays(1));
             nativeFirst();
             harness.moveDate(harness.today.plusDays(1));
-            snapshotBeforeClosure(database);
+            readBeforeClosure();
         } finally {
             Barrier pending = next.getAndSet(null);
             if (pending != null) {
@@ -146,7 +134,7 @@ final class ReceivablesOfficeClosureScenarios {
         }
     }
 
-    private void snapshotBeforeClosure(String database) throws Exception {
+    private void readBeforeClosure() throws Exception {
         // execute has already read/locked configuration and read idempotency before this repository method is invoked.
         Barrier beforeLock = new Barrier(false, true);
         ObjectNode command = receipt("office-stale-snapshot");
@@ -160,11 +148,8 @@ final class ReceivablesOfficeClosureScenarios {
                 closure = close(harness.today).path("resourceId").asLong();
                 beforeLock.release.countDown();
                 JsonNode rejected = nativeResult.get(60, TimeUnit.SECONDS);
-                if (database.equals("postgresql")) {
-                    assertThat(beforeLock.sqlState.get()).isEqualTo("40001");
-                } else {
-                    assertThat(rejected.path("code").asText()).isEqualTo("PERIOD_CLOSED");
-                }
+                // The next statement sees the closure committed while the command waited for the office lock.
+                assertThat(rejected.path("code").asText()).isEqualTo("PERIOD_CLOSED");
                 assertThat(harness.counts()).isEqualTo(before);
                 assertThat(post(command, 409).path("code").asText()).isEqualTo("PERIOD_CLOSED");
                 assertThat(harness.counts()).isEqualTo(before);
@@ -210,7 +195,6 @@ final class ReceivablesOfficeClosureScenarios {
         private final boolean after;
         private final CountDownLatch entered = new CountDownLatch(1);
         private final CountDownLatch release;
-        private final AtomicReference<String> sqlState = new AtomicReference<>();
 
         private Barrier(boolean after, boolean pause) {
             this.after = after;

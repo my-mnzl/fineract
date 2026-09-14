@@ -44,18 +44,20 @@ custom period guards remain in force; exact persisted replay precedes the new lo
 
 Closure creation and deletion increment `m_office.accounting_closure_version` while
 holding the office lock. The physical epoch is intentionally unmapped in the office
-entity so ordinary office edits cannot overwrite it. Under PostgreSQL repeatable
-read, a command whose snapshot predates a committed closure cannot lock that changed
-office row: it aborts with a serialization conflict and no financial effects. A fresh
-retry observes the closure and rejects the closed posting date. MariaDB and MySQL
-use a current locking closure read. A command that acquires the office lock first
-finishes atomically before closure creation proceeds. Comment-only closure updates
-and ordinary office lookups retain their existing behavior.
+entity so ordinary office edits cannot overwrite it. Financial commands use
+`READ_COMMITTED` under the scope and office locks, so a command waiting for a
+committed closure reads the new closure and rejects the closed posting date with
+`PERIOD_CLOSED`. A command that acquires the office lock first finishes atomically
+before closure creation proceeds. This also lets concurrent identical commands read
+the winner's durable result after waiting for the scope lock. Standalone reads and
+period proofs retain `REPEATABLE_READ`; internal close reads join the existing locked
+command transaction. Comment-only closure updates and ordinary office lookups retain
+their existing behavior.
 
 The real database matrix checks closed/equal/open date boundaries, exact replay after
-closure, native-first serialization, and a snapshot established before a competing
-closure commits. It checks PostgreSQL SQLSTATE `40001`, unchanged financial counts
-after rejection, and fresh-retry `PERIOD_CLOSED` on all three databases.
+closure, native-first serialization, and a command that reads before a competing
+closure commits. It checks `PERIOD_CLOSED`, unchanged financial counts after rejection,
+and identical fresh-retry rejection on all three databases.
 
 ## Observed posted-period proof
 
@@ -176,3 +178,28 @@ solves yields and builds projections. Omitting `includeProjections` preserves th
 full `PRICE` response. Estimate work checks a five-second deadline between
 accounts and rejects with `PRICING_TIMEOUT` when exceeded; a partial portfolio is
 never returned as complete.
+
+## Historical acquisition recording
+
+Capabilities advertise `historicalPurchaseVersion: "1"`. `BOOK_HISTORICAL_PURCHASE`
+requires `RECORD_HISTORICAL_MNZL_RECEIVABLES` in addition to execute permission.
+It accepts one operator and a source/basis-bound acknowledgment, with empty
+approver and approval-evidence lists. Historical dates still require the existing
+command-bound reconstruction grant; period, configuration and replay rules apply.
+
+The command recognizes the same exact-face native loan and measured purchase
+basis as `BOOK_PURCHASE`, crediting acquisition clearing without claiming a bank
+payment. Each account stores the original historical purchase cost and its
+unreconciled amount. `RECONCILE_HISTORICAL_PURCHASE` consumes verified acquisition
+cash allocations against that amount, partially or in full, under the ordinary
+approval rules. Reconciliation never creates another loan or payment posting;
+ordinary intervening accrual still applies. A payment difference remains pending.
+
+Historical accounts initially report `riskAssessmentStatus: PENDING`, a null
+credit stage, and zero **posted** allowance. This is not an assessed zero-loss
+forecast. Collections and accrual remain available. `SET_IMPAIRMENT` records the
+actual assessment; a period close cannot include outstanding unassessed exposure.
+Position events freeze both risk status and unreconciled cost, so past reads do
+not change when assessment or payment evidence arrives. Controls expose pending
+assessment accounts and the unreconciled purchase total. Existing event/command
+JSON and hashes are never rewritten by the additive migration.

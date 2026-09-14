@@ -2917,11 +2917,18 @@
             "$ref": "#/components/schemas/decimal"
           },
           "stage": {
-            "type": "string",
-            "enum": [
-              "STAGE_1",
-              "STAGE_2",
-              "STAGE_3"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "STAGE_1",
+                  "STAGE_2",
+                  "STAGE_3"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "daysPastDue": {
@@ -2941,6 +2948,16 @@
                 "type": "null"
               }
             ]
+          },
+          "riskAssessmentStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ASSESSED"
+            ]
+          },
+          "unreconciledPurchaseMinor": {
+            "$ref": "#/components/schemas/version"
           }
         },
         "required": [
@@ -3957,7 +3974,9 @@
           "RECOVER_WRITTEN_OFF",
           "SET_DEVELOPER_IMPAIRMENT",
           "CLOSE_PERIOD",
-          "CORRECT_EVENT"
+          "CORRECT_EVENT",
+          "BOOK_HISTORICAL_PURCHASE",
+          "RECONCILE_HISTORICAL_PURCHASE"
         ]
       },
       "financialCommand": {
@@ -9300,6 +9319,316 @@
               "correctionEvidenceId"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "CURRENT",
+                  "RECONSTRUCTION"
+                ]
+              },
+              "executionAuthorization": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "authorizationId": {
+                        "$ref": "#/components/schemas/id"
+                      },
+                      "scopeHash": {
+                        "$ref": "#/components/schemas/sha256"
+                      },
+                      "approvedBy": {
+                        "$ref": "#/components/schemas/id"
+                      },
+                      "effectiveFrom": {
+                        "$ref": "#/components/schemas/financialDate"
+                      },
+                      "effectiveThrough": {
+                        "$ref": "#/components/schemas/financialDate"
+                      }
+                    },
+                    "required": [
+                      "authorizationId",
+                      "scopeHash",
+                      "approvedBy",
+                      "effectiveFrom",
+                      "effectiveThrough"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "accountMappingRevisionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "operationId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "idempotencyKey": {
+                "$ref": "#/components/schemas/id"
+              },
+              "expectedVersion": {
+                "$ref": "#/components/schemas/version"
+              },
+              "businessDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "basisHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "scope": {
+                "$ref": "#/components/schemas/scope"
+              },
+              "subjectId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "subjectKind": {
+                "type": "string",
+                "const": "RECEIVABLE"
+              },
+              "affectedAccountVersions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/accountVersion"
+                }
+              },
+              "executionScopeHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "actorId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "approverIds": {
+                "maxItems": 0,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "approvalEvidenceIds": {
+                "maxItems": 0,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "commandType": {
+                "type": "string",
+                "const": "BOOK_HISTORICAL_PURCHASE"
+              },
+              "accountId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "dealId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "customerReferenceId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "basis": {
+                "$ref": "#/components/schemas/calculationBasis"
+              },
+              "acknowledgment": {
+                "type": "object",
+                "properties": {
+                  "recordId": {
+                    "$ref": "#/components/schemas/id"
+                  },
+                  "sourceHash": {
+                    "$ref": "#/components/schemas/sha256"
+                  },
+                  "basisHash": {
+                    "$ref": "#/components/schemas/sha256"
+                  },
+                  "actorId": {
+                    "$ref": "#/components/schemas/id"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "recordId",
+                  "sourceHash",
+                  "basisHash",
+                  "actorId",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "executionMode",
+              "executionAuthorization",
+              "accountMappingRevisionId",
+              "operationId",
+              "idempotencyKey",
+              "expectedVersion",
+              "businessDate",
+              "basisHash",
+              "scope",
+              "subjectId",
+              "subjectKind",
+              "affectedAccountVersions",
+              "executionScopeHash",
+              "actorId",
+              "approverIds",
+              "approvalEvidenceIds",
+              "commandType",
+              "accountId",
+              "dealId",
+              "customerReferenceId",
+              "basis",
+              "acknowledgment"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "executionMode": {
+                "type": "string",
+                "enum": [
+                  "CURRENT",
+                  "RECONSTRUCTION",
+                  "CORRECTION"
+                ]
+              },
+              "executionAuthorization": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "authorizationId": {
+                        "$ref": "#/components/schemas/id"
+                      },
+                      "scopeHash": {
+                        "$ref": "#/components/schemas/sha256"
+                      },
+                      "approvedBy": {
+                        "$ref": "#/components/schemas/id"
+                      },
+                      "effectiveFrom": {
+                        "$ref": "#/components/schemas/financialDate"
+                      },
+                      "effectiveThrough": {
+                        "$ref": "#/components/schemas/financialDate"
+                      }
+                    },
+                    "required": [
+                      "authorizationId",
+                      "scopeHash",
+                      "approvedBy",
+                      "effectiveFrom",
+                      "effectiveThrough"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "accountMappingRevisionId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "operationId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "idempotencyKey": {
+                "$ref": "#/components/schemas/id"
+              },
+              "expectedVersion": {
+                "$ref": "#/components/schemas/version"
+              },
+              "businessDate": {
+                "$ref": "#/components/schemas/financialDate"
+              },
+              "basisHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "scope": {
+                "$ref": "#/components/schemas/scope"
+              },
+              "subjectId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "subjectKind": {
+                "type": "string",
+                "const": "RECEIVABLE"
+              },
+              "affectedAccountVersions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/accountVersion"
+                }
+              },
+              "executionScopeHash": {
+                "$ref": "#/components/schemas/sha256"
+              },
+              "actorId": {
+                "$ref": "#/components/schemas/id"
+              },
+              "approverIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "approvalEvidenceIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              },
+              "commandType": {
+                "type": "string",
+                "const": "RECONCILE_HISTORICAL_PURCHASE"
+              },
+              "amountMinor": {
+                "$ref": "#/components/schemas/positiveMinorUnits"
+              },
+              "acquisitionClearingAllocationIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/id"
+                }
+              }
+            },
+            "required": [
+              "executionMode",
+              "executionAuthorization",
+              "accountMappingRevisionId",
+              "operationId",
+              "idempotencyKey",
+              "expectedVersion",
+              "businessDate",
+              "basisHash",
+              "scope",
+              "subjectId",
+              "subjectKind",
+              "affectedAccountVersions",
+              "executionScopeHash",
+              "actorId",
+              "approverIds",
+              "approvalEvidenceIds",
+              "commandType",
+              "amountMinor",
+              "acquisitionClearingAllocationIds"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -10158,7 +10487,8 @@
           "IDEMPOTENCY_CONFLICT",
           "INVALID_DATA",
           "UNSUPPORTED_VERSION",
-          "INFRASTRUCTURE_UNAVAILABLE"
+          "INFRASTRUCTURE_UNAVAILABLE",
+          "RISK_ASSESSMENT_PENDING"
         ]
       },
       "capabilities": {
@@ -10254,6 +10584,10 @@
             "items": {
               "$ref": "#/components/schemas/blockerCode"
             }
+          },
+          "historicalPurchaseVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [
@@ -10390,6 +10724,15 @@
           },
           "snapshotHash": {
             "$ref": "#/components/schemas/sha256"
+          },
+          "unreconciledPurchaseMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "pendingRiskAssessmentAccountIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
           }
         },
         "required": [

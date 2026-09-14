@@ -93,6 +93,18 @@ public class ReceivablesReadService {
         return scope;
     }
 
+    /** Internal close read: participate in the already locked financial transaction, including its own writes. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY, isolation = Isolation.DEFAULT)
+    public long executionWatermark(ReceivablesExecution execution) {
+        return watermark(execution.command.get("scope"));
+    }
+
+    /** Standalone controls keep repeatable-read; close controls use its existing scope and office locks. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY, isolation = Isolation.DEFAULT)
+    public JsonNode executionControls(ReceivablesExecution execution, long watermark) {
+        return controls(execution.command.get("scope"), new Boundary(execution.date, execution.boundarySide, watermark), null, null);
+    }
+
     public long watermark(JsonNode scope) {
         Long maximum = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, key(scope));
         return maximum == null ? 0 : maximum;
@@ -658,6 +670,18 @@ public class ReceivablesReadService {
         result.put("eventWatermark", Long.toString(boundary.watermark()));
         result.set("balances", json.value(balances));
         result.set("activeAccountIds", json.value(activeIds.stream().sorted().toList()));
+        BigInteger unreconciled = BigInteger.ZERO;
+        List<String> pendingAssessments = new ArrayList<>();
+        for (var account : accounts) {
+            JsonNode position = positions.get(string(account, "external_id"));
+            unreconciled = unreconciled.add(new BigInteger(position.path("unreconciledPurchaseMinor").asText("0")));
+            if ("PENDING".equals(position.path("riskAssessmentStatus").asText())
+                    && new BigInteger(text(position, "contractualOutstandingMinor")).signum() > 0) {
+                pendingAssessments.add(string(account, "external_id"));
+            }
+        }
+        result.put("unreconciledPurchaseMinor", unreconciled.toString());
+        result.set("pendingRiskAssessmentAccountIds", json.value(pendingAssessments.stream().sorted().toList()));
         List<String> lots = new ArrayList<>();
         List<String> facilities = new ArrayList<>();
         for (var snapshot : snapshotRows(scope, boundary, "LOT")) {

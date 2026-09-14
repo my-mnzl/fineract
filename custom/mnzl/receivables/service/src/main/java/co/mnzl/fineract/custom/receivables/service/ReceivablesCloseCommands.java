@@ -72,7 +72,7 @@ public class ReceivablesCloseCommands {
             require(!boundary.isBefore(LocalDate.parse(string(recorded, "effective_from")))
                     && !boundary.isAfter(LocalDate.parse(string(recorded, "effective_through"))), "APPROVAL_SCOPE_CHANGED");
         }
-        require(Long.parseLong(text(e.command, "eventWatermark")) == reads.watermark(e.command.get("scope")), "SOURCE_CHANGED");
+        require(Long.parseLong(text(e.command, "eventWatermark")) == reads.executionWatermark(e), "SOURCE_CHANGED");
         e.date = boundary;
         e.postingDate = boundary.minusDays(1);
         e.boundarySide = "BEFORE_EVENTS";
@@ -105,8 +105,7 @@ public class ReceivablesCloseCommands {
         if (!text(e.command, "commandType").equals("CLOSE_PERIOD") || !text(e.command, "phase").equals("PREPARE")) {
             return;
         }
-        var controls = reads.controls(e.command.get("scope"), new ReceivablesReadService.Boundary(e.date, "BEFORE_EVENTS", watermark), null,
-                null);
+        var controls = reads.executionControls(e, watermark);
         for (var balance : controls.get("balances")) {
             require(text(balance, "differenceMinor").equals("0"), "JOURNAL_MISMATCH");
         }
