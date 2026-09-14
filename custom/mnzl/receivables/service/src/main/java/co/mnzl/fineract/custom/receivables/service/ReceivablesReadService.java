@@ -93,6 +93,18 @@ public class ReceivablesReadService {
         return scope;
     }
 
+    /** Internal close read: participate in the already locked financial transaction, including its own writes. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY, isolation = Isolation.DEFAULT)
+    public long executionWatermark(ReceivablesExecution execution) {
+        return watermark(execution.command.get("scope"));
+    }
+
+    /** Standalone controls keep repeatable-read; close controls use its existing scope and office locks. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY, isolation = Isolation.DEFAULT)
+    public JsonNode executionControls(ReceivablesExecution execution, long watermark) {
+        return controls(execution.command.get("scope"), new Boundary(execution.date, execution.boundarySide, watermark), null, null);
+    }
+
     public long watermark(JsonNode scope) {
         Long maximum = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, key(scope));
         return maximum == null ? 0 : maximum;
