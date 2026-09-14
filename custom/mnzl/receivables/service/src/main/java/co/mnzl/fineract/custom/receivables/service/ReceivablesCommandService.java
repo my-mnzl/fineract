@@ -51,7 +51,10 @@ public class ReceivablesCommandService {
     private final ReceivablesHelCommands hel;
     private final PlatformSecurityContext security;
 
-    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    // The scope and office locks serialize financial effects. A fresh statement snapshot after waiting
+    // for the scope lock must see the winner's durable command; REPEATABLE_READ can retain a pre-lock
+    // snapshot established by authentication and attempt to insert the same operation twice.
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public JsonNode execute(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
         JsonNode input = json.read(request);

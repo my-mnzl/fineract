@@ -467,7 +467,7 @@ public class ReceivablesConfiguration {
     void validateHistoricalOperator(JsonNode command) {
         security.authenticatedUser().validateHasPermissionTo("RECORD_HISTORICAL_MNZL_RECEIVABLES");
         JsonNode acknowledgment = command.get("acknowledgment");
-        require(text(acknowledgment, "actorId").equals(text(command, "actorId"))
+        require(!text(acknowledgment, "reason").isBlank() && text(acknowledgment, "actorId").equals(text(command, "actorId"))
                 && text(acknowledgment, "basisHash").equals(text(command, "basisHash"))
                 && text(acknowledgment, "sourceHash").equals(text(command.get("basis"), "sourceHash")), "APPROVAL_SCOPE_CHANGED");
     }
