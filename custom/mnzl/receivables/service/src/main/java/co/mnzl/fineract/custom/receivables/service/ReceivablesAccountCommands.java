@@ -70,6 +70,7 @@ public class ReceivablesAccountCommands {
     private final ReceivablesConfiguration configuration;
 
     public void book(ReceivablesExecution e) {
+        boolean historical = "BOOK_HISTORICAL_PURCHASE".equals(text(e.command, "commandType"));
         String id = text(e.command, "accountId");
         require(id.equals(e.subjectId()), "INVALID_DATA");
         String key = e.accountKey(id);
@@ -79,11 +80,13 @@ public class ReceivablesAccountCommands {
                 "SOURCE_CHANGED");
         require(text(basis, "policyRevisionId").equals(string(e.configuration, "policy_revision"))
                 && text(basis, "calculatorBuild").equals(string(e.configuration, "calculator_build")), "UNSUPPORTED_VERSION");
-        require(text(e.command.get("riskForecast"), "stage").equals("STAGE_1") && basis.get("acceptedAccountPrices").size() > 0,
-                "INVALID_DATA");
+        require((historical || text(e.command.get("riskForecast"), "stage").equals("STAGE_1"))
+                && basis.get("acceptedAccountPrices").size() > 0, "INVALID_DATA");
         Purchase purchase = measurement.purchase(basis, id);
-        cash.consumeAllocations(e, e.command.get("acquisitionClearingAllocationIds"), purchase.netPurchaseCashMinor(),
-                "ACQUISITION_ADVANCE", text(e.command, "dealId"));
+        if (!historical) {
+            cash.consumeAllocations(e, e.command.get("acquisitionClearingAllocationIds"), purchase.netPurchaseCashMinor(),
+                    "ACQUISITION_ADVANCE", text(e.command, "dealId"));
+        }
         long client = nativeBridge
                 .createClient(new ClientIdentity("R" + ReceivablesStore.key(e.scope, "customer", text(e.command, "customerReferenceId")),
                         text(e.command, "customerReferenceId"), number(e.configuration, "office_id")));
@@ -96,7 +99,8 @@ public class ReceivablesAccountCommands {
         var state = new MeasurementState(purchase.segment(), position, outstanding);
         String segmentKey = ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + key);
         measurement.saveState(e.scope, key, e.operationKey, state, string(e.configuration, "calculator_build"));
-        BigInteger allowance = measurement.allowance(position, purchase.segment(), e.command.get("riskForecast"));
+        BigInteger allowance = historical ? BigInteger.ZERO
+                : measurement.allowance(position, purchase.segment(), e.command.get("riskForecast"));
         var fields = new LinkedHashMap<String, Object>();
         fields.put("scope_key", e.scope);
         fields.put("external_id", id);
@@ -116,13 +120,18 @@ public class ReceivablesAccountCommands {
         fields.put("gross_minor", position.grossPurchaseBasisMinor().toString());
         fields.put("net_minor", position.amortizedCostMinor().toString());
         fields.put("allowance_minor", allowance.toString());
-        fields.put("stage", "STAGE_1");
+        fields.put("stage", historical ? null : "STAGE_1");
+        fields.put("risk_assessment_status", historical ? "PENDING" : "ASSESSED");
+        fields.put("historical_purchase_minor", historical ? purchase.netPurchaseCashMinor().toString() : "0");
+        fields.put("unreconciled_purchase_minor", historical ? purchase.netPurchaseCashMinor().toString() : "0");
         fields.put("active_segment_key", segmentKey);
         fields.put("last_event_key", null);
         fields.put("created_at", java.sql.Timestamp.from(java.time.Instant.now()));
         store.insert("account", key, fields);
         saveLegs(e, key, basis.get("cashflows"), nativeBook.sourcePeriodIds());
-        saveForecast(e, key, e.command.get("riskForecast"), allowance);
+        if (!historical) {
+            saveForecast(e, key, e.command.get("riskForecast"), allowance);
+        }
         String deal = text(e.command, "dealId");
         line(e.lines, "contractualReceivable", "DEBIT", purchase.contractualFaceMinor(), id, deal, "FACE");
         line(e.lines, "deferredDiscount", "CREDIT", position.deferredDiscountMinor(), id, deal, "DISCOUNT");
@@ -131,6 +140,31 @@ public class ReceivablesAccountCommands {
         pair(e.lines, "impairmentExpense", "lossAllowance", allowance, id, deal, "IMPAIRMENT");
         e.accountKeys.add(key);
         reconcileNative(store.require("account", key), position, e.date);
+    }
+
+    private static boolean pendingAssessment(Map<String, Object> account) {
+        return "PENDING".equals(string(account, "risk_assessment_status"));
+    }
+
+    public void reconcileHistoricalPurchase(ReceivablesExecution e) {
+        // Only ordinary time accrual may post here; recognition and bank cash must never be posted twice.
+        var account = account(e);
+        BigInteger requested = minor(e.command, "amountMinor");
+        BigInteger pending = amount(account, "unreconciled_purchase_minor");
+        require(amount(account, "historical_purchase_minor").signum() > 0 && requested.signum() > 0 && requested.compareTo(pending) <= 0,
+                "BANK_PROOF_MISMATCH");
+        for (JsonNode allocation : e.command.get("acquisitionClearingAllocationIds")) {
+            var cashAllocation = store.require("cash_allocation", ReceivablesStore.key(e.scope, "cash-allocation", allocation.asText()));
+            require(cashAllocation.get("account_key") == null || e.accountKey(e.subjectId()).equals(string(cashAllocation, "account_key")),
+                    "BANK_PROOF_MISMATCH");
+            var source = store.require("cash_source", string(cashAllocation, "source_key"));
+            require(!LocalDate.parse(string(source, "value_date")).isAfter(e.date), "BANK_PROOF_MISMATCH");
+        }
+        cash.consumeAllocations(e, e.command.get("acquisitionClearingAllocationIds"), requested, "ACQUISITION_ADVANCE",
+                string(account, "deal_id"));
+        store.update("account", string(account, "record_key"),
+                Map.of("unreconciled_purchase_minor", pending.subtract(requested).toString()));
+        e.accountKeys.add(string(account, "record_key"));
     }
 
     private void saveLegs(ReceivablesExecution e, String accountKey, JsonNode flows, Map<String, Long> periods) {
@@ -169,7 +203,7 @@ public class ReceivablesAccountCommands {
         LocalDate previous = LocalDate.parse(string(account, "last_effective_date"));
         require(!e.date.isBefore(previous), "PERIOD_CLOSED");
         Position p = measurement.position(account, e.date);
-        if (e.date.isAfter(previous) && p.contractualOutstandingMinor().signum() > 0) {
+        if (e.date.isAfter(previous) && p.contractualOutstandingMinor().signum() > 0 && !pendingAssessment(account)) {
             // Validate the approved replacement at this boundary; Stage 3 time passage below still uses the old
             // forecast.
             JsonNode forecast = "SET_IMPAIRMENT".equals(text(e.command, "commandType")) ? e.command.get("forecast") : latestForecast(key);
@@ -210,6 +244,7 @@ public class ReceivablesAccountCommands {
         if (amount(account, "face_minor").signum() == 0) {
             return;
         }
+        require(!pendingAssessment(account), "RISK_ASSESSMENT_PENDING");
         JsonNode forecast = latestForecast(string(account, "record_key"));
         require(approvedForecastIds.contains(text(forecast, "forecastId")), "EVIDENCE_EXPIRED");
         BigInteger target = measurement.allowance(measurement.position(account, e.date), measurement.state(account).segment(), forecast);
@@ -358,7 +393,7 @@ public class ReceivablesAccountCommands {
         pair(e.lines, "impairmentExpense", "lossAllowance", target.subtract(amount(account, "allowance_minor")),
                 string(account, "external_id"), string(account, "deal_id"), "IMPAIRMENT");
         store.update("account", string(account, "record_key"),
-                Map.of("allowance_minor", target.toString(), "stage", text(forecast, "stage")));
+                Map.of("allowance_minor", target.toString(), "stage", text(forecast, "stage"), "risk_assessment_status", "ASSESSED"));
         saveForecast(e, string(account, "record_key"), forecast, target);
     }
 
@@ -377,7 +412,8 @@ public class ReceivablesAccountCommands {
         BigInteger allowance = measurement.allowance(position, measurement.state(account).segment(), forecast);
         pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")),
                 string(account, "external_id"), string(account, "deal_id"), "IMPAIRMENT");
-        store.update("account", key, Map.of("allowance_minor", allowance.toString(), "stage", text(forecast, "stage")));
+        store.update("account", key,
+                Map.of("allowance_minor", allowance.toString(), "stage", text(forecast, "stage"), "risk_assessment_status", "ASSESSED"));
         saveForecast(e, key, forecast, allowance);
     }
 
@@ -578,7 +614,8 @@ public class ReceivablesAccountCommands {
         update.put("status", "ACTIVE");
         update.put("closure_reason", null);
         if (remeasureAllowance) {
-            BigInteger allowance = measurement.allowance(restored, state.segment(), latestForecast(key));
+            BigInteger allowance = pendingAssessment(account) ? BigInteger.ZERO
+                    : measurement.allowance(restored, state.segment(), latestForecast(key));
             pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")), id, deal,
                     "IMPAIRMENT");
             update.put("allowance_minor", allowance.toString());
@@ -737,6 +774,9 @@ public class ReceivablesAccountCommands {
         row.put("net_minor", after.amortizedCostMinor().toString());
         row.put("allowance_minor", allowance.toString());
         row.put("stage", text(e.command.get("replacementRiskForecast"), "stage"));
+        row.put("risk_assessment_status", "ASSESSED");
+        row.put("historical_purchase_minor", "0");
+        row.put("unreconciled_purchase_minor", "0");
         row.put("active_segment_key", ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + newKey));
         row.put("last_event_key", null);
         row.put("created_at", java.sql.Timestamp.from(java.time.Instant.now()));
@@ -853,7 +893,7 @@ public class ReceivablesAccountCommands {
         store.update("account", key,
                 Map.of("face_minor", after.contractualOutstandingMinor().toString(), "gross_minor",
                         after.grossPurchaseBasisMinor().toString(), "net_minor", after.amortizedCostMinor().toString(), "allowance_minor",
-                        allowance.toString(), "stage", text(e.command.get("riskForecast"), "stage")));
+                        allowance.toString(), "stage", text(e.command.get("riskForecast"), "stage"), "risk_assessment_status", "ASSESSED"));
         saveForecast(e, key, e.command.get("riskForecast"), allowance);
     }
 
@@ -914,6 +954,9 @@ public class ReceivablesAccountCommands {
         row.put("net_minor", consideration.toString());
         row.put("allowance_minor", allowance.toString());
         row.put("stage", text(e.command.get("riskForecast"), "stage"));
+        row.put("risk_assessment_status", "ASSESSED");
+        row.put("historical_purchase_minor", "0");
+        row.put("unreconciled_purchase_minor", "0");
         row.put("source_hash", text(outcome, "replacementSourceHash"));
         row.put("basis_hash", text(outcome, "replacementSourceHash"));
         row.put("active_segment_key", ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + newKey));

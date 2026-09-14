@@ -176,3 +176,28 @@ solves yields and builds projections. Omitting `includeProjections` preserves th
 full `PRICE` response. Estimate work checks a five-second deadline between
 accounts and rejects with `PRICING_TIMEOUT` when exceeded; a partial portfolio is
 never returned as complete.
+
+## Historical acquisition recording
+
+Capabilities advertise `historicalPurchaseVersion: "1"`. `BOOK_HISTORICAL_PURCHASE`
+requires `RECORD_HISTORICAL_MNZL_RECEIVABLES` in addition to execute permission.
+It accepts one operator and a source/basis-bound acknowledgment, with empty
+approver and approval-evidence lists. Historical dates still require the existing
+command-bound reconstruction grant; period, configuration and replay rules apply.
+
+The command recognizes the same exact-face native loan and measured purchase
+basis as `BOOK_PURCHASE`, crediting acquisition clearing without claiming a bank
+payment. Each account stores the original historical purchase cost and its
+unreconciled amount. `RECONCILE_HISTORICAL_PURCHASE` consumes verified acquisition
+cash allocations against that amount, partially or in full, under the ordinary
+approval rules. Reconciliation never creates another loan or payment posting;
+ordinary intervening accrual still applies. A payment difference remains pending.
+
+Historical accounts initially report `riskAssessmentStatus: PENDING`, a null
+credit stage, and zero **posted** allowance. This is not an assessed zero-loss
+forecast. Collections and accrual remain available. `SET_IMPAIRMENT` records the
+actual assessment; a period close cannot include outstanding unassessed exposure.
+Position events freeze both risk status and unreconciled cost, so past reads do
+not change when assessment or payment evidence arrives. Controls expose pending
+assessment accounts and the unreconciled purchase total. Existing event/command
+JSON and hashes are never rewritten by the additive migration.

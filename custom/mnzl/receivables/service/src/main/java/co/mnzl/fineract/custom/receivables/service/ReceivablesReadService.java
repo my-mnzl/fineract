@@ -658,6 +658,18 @@ public class ReceivablesReadService {
         result.put("eventWatermark", Long.toString(boundary.watermark()));
         result.set("balances", json.value(balances));
         result.set("activeAccountIds", json.value(activeIds.stream().sorted().toList()));
+        BigInteger unreconciled = BigInteger.ZERO;
+        List<String> pendingAssessments = new ArrayList<>();
+        for (var account : accounts) {
+            JsonNode position = positions.get(string(account, "external_id"));
+            unreconciled = unreconciled.add(new BigInteger(position.path("unreconciledPurchaseMinor").asText("0")));
+            if ("PENDING".equals(position.path("riskAssessmentStatus").asText())
+                    && new BigInteger(text(position, "contractualOutstandingMinor")).signum() > 0) {
+                pendingAssessments.add(string(account, "external_id"));
+            }
+        }
+        result.put("unreconciledPurchaseMinor", unreconciled.toString());
+        result.set("pendingRiskAssessmentAccountIds", json.value(pendingAssessments.stream().sorted().toList()));
         List<String> lots = new ArrayList<>();
         List<String> facilities = new ArrayList<>();
         for (var snapshot : snapshotRows(scope, boundary, "LOT")) {

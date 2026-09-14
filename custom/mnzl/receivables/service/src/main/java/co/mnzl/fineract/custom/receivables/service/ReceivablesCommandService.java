@@ -96,7 +96,8 @@ public class ReceivablesCommandService {
             case "ALLOCATE_HEL_DEVELOPER_ADVANCE" -> hel.allocateAdvance(execution);
             case "RECORD_CASH_MOVEMENT" -> cash.recordCash(execution);
             case "RECORD_FUNDING_EVENT" -> cash.recordFunding(execution);
-            case "BOOK_PURCHASE" -> accounts.book(execution);
+            case "BOOK_PURCHASE", "BOOK_HISTORICAL_PURCHASE" -> accounts.book(execution);
+            case "RECONCILE_HISTORICAL_PURCHASE" -> accounts.reconcileHistoricalPurchase(execution);
             case "COLLECT" -> accounts.collect(execution, false);
             case "REVERSE_COLLECTION" -> accounts.reverse(execution);
             case "RESET_RATE" -> accounts.reset(execution);
