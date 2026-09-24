@@ -322,10 +322,30 @@ public class ReceivablesCalculationService {
                 minor(wire, "deferredIntegralFeeMinor"), dpd, gross, net, legs);
         ReceivablesMath.allocateGross(position);
         ReceivablesMath.allocateNet(position);
-        var segment = new ReceivablesMath.Segment(date, flows, g, n,
+        String version = ReceivablesMeasurement.calculationVersion(input);
+        var segment = new ReceivablesMath.Segment(segmentStart(input, version, date), flows, g, n,
                 new ReceivablesMath.Yield(decimal(wire, "grossYield"), BigDecimal.ZERO, 0),
-                new ReceivablesMath.Yield(decimal(wire, "netEir"), BigDecimal.ZERO, 0), ReceivablesMeasurement.calculationVersion(input));
+                new ReceivablesMath.Yield(decimal(wire, "netEir"), BigDecimal.ZERO, 0), version);
         return new ReceivablesMath.MeasurementState(segment, position, outstanding);
+    }
+
+    /**
+     * Daily legs discount from the measurement date, so the rebuilt daily segment starts there as it always has. Simple
+     * legs are shares of a balance walked from the segment start through the cheque dates, so the rebuilt simple
+     * segment must start where the wire legs say their segment started; otherwise a position between two cheques cannot
+     * reproduce the supplied bases and the request is rejected as a changed measurement.
+     */
+    private static LocalDate segmentStart(JsonNode input, String version, LocalDate date) {
+        if (!version.equals(ReceivablesMath.SIMPLE_CALCULATION_VERSION)) {
+            return date;
+        }
+        LocalDate start = null;
+        for (JsonNode row : input.path("measurementLegs")) {
+            LocalDate rowStart = date(row, "segmentStartDate");
+            require((start == null || start.equals(rowStart)) && !rowStart.isAfter(date), "SOURCE_CHANGED");
+            start = rowStart;
+        }
+        return start;
     }
 
     private ObjectNode after(JsonNode before, ReceivablesMath.Position position, BigInteger allowance) {
