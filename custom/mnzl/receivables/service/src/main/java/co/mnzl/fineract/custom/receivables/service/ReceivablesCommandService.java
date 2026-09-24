@@ -166,6 +166,16 @@ public class ReceivablesCommandService {
         }
     }
 
+    /**
+     * An event carries one calculation version, so a command whose accounts are pinned to different accretion rules (a
+     * developer settlement across daily and simple lots, for example) is refused rather than misreported; split it per
+     * version. A command that touches no account reports the daily default.
+     */
+    static String eventVersion(Set<String> pinnedVersions) {
+        require(pinnedVersions.size() <= 1, "INVALID_DATA");
+        return pinnedVersions.isEmpty() ? ReceivablesConfiguration.CALCULATION : pinnedVersions.iterator().next();
+    }
+
     private JsonNode finish(ReceivablesExecution e, String payloadHash, Instant now) {
         List<JsonNode> positions = new ArrayList<>();
         Set<String> versions = new HashSet<>();
@@ -182,8 +192,7 @@ public class ReceivablesCommandService {
         var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"),
                 string(e.configuration, "mapping_revision"), e.lines);
         var event = json.object();
-        // The event names the rule its accounts are pinned to; operations that touch no account report the default.
-        event.put("calculationVersion", versions.size() == 1 ? versions.iterator().next() : ReceivablesConfiguration.CALCULATION);
+        event.put("calculationVersion", eventVersion(versions));
         event.put("productPolicyCode", ReceivablesConfiguration.POLICY);
         event.put("schemaVersion", "1");
         event.put("policyRevisionId", string(e.configuration, "policy_revision"));
