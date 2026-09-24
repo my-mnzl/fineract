@@ -330,7 +330,7 @@ public class ReceivablesAccountCommands {
             return allowance;
         }
         JsonNode forecast = latestForecast(string(account, "record_key"));
-        var losses = CreditAndFunding.impairment(p, measurement.state(account).segment().netEir().rate(),
+        var losses = CreditAndFunding.impairment(measurement.state(account).segment(), p,
                 Integer.parseInt(text(forecast, "stage").substring(6)), measurement.scenarios(forecast)).lossByCashflow();
         Map<String, BigDecimal> weights = new LinkedHashMap<>();
         for (Leg leg : p.legs()) {
@@ -481,11 +481,11 @@ public class ReceivablesAccountCommands {
         line(e.lines, "portfolioInterestIncome", "CREDIT",
                 result.financierIncomeMinor().add(recourse ? result.developerShareMinor() : BigInteger.ZERO), id, deal, "SETTLEMENT");
         pair(e.lines, "lossAllowance", "impairmentExpense", released, id, deal, "IMPAIRMENT");
-        applyRemaining(e, account, partial.remainingMeasurement(measurement.state(account).segment()), released);
+        Segment segment = measurement.state(account).segment();
+        applyRemaining(e, account, partial.remainingMeasurement(segment), released);
         if (share.signum() > 0) {
-            createLot(e, key,
-                    new ReceivableEvents.AdjustmentLot(e.date, e.date, BigDecimal.ZERO, ReceivableEvents.Direction.PAYABLE, share, share),
-                    ":settlement");
+            createLot(e, key, new ReceivableEvents.AdjustmentLot(e.date, e.date, BigDecimal.ZERO, ReceivableEvents.Direction.PAYABLE, share,
+                    share, segment.calculationVersion()), ":settlement");
         }
         if (partial.retainedPosition().contractualOutstandingMinor().signum() == 0) {
             store.update("account", key, Map.of("closure_reason", text(source, "closureReason")));
@@ -539,7 +539,7 @@ public class ReceivablesAccountCommands {
         }
         Segment next = new Segment(e.date, flows, reset.futureSegment().grossBasisMinor().add(before.pastDueMinor()),
                 reset.futureSegment().netBasisMinor().add(before.pastDueMinor()), reset.futureSegment().grossYield(),
-                reset.futureSegment().netEir());
+                reset.futureSegment().netEir(), reset.futureSegment().calculationVersion());
         Map<String, BigInteger> outstanding = new LinkedHashMap<>();
         flows.forEach(f -> outstanding.put(f.cashflowId(), f.amountMinor()));
         Position after = ReceivablesMath.position(next, e.date, outstanding);
@@ -743,9 +743,10 @@ public class ReceivablesAccountCommands {
         String newKey = e.accountKey(newId);
         String deal = string(old, "deal_id");
         require(store.find("account", newKey) == null, "OWNERSHIP_CONFLICT");
-        Position before = measurement.position(old, e.date);
-        var replacement = ReceivableEvents.substitute(before, measurement.flows(e.command.get("replacementCashflows")),
-                amount(old, "allowance_minor"));
+        var oldState = measurement.state(old);
+        Position before = ReceivablesMath.position(oldState, e.date);
+        var replacement = ReceivableEvents.substitute(oldState.segment().calculationVersion(), before,
+                measurement.flows(e.command.get("replacementCashflows")), amount(old, "allowance_minor"));
         var allocations = new ArrayList<Allocation>();
         for (var leg : store.children("leg", "account_key", oldKey)) {
             if (outstanding(leg).signum() > 0) {
@@ -875,10 +876,11 @@ public class ReceivablesAccountCommands {
         require(classification.equals("MODIFICATION"), "RECOVERY_REQUIRED");
         var oldState = measurement.state(account);
         List<Cashflow> flows = measurement.flows(e.command.get("modifiedCashflows"));
-        var modification = ReceivableEvents.modify(e.date, flows, oldState.segment().netEir().rate(), before.amortizedCostMinor());
-        BigInteger gross = ReceivablesMath.minor(ReceivablesMath.pv(e.date, flows, oldState.segment().grossYield().rate()));
+        String version = oldState.segment().calculationVersion();
+        var modification = ReceivableEvents.modify(version, e.date, flows, oldState.segment().netEir().rate(), before.amortizedCostMinor());
+        BigInteger gross = ReceivablesMath.minor(ReceivablesMath.pv(version, e.date, flows, oldState.segment().grossYield().rate()));
         Segment next = new Segment(e.date, flows, gross, modification.modifiedNetBasisMinor(), oldState.segment().grossYield(),
-                oldState.segment().netEir());
+                oldState.segment().netEir(), version);
         Map<String, BigInteger> outstanding = new LinkedHashMap<>();
         flows.forEach(f -> outstanding.put(f.cashflowId(), f.amountMinor()));
         Position after = ReceivablesMath.position(next, e.date, outstanding);
@@ -938,7 +940,8 @@ public class ReceivablesAccountCommands {
             require(text(flow, "receivableId").equals(newId)
                     && text(flow, "scheduleVersionId").equals(text(outcome, "replacementScheduleVersionId")), "SOURCE_CHANGED");
         }
-        Segment segment = ReceivablesMath.segment(e.date, flows, consideration, consideration);
+        Segment segment = ReceivablesMath.segment(measurement.state(account).segment().calculationVersion(), e.date, flows, consideration,
+                consideration);
         Map<String, BigInteger> outstanding = new LinkedHashMap<>();
         flows.forEach(flow -> outstanding.put(flow.cashflowId(), flow.amountMinor()));
         Position position = ReceivablesMath.position(segment, e.date, outstanding);

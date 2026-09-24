@@ -120,8 +120,15 @@ class ReceivablesCalculationServiceTest {
     }
 
     private ObjectNode positioned(ObjectNode basis) {
+        return positioned(basis, LocalDate.parse(basis.path("settlementDate").asText()), Map.of());
+    }
+
+    /**
+     * The wire position and legs the app holds for the account on {@code date}, after the given cheques were collected.
+     */
+    private ObjectNode positioned(ObjectNode basis, LocalDate date, Map<String, BigInteger> collected) {
         var purchase = measurement.purchase(basis, "account-1");
-        var position = ReceivablesMath.position(purchase.segment(), LocalDate.parse(basis.path("settlementDate").asText()), Map.of());
+        var position = ReceivablesMath.position(purchase.segment(), date, collected);
         ObjectNode wire = measurement.measures(position, BigInteger.ZERO);
         wire.set("scope", json.read(
                 "{\"platformId\":\"mnzl\",\"financierOrganizationId\":\"financier\",\"environment\":\"test\",\"developerOrganizationId\":\"developer\"}"));
@@ -144,13 +151,13 @@ class ReceivablesCalculationServiceTest {
             ObjectNode row = json.object();
             row.set("cashflow", basis.get("cashflows").get(i));
             row.put("segmentId", "segment");
-            row.put("segmentStartDate", position.businessDate().toString());
+            row.put("segmentStartDate", purchase.segment().startDate().toString());
             row.put("asOfDate", position.businessDate().toString());
             row.put("grossBasisMinor", leg.grossBasis().movePointRight(2).toPlainString());
             row.put("netBasisMinor", leg.netBasis().movePointRight(2).toPlainString());
             row.set("grossYield", wire.get("grossYield"));
             row.set("netEir", wire.get("netEir"));
-            row.put("collectedMinor", "0");
+            row.put("collectedMinor", leg.cashflow().amountMinor().subtract(leg.outstandingMinor()).toString());
             row.put("adjustedMinor", "0");
             legs.add(row);
         }
@@ -249,6 +256,181 @@ class ReceivablesCalculationServiceTest {
         result = calculate(request);
         assertThat(result.path("lossAllowanceMinor").asText()).isEqualTo("0");
         assertThat(result.path("scheduledIncomeMinor").asText()).isEqualTo("0");
+    }
+
+    @Test
+    void simpleVersionPricesIdenticallyPinsItsOwnYieldsAndResetsUnderTheSameRule() throws Exception {
+        String simple = ReceivablesMath.SIMPLE_CALCULATION_VERSION;
+        JsonNode daily = vector("irregular-integral-fee");
+        JsonNode expected = vector("simple-irregular-integral-fee").get("expected");
+        ObjectNode basis = basis(daily);
+        basis.put("calculationVersion", simple);
+        ObjectNode request = context();
+        request.put("calculationVersion", simple);
+        request.put("calculationType", "PRICE");
+        request.set("basis", basis);
+        JsonNode result = calculate(request);
+        assertThat(result.path("calculationVersion").asText()).isEqualTo(simple);
+        JsonNode totals = result.path("pricing").path("totals");
+        assertThat(totals.path("grossPurchasePriceMinor").asText()).isEqualTo(daily.path("expected").path("grossPriceMinor").asText());
+        assertThat(totals.path("netPurchaseCashMinor").asText()).isEqualTo(daily.path("expected").path("netPurchaseCashMinor").asText());
+        JsonNode account = result.path("pricing").path("accounts").get(0);
+        for (String yield : List.of("grossYield", "netEir")) {
+            assertThat(new BigDecimal(account.path(yield).asText()).subtract(new BigDecimal(expected.path(yield).asText())).abs())
+                    .isLessThanOrEqualTo(new BigDecimal("5e-17"));
+        }
+        BigInteger income = BigInteger.ZERO;
+        for (JsonNode row : account.path("monthlyIncome")) {
+            income = income.add(new BigInteger(row.path("interestIncomeMinor").asText()));
+        }
+        assertThat(income).isEqualTo(new BigInteger(totals.path("contractualFaceMinor").asText())
+                .subtract(new BigInteger(totals.path("netPurchaseCashMinor").asText())));
+        var purchase = measurement.purchase(basis, "account-1");
+        assertThat(purchase.segment().calculationVersion()).isEqualTo(simple);
+        assertThat(ReceivablesMeasurement.calculationVersion(context())).isEqualTo(ReceivablesConfiguration.CALCULATION);
+        // A mixed request is refused: the basis names the rule the account is booked under.
+        ObjectNode mixed = context();
+        mixed.put("calculationType", "PRICE");
+        mixed.set("basis", basis);
+        assertThatThrownBy(() -> calculate(mixed)).isInstanceOf(ReceivablesException.class);
+        // The wire position rebuilds a simple segment, so a reset uses the simple present value and lot accrual.
+        ObjectNode reset = positioned(basis);
+        reset.put("calculationVersion", simple);
+        reset.put("calculationType", "RESET");
+        reset.set("remainingCashflows", basis.get("cashflows"));
+        reset.set("effectiveDate", basis.get("settlementDate"));
+        reset.put("corridorObservationId", "new-rate");
+        reset.put("corridorRate", "0.30");
+        reset.put("spread", "0");
+        reset.put("adjustmentDueDate", "2030-04-01");
+        JsonNode outcome = calculate(reset);
+        var simpleReset = ReceivableEvents.reset(purchase.segment(), purchase.segment().startDate(), Map.of(), new BigDecimal("0.30"));
+        var dailyReset = ReceivableEvents.reset(measurement.purchase(basis(daily), "account-1").segment(), purchase.segment().startDate(),
+                Map.of(), new BigDecimal("0.30"));
+        assertThat(outcome.path("calculationVersion").asText()).isEqualTo(simple);
+        assertThat(outcome.path("grossBasisChangeMinor").asText()).isEqualTo(simpleReset.deltaMinor().toString());
+        assertThat(simpleReset.deltaMinor()).isNotEqualTo(dailyReset.deltaMinor());
+        assertThat(simpleReset.futureSegment().calculationVersion()).isEqualTo(simple);
+    }
+
+    private ObjectNode contractualForecast(ObjectNode basis, LocalDate asOf, Map<String, BigInteger> collected) {
+        ObjectNode forecast = json.object();
+        forecast.put("forecastId", "forecast");
+        forecast.put("forecastVersion", "1");
+        forecast.put("asOfDate", asOf.toString());
+        forecast.put("validThroughDate", asOf.plusDays(30).toString());
+        forecast.put("stage", "STAGE_1");
+        forecast.put("contentHash", "0".repeat(64));
+        List<JsonNode> recoveries = new ArrayList<>();
+        for (JsonNode flow : basis.path("cashflows")) {
+            if (collected.containsKey(flow.path("cashflowId").asText())) {
+                continue;
+            }
+            ObjectNode recovery = json.object();
+            recovery.set("sourceCashflowId", flow.get("cashflowId"));
+            recovery.set("date", flow.get("dueDate"));
+            recovery.set("amountMinor", flow.get("amountMinor"));
+            recovery.put("payer", "BORROWER");
+            recoveries.add(recovery);
+        }
+        ObjectNode scenario = json.object();
+        scenario.put("scenarioId", "contractual");
+        scenario.put("probability", "1");
+        scenario.putNull("defaultDate");
+        scenario.set("recoveries", json.value(recoveries));
+        forecast.set("scenarios", json.value(List.of(scenario)));
+        return forecast;
+    }
+
+    private ObjectNode resetRequest(ObjectNode basis, LocalDate date, Map<String, BigInteger> collected, String dueDate) {
+        ObjectNode request = positioned(basis, date, collected);
+        request.set("calculationVersion", basis.get("calculationVersion"));
+        request.put("calculationType", "RESET");
+        request.set("remainingCashflows", basis.get("cashflows"));
+        request.put("effectiveDate", date.toString());
+        request.put("corridorObservationId", "new-rate");
+        request.put("corridorRate", "0.20");
+        request.put("spread", "0");
+        request.put("adjustmentDueDate", dueDate);
+        return request;
+    }
+
+    /**
+     * Between two cheques the app's legs are shares of the walked simple balance, not a fresh discounting from the
+     * measurement date; the rebuilt segment must reproduce them exactly for every calculation type.
+     */
+    @Test
+    void simpleAccountCalculatesBetweenChequesAndOnChequeDatesAfterEvents() throws Exception {
+        String simple = ReceivablesMath.SIMPLE_CALCULATION_VERSION;
+        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        basis.put("calculationVersion", simple);
+        var segment = measurement.purchase(basis, "account-1").segment();
+        LocalDate mid = LocalDate.of(2030, 5, 1);
+        Map<String, BigInteger> afterFirst = Map.of("cf-01", BigInteger.ZERO);
+        JsonNode vector = vector("simple-reset-fall").get("expected");
+
+        JsonNode reset = calculate(resetRequest(basis, mid, afterFirst, "2030-07-30"));
+        var expectedReset = ReceivableEvents.reset(segment, mid, afterFirst, new BigDecimal("0.20"));
+        assertThat(reset.path("grossBasisChangeMinor").asText()).isEqualTo(expectedReset.deltaMinor().toString())
+                .isEqualTo(vector.path("developerAdjustmentMinor").asText());
+        assertThat(reset.path("developerAdjustment").path("initialAmountMinor").asText())
+                .isEqualTo(expectedReset.lot().principalMinor().toString());
+        assertThat(reset.path("positionAfter").path("grossPurchaseBasisMinor").asText())
+                .isEqualTo(vector.path("newGrossBasisMinor").asText());
+
+        ObjectNode settlement = positioned(basis, mid, afterFirst);
+        settlement.put("calculationVersion", simple);
+        settlement.put("calculationType", "SETTLEMENT");
+        settlement.put("settlementDate", mid.toString());
+        settlement.set("cashflowIds", json.value(List.of("cf-02")));
+        settlement.put("payoffMinor", "5000000");
+        JsonNode settled = calculate(settlement);
+        var expectedSettlement = ReceivableEvents.settlePortions(ReceivablesMath.position(segment, mid, afterFirst),
+                Map.of("cf-02", BigInteger.valueOf(5000000)), BigInteger.valueOf(5000000), BigInteger.ZERO);
+        assertThat(settled.path("grossPurchaseBasisMinor").asText())
+                .isEqualTo(expectedSettlement.settlement().grossBasisMinor().toString());
+        assertThat(settled.path("positionAfter").path("amortizedCostMinor").asText())
+                .isEqualTo(expectedSettlement.retainedPosition().amortizedCostMinor().toString());
+
+        ObjectNode impairment = positioned(basis, mid, afterFirst);
+        impairment.put("calculationVersion", simple);
+        impairment.put("calculationType", "IMPAIRMENT");
+        impairment.set("cashflows", basis.get("cashflows"));
+        impairment.set("forecast", contractualForecast(basis, mid, afterFirst));
+        JsonNode impaired = calculate(impairment);
+        assertThat(impaired.path("lossAllowanceMinor").asText()).isEqualTo("0");
+
+        // On a cheque date after its collection the anchor is that cheque date; the legs equal the closed form.
+        LocalDate second = LocalDate.of(2030, 7, 30);
+        Map<String, BigInteger> afterSecond = Map.of("cf-01", BigInteger.ZERO, "cf-02", BigInteger.ZERO);
+        JsonNode onCheque = calculate(resetRequest(basis, second, afterSecond, "2031-01-26"));
+        var expectedOnCheque = ReceivableEvents.reset(segment, second, afterSecond, new BigDecimal("0.20"));
+        assertThat(onCheque.path("grossBasisChangeMinor").asText()).isEqualTo(expectedOnCheque.deltaMinor().toString());
+        assertThat(expectedOnCheque.futureSegment().calculationVersion()).isEqualTo(simple);
+
+        // Legs claiming a later segment start than the measurement date are a changed measurement, not a silent rebase.
+        ObjectNode stale = resetRequest(basis, mid, afterFirst, "2030-07-30");
+        for (JsonNode row : stale.path("measurementLegs")) {
+            ((ObjectNode) row).put("segmentStartDate", mid.plusDays(1).toString());
+        }
+        assertThatThrownBy(() -> calculate(stale)).isInstanceOf(ReceivablesException.class);
+    }
+
+    /**
+     * The daily rebuild still starts on the measurement date: the same mid-period request reproduces the daily vector.
+     */
+    @Test
+    void dailyAccountStillCalculatesBetweenChequesFromTheMeasurementDate() throws Exception {
+        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        var segment = measurement.purchase(basis, "account-1").segment();
+        LocalDate mid = LocalDate.of(2030, 5, 1);
+        Map<String, BigInteger> afterFirst = Map.of("cf-01", BigInteger.ZERO);
+        JsonNode reset = calculate(resetRequest(basis, mid, afterFirst, "2030-07-30"));
+        var expected = ReceivableEvents.reset(segment, mid, afterFirst, new BigDecimal("0.20"));
+        assertThat(reset.path("calculationVersion").asText()).isEqualTo(ReceivablesMath.CALCULATION_VERSION);
+        assertThat(reset.path("grossBasisChangeMinor").asText()).isEqualTo(expected.deltaMinor().toString())
+                .isEqualTo(vector("reset-fall").path("expected").path("developerAdjustmentMinor").asText());
+        assertThat(expected.futureSegment().calculationVersion()).isEqualTo(ReceivablesMath.CALCULATION_VERSION);
     }
 
     @Test

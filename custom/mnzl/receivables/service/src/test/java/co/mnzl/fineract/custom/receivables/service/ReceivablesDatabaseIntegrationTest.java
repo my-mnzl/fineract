@@ -119,6 +119,8 @@ class ReceivablesDatabaseIntegrationTest {
                 boolean ordinaryPassed = ordinaryRegression();
                 verifyServicingAndClose();
                 new ReceivablesCommandDatabaseScenarios(this).verify();
+                // Runs while mapping-1 is still active; the configuration scenarios retire it at the end.
+                new ReceivablesSimpleAccretionScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify();
@@ -160,8 +162,9 @@ class ReceivablesDatabaseIntegrationTest {
                         "historical-grant-issuer-policy-preserved", "office-closure-inclusive-posting-boundary",
                         "office-closure-native-first-serialization", "office-closure-snapshot-before-close",
                         "office-closure-durable-replay", "period-proof-population-and-gross-controls",
-                        "period-proof-zero-and-hel-exclusion", "period-proof-missing-extra-and-cross-date",
-                        "period-proof-event-integrity")));
+                        "period-proof-zero-and-hel-exclusion", "period-proof-missing-extra-and-cross-date", "period-proof-event-integrity",
+                        "simple-accretion-pinned-on-booking", "simple-accretion-impairment-and-reset-from-reloaded-segment",
+                        "simple-accretion-lot-and-event-version", "mixed-version-developer-settlement-refused")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -323,8 +326,17 @@ class ReceivablesDatabaseIntegrationTest {
         return request("POST", PREFIX + "/commands", preparePurchase(id, first, second, acquisitionId), 200);
     }
 
+    JsonNode purchase(String id, String first, String second, String acquisitionId, String calculationVersion) throws Exception {
+        return request("POST", PREFIX + "/commands", preparePurchase(id, first, second, acquisitionId, calculationVersion), 200);
+    }
+
     ObjectNode preparePurchase(String id, String first, String second, String acquisitionId) throws Exception {
+        return preparePurchase(id, first, second, acquisitionId, "EG_RECEIVABLES_ACT360_DAILY_V1");
+    }
+
+    ObjectNode preparePurchase(String id, String first, String second, String acquisitionId, String calculationVersion) throws Exception {
         ObjectNode basis = versions();
+        basis.put("calculationVersion", calculationVersion);
         basis.put("settlementDate", today.toString());
         basis.put("corridorObservationId", "rate");
         basis.put("corridorRate", "0.24");
@@ -347,6 +359,7 @@ class ReceivablesDatabaseIntegrationTest {
         }
         basis.set("cashflows", json.value(flows));
         ObjectNode calculate = versions();
+        calculate.put("calculationVersion", calculationVersion);
         calculate.put("calculationType", "PRICE");
         calculate.set("basis", basis);
         calculate.put("basisHash", json.hash(basis));

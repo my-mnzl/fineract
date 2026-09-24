@@ -23,11 +23,13 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.number;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
+import co.mnzl.fineract.receivables.math.ReceivablesMath;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +43,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReceivablesConfiguration {
 
-    public static final String CALCULATION = "EG_RECEIVABLES_ACT360_DAILY_V1";
+    /** The daily default; every version the runtime can pin on an account is listed in {@link #CALCULATIONS}. */
+    public static final String CALCULATION = ReceivablesMath.CALCULATION_VERSION;
+    public static final List<String> CALCULATIONS = ReceivablesMath.SUPPORTED_VERSIONS;
     public static final String POLICY = "EG_RECEIVABLES_V1";
     public static final Set<String> ACCOUNTS = Set.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredIntegralFee",
             "lossAllowance", "developerReceivable", "developerReceivableAllowance", "developerPayable", "acquisitionClearing",
@@ -392,6 +396,7 @@ public class ReceivablesConfiguration {
         }
         ObjectNode result = json.object();
         result.put("calculationVersion", CALCULATION);
+        result.set("calculationVersions", json.value(CALCULATIONS));
         result.put("productPolicyCode", POLICY);
         result.put("schemaVersion", "1");
         result.put("policyRevisionId", string(config, "policy_revision"));

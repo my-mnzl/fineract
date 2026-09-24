@@ -20,7 +20,6 @@ package co.mnzl.fineract.receivables.math;
 
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.MC;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.days;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.growth;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.major;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.minor;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.position;
@@ -80,7 +79,24 @@ public final class CreditAndFunding {
     }
 
     public static Impairment impairment(Position position, BigDecimal originalNetEir, int stage, List<Scenario> scenarios) {
+        return impairment(ReceivablesMath.CALCULATION_VERSION, position.businessDate(), position, originalNetEir, stage, scenarios);
+    }
+
+    /** Forecast recoveries discount under the segment's pinned rule, anchored exactly as its position legs are. */
+    public static Impairment impairment(Segment segment, Position position, int stage, List<Scenario> scenarios) {
+        List<LocalDate> boundaries = segment.cashflows().stream().map(ReceivablesMath.Cashflow::dueDate).toList();
+        return impairment(segment.calculationVersion(), ReceivablesMath.anchor(segment.startDate(), position.businessDate(), boundaries),
+                position, segment.netEir().rate(), stage, scenarios);
+    }
+
+    /**
+     * Recoveries discount to the measurement date under the given rule; the anchor is the segment start or the last
+     * cheque date on or before that date (the measurement date itself for a standalone claim such as a lot).
+     */
+    public static Impairment impairment(String calculationVersion, LocalDate anchor, Position position, BigDecimal originalNetEir,
+            int stage, List<Scenario> scenarios) {
         require(stage >= 1 && stage <= 3 && !scenarios.isEmpty(), "Current Credit forecast required");
+        List<LocalDate> boundaries = position.legs().stream().map(l -> l.cashflow().dueDate()).toList();
         BigDecimal weights = BigDecimal.ZERO;
         HashSet<String> ids = new HashSet<>();
         Map<String, Leg> legs = new LinkedHashMap<>();
@@ -103,7 +119,9 @@ public final class CreditAndFunding {
                         "Invalid recovery exposure");
                 require(sources.add(r.cashflowId() + "/" + r.payer() + "/" + r.date()), "Duplicate recovery source/date");
                 recovered.merge(r.cashflowId(), r.amountMinor(), BigInteger::add);
-                recoveriesPv.merge(r.cashflowId(), major(r.amountMinor()).divide(growth(originalNetEir, days(date, r.date())), MC),
+                recoveriesPv.merge(r.cashflowId(),
+                        major(r.amountMinor()).divide(
+                                ReceivablesMath.discount(calculationVersion, originalNetEir, anchor, date, r.date(), boundaries), MC),
                         (a, b) -> a.add(b, MC));
             }
             for (Leg leg : position.legs()) {
@@ -136,8 +154,8 @@ public final class CreditAndFunding {
         days(from, to);
         Position opening = position(segment, from, outstanding);
         Position closing = position(segment, to, outstanding);
-        Impairment a = impairment(opening, segment.netEir().rate(), 3, unchangedForecast);
-        Impairment b = impairment(closing, segment.netEir().rate(), 3, unchangedForecast);
+        Impairment a = impairment(segment, opening, 3, unchangedForecast);
+        Impairment b = impairment(segment, closing, 3, unchangedForecast);
         BigInteger scheduled = closing.amortizedCostMinor().subtract(opening.amortizedCostMinor());
         BigInteger allowanceUnwind = a.lossAllowanceMinor().subtract(b.lossAllowanceMinor());
         return new Stage3Unwind(a.lossAllowanceMinor(), b.lossAllowanceMinor(), scheduled.add(allowanceUnwind), scheduled, allowanceUnwind);

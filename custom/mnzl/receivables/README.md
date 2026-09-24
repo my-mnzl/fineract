@@ -161,6 +161,42 @@ completion; activation retries retain the original `activatedAt`. `expectedActiv
 is the caller's precondition, while `sourceRevision` is the recorded predecessor on
 success. Logs exclude configuration bodies and financial contents.
 
+## Calculation versions
+
+Every purchase pins one accretion rule on the account. The calculation basis names
+it in `calculationVersion`: `EG_RECEIVABLES_ACT360_DAILY_V1` (daily compounding,
+the default and the only value earlier bases could carry) or
+`EG_RECEIVABLES_ACT360_SIMPLE_V1` (simple interest between cheques, capitalised
+on cheque due dates; see the maths module README). Pricing is identical under
+both, so accepted account prices never depend on the version; the solved yields,
+projections, resets, modifications, substitutions, adjustment lots and forecast
+discounting do. The pinned version lives in the segment snapshot and in
+`m_mnzl_r_segment.calculator_version`; every later event on the account, and any
+segment it spawns, keeps it. Rows written before the simple rule existed carry the
+daily id already, and snapshots without the field measure as daily, so no
+migration is needed. A calculation request must carry the same version as its
+basis, and `RESET`, `SETTLEMENT` and `IMPAIRMENT` requests name the version of the
+wire position they rebuild. For a simple-rule position the measurement legs'
+`segmentStartDate` is the start of the rebuilt segment (all legs must agree and
+it cannot follow the measurement date), because simple legs between two cheques
+are shares of the balance walked from that start; daily legs still rebuild from
+the measurement date as before.
+
+A financial event names one version, so a command whose accounts are pinned to
+different rules (a developer settlement that mixes daily and simple lots, for
+example) is refused with `INVALID_DATA` before anything is posted; settle such
+lots in one command per version.
+
+`GET /capabilities` keeps `calculationVersion` as the daily default and adds
+`calculationVersions`, the list a caller may pin at booking. Financial events
+report the version of the accounts they touched (the default when an operation
+touches no account). `GET /configuration/runtime` is unchanged.
+
+The Docker-backed database integration test books a simple account beside a
+daily one, reloads the segment for a later impairment and reset, and checks the
+pinned version on the segment row, the event and the adjustment lot, the
+simple-rule journal amounts, and the refusal of a mixed-version settlement.
+
 ## Lightweight pricing estimates
 
 `POST /pricing-calculations` accepts `includeProjections: false` on a `PRICE`

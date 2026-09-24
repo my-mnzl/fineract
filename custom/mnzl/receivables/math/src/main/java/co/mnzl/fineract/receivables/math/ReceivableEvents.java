@@ -18,11 +18,12 @@
  */
 package co.mnzl.fineract.receivables.math;
 
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.CALCULATION_VERSION;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.MC;
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.accrual;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.allocate;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.days;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.face;
-import static co.mnzl.fineract.receivables.math.ReceivablesMath.growth;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.major;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.minor;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.position;
@@ -30,6 +31,7 @@ import static co.mnzl.fineract.receivables.math.ReceivablesMath.pv;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.require;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.segment;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.validateIds;
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.version;
 
 import co.mnzl.fineract.receivables.math.ReceivablesMath.Cashflow;
 import co.mnzl.fineract.receivables.math.ReceivablesMath.Leg;
@@ -56,13 +58,23 @@ public final class ReceivableEvents {
         PAYABLE, RECEIVABLE
     }
 
+    /** A lot unwinds under the accretion rule of the account it adjusts; persisted lots without one are daily. */
     public record AdjustmentLot(LocalDate effectiveDate, LocalDate dueDate, BigDecimal rate, Direction direction, BigInteger principalMinor,
-            BigInteger amountDueMinor) {
+            BigInteger amountDueMinor, String calculationVersion) {
+
+        public AdjustmentLot {
+            calculationVersion = version(calculationVersion);
+        }
+
+        public AdjustmentLot(LocalDate effectiveDate, LocalDate dueDate, BigDecimal rate, Direction direction, BigInteger principalMinor,
+                BigInteger amountDueMinor) {
+            this(effectiveDate, dueDate, rate, direction, principalMinor, amountDueMinor, CALCULATION_VERSION);
+        }
 
         public BigInteger balanceMinor(LocalDate date) {
             days(effectiveDate, date);
             LocalDate end = date.isAfter(dueDate) ? dueDate : date;
-            return minor(major(principalMinor).multiply(growth(rate, days(effectiveDate, end)), MC));
+            return minor(major(principalMinor).multiply(accrual(calculationVersion, rate, days(effectiveDate, end)), MC));
         }
 
         public BigInteger unwindMinor(LocalDate from, LocalDate to) {
@@ -106,14 +118,16 @@ public final class ReceivableEvents {
     }
 
     public static Reset reset(Segment segment, LocalDate date, Map<String, BigInteger> outstanding, BigDecimal newRate) {
-        return reset(position(segment, date, outstanding), newRate);
+        return reset(segment.calculationVersion(), position(segment, date, outstanding), newRate);
     }
 
     public static Reset reset(MeasurementState state, LocalDate date, BigDecimal newRate) {
-        return reset(position(state, date), newRate);
+        return reset(state.segment().calculationVersion(), position(state, date), newRate);
     }
 
-    private static Reset reset(Position p, BigDecimal newRate) {
+    /** The reset segment and its lot keep the account's pinned rule; a simple segment restarts from rounded bases. */
+    private static Reset reset(String calculationVersion, Position p, BigDecimal newRate) {
+        String version = version(calculationVersion);
         LocalDate date = p.businessDate();
         List<Cashflow> future = new ArrayList<>();
         BigDecimal oldPv = BigDecimal.ZERO;
@@ -129,15 +143,15 @@ public final class ReceivableEvents {
         }
         BigInteger oldG = p.grossPurchaseBasisMinor().subtract(p.pastDueMinor());
         BigInteger oldN = p.amortizedCostMinor().subtract(p.pastDueMinor());
-        BigDecimal newPv = pv(date, future, newRate);
+        BigDecimal newPv = pv(version, date, future, newRate);
         BigInteger newG = minor(newPv);
         BigInteger delta = newG.subtract(oldG);
         BigInteger newN = oldN.add(delta);
-        Segment next = segment(date, future, newG, newN);
+        Segment next = segment(version, date, future, newG, newN);
         LocalDate nextDate = future.stream().map(Cashflow::dueDate).min(LocalDate::compareTo).orElseThrow();
         AdjustmentLot lot = delta.signum() == 0 ? null
                 : new AdjustmentLot(date, nextDate, newRate, delta.signum() > 0 ? Direction.PAYABLE : Direction.RECEIVABLE, delta.abs(),
-                        minor(major(delta.abs()).multiply(growth(newRate, days(date, nextDate)), MC)));
+                        minor(major(delta.abs()).multiply(accrual(version, newRate, days(date, nextDate)), MC)), version);
         return new Reset(oldPv, newPv, oldG, oldN, delta, next, lot, p.pastDueMinor());
     }
 
@@ -231,14 +245,26 @@ public final class ReceivableEvents {
     }
 
     public static Substitution substitute(Position old, List<Cashflow> replacement, BigInteger oldAllowance) {
+        return substitute(CALCULATION_VERSION, old, replacement, oldAllowance);
+    }
+
+    /** The replacement segment inherits the substituted account's pinned rule. */
+    public static Substitution substitute(String calculationVersion, Position old, List<Cashflow> replacement, BigInteger oldAllowance) {
         require(oldAllowance.signum() >= 0 && oldAllowance.compareTo(old.amortizedCostMinor()) <= 0, "Invalid old allowance");
-        return new Substitution(segment(old.businessDate(), replacement, old.grossPurchaseBasisMinor(), old.amortizedCostMinor()),
+        return new Substitution(
+                segment(calculationVersion, old.businessDate(), replacement, old.grossPurchaseBasisMinor(), old.amortizedCostMinor()),
                 old.contractualOutstandingMinor(), face(replacement), oldAllowance);
     }
 
     public static Modification modify(LocalDate date, List<Cashflow> legallyModified, BigDecimal originalNetEir, BigInteger beforeNet) {
+        return modify(CALCULATION_VERSION, date, legallyModified, originalNetEir, beforeNet);
+    }
+
+    /** The modified schedule is valued at the original EIR under the account's pinned rule. */
+    public static Modification modify(String calculationVersion, LocalDate date, List<Cashflow> legallyModified, BigDecimal originalNetEir,
+            BigInteger beforeNet) {
         validateIds(legallyModified);
-        BigDecimal net = pv(date, legallyModified, originalNetEir);
+        BigDecimal net = pv(calculationVersion, date, legallyModified, originalNetEir);
         return new Modification(legallyModified, originalNetEir, net, minor(net), minor(net).subtract(beforeNet));
     }
 

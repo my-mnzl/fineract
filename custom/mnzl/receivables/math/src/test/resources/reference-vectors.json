@@ -591,6 +591,251 @@
           }
         ]
       }
+    },
+    {
+      "id": "simple-leap",
+      "operation": "simpleAccrual",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "fromDate": "2028-02-28",
+        "toDate": "2028-03-01",
+        "nominalAnnualRate": "0.36",
+        "openingMinor": "10000000"
+      },
+      "expected": {
+        "days": 2,
+        "factor": "1.002000000000000000",
+        "closingMinor": "10020000",
+        "incomeMinor": "20000",
+        "dailyClosingMinor": "10020010"
+      }
+    },
+    {
+      "id": "simple-irregular-integral-fee",
+      "operation": "priceSimple",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0.24",
+        "feeRate": "0.01",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-04-01",
+            "amountMinor": "4000000"
+          },
+          {
+            "id": "cf-02",
+            "dueDate": "2030-07-30",
+            "amountMinor": "5000000"
+          },
+          {
+            "id": "cf-03",
+            "dueDate": "2031-01-26",
+            "amountMinor": "6000000"
+          }
+        ]
+      },
+      "expected": {
+        "unroundedGrossPrice": "127408.376855474932960524",
+        "contractualFaceMinor": "15000000",
+        "grossPriceMinor": "12740838",
+        "feeMinor": "127408",
+        "netPurchaseCashMinor": "12613430",
+        "deferredDiscountMinor": "2259162",
+        "grossYield": "0.250159027837733415",
+        "netEir": "0.266600286458115766",
+        "dailyGrossYield": "0.239999962936445851",
+        "dailyNetEir": "0.255113051099557374",
+        "lifetimeGrossIncomeMinor": "2259162",
+        "lifetimeFeeIncomeMinor": "127408",
+        "lifetimeTotalIncomeMinor": "2386570"
+      }
+    },
+    {
+      "id": "simple-first-cheque-boundary",
+      "operation": "positionSimple",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "acquisitionVector": "simple-irregular-integral-fee",
+        "boundaryDate": "2030-04-01",
+        "boundarySide": "BEFORE_EVENTS",
+        "collectedCashflowIds": []
+      },
+      "expected": {
+        "days": 90,
+        "grossBasisMinor": "13537647",
+        "amortizedCostMinor": "13454116",
+        "deferredFeeMinor": "83531",
+        "pastDueMinor": "4000000",
+        "notYetDueMinor": "11000000",
+        "deferredDiscountMinor": "1462353",
+        "grossIncomeSinceAcquisitionMinor": "796809",
+        "totalIncomeSinceAcquisitionMinor": "840686",
+        "analyticalGrossBasis": "135376.469119795129326480",
+        "analyticalNetBasis": "134541.160128048477871703",
+        "afterCollectionGrossBasisMinor": "9537647",
+        "afterCollectionAmortizedCostMinor": "9454116"
+      }
+    },
+    {
+      "id": "simple-mid-period",
+      "operation": "positionSimple",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "acquisitionVector": "simple-irregular-integral-fee",
+        "boundaryDate": "2030-05-01",
+        "boundarySide": "BEFORE_EVENTS",
+        "collectedCashflowIds": ["cf-01"]
+      },
+      "expected": {
+        "days": 120,
+        "grossBasisMinor": "9736474",
+        "amortizedCostMinor": "9664155",
+        "deferredFeeMinor": "72319",
+        "pastDueMinor": "0",
+        "notYetDueMinor": "11000000",
+        "deferredDiscountMinor": "1263526",
+        "grossIncomeSinceAcquisitionMinor": "995636",
+        "totalIncomeSinceAcquisitionMinor": "1050725",
+        "analyticalGrossBasis": "97364.742852595425259785",
+        "analyticalNetBasis": "96641.551825733504274255",
+        "daysSinceLastCheque": 30
+      }
+    },
+    {
+      "id": "simple-full-maturity",
+      "operation": "positionSimple",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "acquisitionVector": "simple-irregular-integral-fee",
+        "boundaryDate": "2031-01-26",
+        "boundarySide": "BEFORE_EVENTS",
+        "collectedCashflowIds": ["cf-01", "cf-02"]
+      },
+      "expected": {
+        "days": 390,
+        "grossBasisMinor": "6000000",
+        "amortizedCostMinor": "6000000",
+        "deferredFeeMinor": "0",
+        "pastDueMinor": "6000000",
+        "notYetDueMinor": "0",
+        "deferredDiscountMinor": "0",
+        "grossIncomeSinceAcquisitionMinor": "2259162",
+        "totalIncomeSinceAcquisitionMinor": "2386570",
+        "analyticalGrossBasis": "60000.000000000000000000",
+        "analyticalNetBasis": "60000.000000000000000000",
+        "afterCollectionGrossBasisMinor": "0",
+        "afterCollectionAmortizedCostMinor": "0"
+      }
+    },
+    {
+      "id": "simple-growing-balance",
+      "operation": "segmentSimple",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "startDate": "2026-09-06",
+        "grossBasisMinor": "528909769",
+        "netBasisMinor": "528909769",
+        "cashflows": [
+          {
+            "id": "crown-01",
+            "dueDate": "2028-07-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-02",
+            "dueDate": "2029-01-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-03",
+            "dueDate": "2029-07-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-04",
+            "dueDate": "2030-01-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-05",
+            "dueDate": "2030-07-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-06",
+            "dueDate": "2031-01-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-07",
+            "dueDate": "2031-07-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-08",
+            "dueDate": "2032-01-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-09",
+            "dueDate": "2032-07-31",
+            "amountMinor": "95493900"
+          },
+          {
+            "id": "crown-10",
+            "dueDate": "2033-01-31",
+            "amountMinor": "95493900"
+          }
+        ]
+      },
+      "expected": {
+        "contractualFaceMinor": "954939000",
+        "grossYield": "0.158676760437342077",
+        "netEir": "0.158676760437342077",
+        "lifetimeInterestMinor": "426029231",
+        "monthlyBoundaryDate": "2027-01-01",
+        "monthlyBoundaryDays": 117,
+        "monthlyBoundaryGrossBasisMinor": "556185618",
+        "firstChequeDate": "2028-07-31",
+        "firstChequeDays": 694,
+        "beforeFirstChequeGrossBasisMinor": "690699847",
+        "afterFirstChequeGrossBasisMinor": "595205947",
+        "afterFirstChequeExceedsOpeningMinor": "66296178",
+        "beforeLastChequeGrossBasisMinor": "95493900",
+        "afterLastChequeGrossBasisMinor": "0"
+      }
+    },
+    {
+      "id": "simple-reset-fall",
+      "operation": "resetSimple",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+      "input": {
+        "acquisitionVector": "simple-irregular-integral-fee",
+        "resetDate": "2030-05-01",
+        "collectedCashflowIds": ["cf-01"],
+        "newNominalAnnualRate": "0.20"
+      },
+      "expected": {
+        "oldPvSameDate": "97364.742852595425259785",
+        "newPvSameDate": "99567.099567099567099567",
+        "oldGrossBasisMinor": "9736474",
+        "oldAmortizedCostMinor": "9664155",
+        "newGrossBasisMinor": "9956710",
+        "newAmortizedCostMinor": "9884391",
+        "deferredFeeBeforeAndAfterMinor": "72319",
+        "developerAdjustmentMinor": "220236",
+        "developerDirection": "PAYABLE",
+        "nextContractualChequeDate": "2030-07-30",
+        "adjustmentDays": 90,
+        "adjustmentSettlementMinor": "231248",
+        "adjustmentUnwindMinor": "11012",
+        "newGrossYield": "0.199999990851485187",
+        "newNetEir": "0.215392594902656837",
+        "customerFaceBeforeAndAfterMinor": "11000000",
+        "immediateIncomeMinor": "0"
+      }
     }
   ]
 }

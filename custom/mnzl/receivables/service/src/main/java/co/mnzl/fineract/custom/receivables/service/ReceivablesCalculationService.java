@@ -322,10 +322,30 @@ public class ReceivablesCalculationService {
                 minor(wire, "deferredIntegralFeeMinor"), dpd, gross, net, legs);
         ReceivablesMath.allocateGross(position);
         ReceivablesMath.allocateNet(position);
-        var segment = new ReceivablesMath.Segment(date, flows, g, n,
+        String version = ReceivablesMeasurement.calculationVersion(input);
+        var segment = new ReceivablesMath.Segment(segmentStart(input, version, date), flows, g, n,
                 new ReceivablesMath.Yield(decimal(wire, "grossYield"), BigDecimal.ZERO, 0),
-                new ReceivablesMath.Yield(decimal(wire, "netEir"), BigDecimal.ZERO, 0));
+                new ReceivablesMath.Yield(decimal(wire, "netEir"), BigDecimal.ZERO, 0), version);
         return new ReceivablesMath.MeasurementState(segment, position, outstanding);
+    }
+
+    /**
+     * Daily legs discount from the measurement date, so the rebuilt daily segment starts there as it always has. Simple
+     * legs are shares of a balance walked from the segment start through the cheque dates, so the rebuilt simple
+     * segment must start where the wire legs say their segment started; otherwise a position between two cheques cannot
+     * reproduce the supplied bases and the request is rejected as a changed measurement.
+     */
+    private static LocalDate segmentStart(JsonNode input, String version, LocalDate date) {
+        if (!version.equals(ReceivablesMath.SIMPLE_CALCULATION_VERSION)) {
+            return date;
+        }
+        LocalDate start = null;
+        for (JsonNode row : input.path("measurementLegs")) {
+            LocalDate rowStart = date(row, "segmentStartDate");
+            require((start == null || start.equals(rowStart)) && !rowStart.isAfter(date), "SOURCE_CHANGED");
+            start = rowStart;
+        }
+        return start;
     }
 
     private ObjectNode after(JsonNode before, ReceivablesMath.Position position, BigInteger allowance) {
@@ -395,8 +415,8 @@ public class ReceivablesCalculationService {
         if (!selectedFace.equals(position.contractualOutstandingMinor()) && oldAllowance.signum() > 0) {
             require(input.hasNonNull("currentForecast"), "POLICY_INCOMPLETE");
             JsonNode forecast = input.get("currentForecast");
-            var losses = CreditAndFunding.impairment(position, state.segment().netEir().rate(),
-                    Integer.parseInt(text(forecast, "stage").substring(6)), measurement.scenarios(forecast));
+            var losses = CreditAndFunding.impairment(state.segment(), position, Integer.parseInt(text(forecast, "stage").substring(6)),
+                    measurement.scenarios(forecast));
             require(!date(forecast, "asOfDate").isAfter(position.businessDate())
                     && !date(forecast, "validThroughDate").isBefore(position.businessDate()), "SOURCE_CHANGED");
             Map<String, BigDecimal> weights = new LinkedHashMap<>();
@@ -438,8 +458,7 @@ public class ReceivablesCalculationService {
                 "SOURCE_CHANGED");
         int stage = Integer.parseInt(text(forecast, "stage").substring(6));
         require(stage >= CreditAndFunding.stage(state.boundaryPosition().daysPastDue(), false, false), "SOURCE_CHANGED");
-        var impairment = CreditAndFunding.impairment(state.boundaryPosition(), state.segment().netEir().rate(), stage,
-                measurement.scenarios(forecast));
+        var impairment = CreditAndFunding.impairment(state.segment(), state.boundaryPosition(), stage, measurement.scenarios(forecast));
         result.set("forecastId", forecast.get("forecastId"));
         result.put("lossAllowanceMinor", impairment.lossAllowanceMinor().toString());
         result.put("allowanceChangeMinor",
