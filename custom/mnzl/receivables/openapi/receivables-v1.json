@@ -10937,6 +10937,10 @@
           "acquisitionGroupingVersion": {
             "type": "string",
             "const": "1"
+          },
+          "customerDisplayNameVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [

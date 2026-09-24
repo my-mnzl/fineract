@@ -39,6 +39,7 @@ final class ReceivablesAcquisitionScenarios {
 
     void verify() throws Exception {
         assertThat(get("/capabilities").path("acquisitionGroupingVersion").asText()).isEqualTo("1");
+        assertThat(get("/capabilities").path("customerDisplayNameVersion").asText()).isEqualTo("1");
         var firstCommand = harness.preparePurchase("group-first", "50000", "50000", "closing-one");
         var secondCommand = harness.preparePurchase("group-second", "30000", "70000", "closing-one");
         var firstBooking = CompletableFuture.supplyAsync(() -> book(firstCommand));

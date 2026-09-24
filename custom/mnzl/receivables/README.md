@@ -204,6 +204,16 @@ not change when assessment or payment evidence arrives. Controls expose pending
 assessment accounts and the unreconciled purchase total. Existing event/command
 JSON and hashes are never rewritten by the additive migration.
 
+## Client display name
+
+Capabilities advertise `customerDisplayNameVersion: "1"`. `BOOK_PURCHASE` and
+`BOOK_HISTORICAL_PURCHASE` accept an optional `customerDisplayName` that labels
+the native client created for a new `customerReferenceId`. The reference stays
+the client's external ID and the only identity key: a client that already exists
+keeps its name, and commands without the field name the client after the
+reference as before. Callers gate sending the field on the capability so an
+older service, which rejects unknown command fields, is not asked for it.
+
 ## Acquisition grouping
 
 Capabilities advertise `acquisitionGroupingVersion: "1"`. New `BOOK_PURCHASE`
