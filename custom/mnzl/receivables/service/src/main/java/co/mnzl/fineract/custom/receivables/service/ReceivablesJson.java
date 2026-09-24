@@ -141,12 +141,13 @@ public final class ReceivablesJson {
     }
 
     /** An optional textual field; absent, null or blank reads as null. */
+    /** An absent property carries no value; a present one must be usable text, never null or blank. */
     public static String optionalText(JsonNode value, String name) {
         JsonNode field = value.get(name);
-        if (field == null || field.isNull()) {
+        if (field == null) {
             return null;
         }
-        ReceivablesException.require(field.isTextual(), "INVALID_DATA");
-        return field.textValue().isBlank() ? null : field.textValue();
+        ReceivablesException.require(field.isTextual() && !field.textValue().isBlank(), "INVALID_DATA");
+        return field.textValue();
     }
 }

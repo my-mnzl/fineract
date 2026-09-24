@@ -98,10 +98,15 @@ class ReceivablesHistoricalPurchaseTest {
         assertThat(named.displayName()).isEqualTo("Palm Hills Buyer");
         assertThat(named.externalId()).isEqualTo(externalId);
 
+        command.remove("customerDisplayName");
+        assertThat(ReceivablesJson.optionalText(command, "customerDisplayName")).isNull();
+        // A present property must carry a usable name: null and blank are data errors, not fallbacks.
         command.put("customerDisplayName", "   ");
-        assertThat(ReceivablesJson.optionalText(command, "customerDisplayName")).isNull();
+        assertThatThrownBy(() -> ReceivablesJson.optionalText(command, "customerDisplayName")).isInstanceOf(ReceivablesException.class)
+                .hasMessage("INVALID_DATA");
         command.putNull("customerDisplayName");
-        assertThat(ReceivablesJson.optionalText(command, "customerDisplayName")).isNull();
+        assertThatThrownBy(() -> ReceivablesJson.optionalText(command, "customerDisplayName")).isInstanceOf(ReceivablesException.class)
+                .hasMessage("INVALID_DATA");
         command.put("customerDisplayName", 7);
         assertThatThrownBy(() -> ReceivablesJson.optionalText(command, "customerDisplayName")).isInstanceOf(ReceivablesException.class)
                 .hasMessage("INVALID_DATA");
@@ -115,10 +120,15 @@ class ReceivablesHistoricalPurchaseTest {
             assertThat(json.validate("financialCommand", json.write(command))).isEqualTo(command);
             command.put("customerDisplayName", "احمد محمد حسن");
             assertThat(json.validate("financialCommand", json.write(command))).isEqualTo(command);
-            for (String rejected : List.of("", "line\nbreak", "x".repeat(201))) {
+            // The native client name columns hold 160 characters.
+            command.put("customerDisplayName", "x".repeat(160));
+            assertThat(json.validate("financialCommand", json.write(command))).isEqualTo(command);
+            for (String rejected : List.of("", "line\nbreak", "x".repeat(161))) {
                 command.put("customerDisplayName", rejected);
                 assertThatThrownBy(() -> json.validate("financialCommand", json.write(command))).isInstanceOf(ReceivablesException.class);
             }
+            command.putNull("customerDisplayName");
+            assertThatThrownBy(() -> json.validate("financialCommand", json.write(command))).isInstanceOf(ReceivablesException.class);
             command.put("customerDisplayName", "Valid Name");
             command.put("customerNickname", "unknown");
             assertThatThrownBy(() -> json.validate("financialCommand", json.write(command))).isInstanceOf(ReceivablesException.class);

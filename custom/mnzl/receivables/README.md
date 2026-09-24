@@ -210,9 +210,12 @@ Capabilities advertise `customerDisplayNameVersion: "1"`. `BOOK_PURCHASE` and
 `BOOK_HISTORICAL_PURCHASE` accept an optional `customerDisplayName` that labels
 the native client created for a new `customerReferenceId`. The reference stays
 the client's external ID and the only identity key: a client that already exists
-keeps its name, and commands without the field name the client after the
-reference as before. Callers gate sending the field on the capability so an
-older service, which rejects unknown command fields, is not asked for it.
+keeps its name, and commands without the property name the client after the
+reference as before. When the property is present it must be a non-blank string
+of at most 160 characters, the width of the native client name columns, without
+control characters; `null` or blank is `INVALID_DATA`, not a fallback. Callers
+gate sending the property on the capability so an older service, which rejects
+unknown command fields, is not asked for it.
 
 ## Acquisition grouping
 
