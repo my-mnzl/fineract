@@ -139,4 +139,15 @@ public final class ReceivablesJson {
     public static BigInteger minor(JsonNode value, String name) {
         return new BigInteger(text(value, name));
     }
+
+    /** An optional textual field; absent, null or blank reads as null. */
+    /** An absent property carries no value; a present one must be usable text, never null or blank. */
+    public static String optionalText(JsonNode value, String name) {
+        JsonNode field = value.get(name);
+        if (field == null) {
+            return null;
+        }
+        ReceivablesException.require(field.isTextual() && !field.textValue().isBlank(), "INVALID_DATA");
+        return field.textValue();
+    }
 }
