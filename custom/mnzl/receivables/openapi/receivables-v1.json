@@ -4673,6 +4673,9 @@
               "customerReferenceId": {
                 "$ref": "#/components/schemas/id"
               },
+              "customerDisplayName": {
+                "$ref": "#/components/schemas/customerDisplayName"
+              },
               "acquisitionClearingAllocationIds": {
                 "minItems": 1,
                 "type": "array",
@@ -7393,6 +7396,9 @@
                       "customerReferenceId": {
                         "$ref": "#/components/schemas/id"
                       },
+                      "customerDisplayName": {
+                        "$ref": "#/components/schemas/customerDisplayName"
+                      },
                       "acquisitionClearingAllocationIds": {
                         "minItems": 1,
                         "type": "array",
@@ -9743,6 +9749,9 @@
               },
               "customerReferenceId": {
                 "$ref": "#/components/schemas/id"
+              },
+              "customerDisplayName": {
+                "$ref": "#/components/schemas/customerDisplayName"
               },
               "basis": {
                 "$ref": "#/components/schemas/calculationBasis"
@@ -14269,6 +14278,13 @@
           "nextCursor"
         ],
         "additionalProperties": false
+      },
+      "customerDisplayName": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
       }
     }
   }

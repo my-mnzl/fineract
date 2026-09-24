@@ -20,6 +20,7 @@ package co.mnzl.fineract.custom.receivables.service;
 
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesException.require;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.minor;
+import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.optionalText;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesLedger.line;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesLedger.pair;
@@ -90,8 +91,7 @@ public class ReceivablesAccountCommands {
                     "ACQUISITION_ADVANCE", text(e.command, "dealId"));
         }
         long client = nativeBridge
-                .createClient(new ClientIdentity("R" + ReceivablesStore.key(e.scope, "customer", text(e.command, "customerReferenceId")),
-                        text(e.command, "customerReferenceId"), number(e.configuration, "office_id")));
+                .createClient(clientIdentity(e, text(e.command, "customerReferenceId"), optionalText(e.command, "customerDisplayName")));
         Booking nativeBook = nativeBridge.bookExactFace(client, number(e.configuration, "product_id"), "R" + key, e.date,
                 purchase.segment().cashflows().stream().map(f -> new FaceLeg(f.cashflowId(), f.dueDate(), f.amountMinor())).toList());
         e.nativeTransactions.add(Long.toString(nativeBook.activationTransactionId()));
@@ -758,9 +758,8 @@ public class ReceivablesAccountCommands {
         }
         e.nativeTransactions.add(Long.toString(nativeBridge.adjustFace(number(old, "native_loan_id"), e.date, AdjustmentType.ASSIGNMENT_OUT,
                 allocations, "R" + e.operationKey + ":old").transactionId()));
-        long client = nativeBridge.createClient(
-                new ClientIdentity("R" + ReceivablesStore.key(e.scope, "customer", text(e.command, "replacementCustomerReferenceId")),
-                        text(e.command, "replacementCustomerReferenceId"), number(e.configuration, "office_id")));
+        // Substitution carries no display name; the replacement client is labelled by its reference.
+        long client = nativeBridge.createClient(clientIdentity(e, text(e.command, "replacementCustomerReferenceId"), null));
         Booking booking = nativeBridge.bookExactFace(client, number(e.configuration, "product_id"), "R" + newKey, e.date, replacement
                 .replacement().cashflows().stream().map(f -> new FaceLeg(f.cashflowId(), f.dueDate(), f.amountMinor())).toList());
         e.nativeTransactions.add(Long.toString(booking.activationTransactionId()));
@@ -990,4 +989,12 @@ public class ReceivablesAccountCommands {
         reconcileNative(store.require("account", newKey), position, e.date);
     }
 
+    /**
+     * The customer reference is the stable client key; an optional display name only labels a client that does not
+     * exist yet. A client already found by that key keeps its name.
+     */
+    static ClientIdentity clientIdentity(ReceivablesExecution e, String customerReferenceId, String customerDisplayName) {
+        return new ClientIdentity("R" + ReceivablesStore.key(e.scope, "customer", customerReferenceId),
+                customerDisplayName != null ? customerDisplayName : customerReferenceId, number(e.configuration, "office_id"));
+    }
 }

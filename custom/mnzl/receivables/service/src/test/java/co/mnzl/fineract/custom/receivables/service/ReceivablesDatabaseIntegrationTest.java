@@ -513,6 +513,10 @@ class ReceivablesDatabaseIntegrationTest {
     private void verifyPurchaseAndIdempotency(JsonNode booked) throws Exception {
         JsonNode account = request("GET", PREFIX + "/accounts/account-1", null, 200);
         long loan = Long.parseLong(account.path("nativeLoanId").asText());
+        // Without a display name the client is labelled by its reference, under the hashed external ID.
+        JsonNode client = request("GET", "/clients/" + account.path("nativeClientId").asText(), null, 200);
+        assertThat(client.path("displayName").asText()).isEqualTo("account-1-customer");
+        assertThat(client.path("externalId").asText()).startsWith("R").hasSize(65).doesNotContain("customer");
         JsonNode ordinaryLoan = request("GET", "/loans/" + loan + "?associations=repaymentSchedule", null, 200);
         assertThat(ordinaryLoan.path("chargeOffBehaviour").path("id").asText()).isEqualTo("REGULAR");
         assertThat(ordinaryLoan.path("summary").path("principalOutstanding").decimalValue()).isEqualByComparingTo("1000.00");

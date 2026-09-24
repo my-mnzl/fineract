@@ -68,6 +68,10 @@ final class ReceivablesHistoricalPurchaseScenarios {
                 .isEqualTo(1);
         assertThat(harness.queryLong("select count(*) from m_mnzl_r_acquisition where external_id='historical-acquisition'")).isEqualTo(1);
         assertThat(harness.queryLong("select count(*) from m_mnzl_r_account where external_id='historical-account'")).isEqualTo(1);
+        JsonNode client = harness.request("GET",
+                "/clients/" + harness.request("GET", BASE + "/accounts/" + ID, null, 200).path("nativeClientId").asText(), null, 200);
+        assertThat(client.path("displayName").asText()).isEqualTo("Historical Customer");
+        assertThat(client.path("externalId").asText()).startsWith("R").hasSize(65).doesNotContain("historical-customer");
         assertThat(harness.queryLong("select count(*) from m_mnzl_r_cash_source")).isEqualTo(before.get("m_mnzl_r_cash_source"));
         assertThat(harness.queryLong(
                 "select count(*) from m_mnzl_r_risk_forecast where account_key=(select record_key from m_mnzl_r_account where external_id='historical-account')"))
@@ -169,6 +173,7 @@ final class ReceivablesHistoricalPurchaseScenarios {
         book.set("acquisition", harness.json.value(Map.of("id", "historical-acquisition", "developerReferenceId", "developer",
                 "sourceReferenceId", "historical-record", "effectiveDate", harness.today.toString())));
         book.put("customerReferenceId", "historical-customer");
+        book.put("customerDisplayName", "Historical Customer");
         book.set("basis", basis);
         book.put("basisHash", harness.json.hash(basis));
         book.set("approverIds", harness.json.value(List.of()));
