@@ -72,7 +72,6 @@ final class ReceivablesHistoricalPurchaseScenarios {
                 "/clients/" + harness.request("GET", BASE + "/accounts/" + ID, null, 200).path("nativeClientId").asText(), null, 200);
         assertThat(client.path("displayName").asText()).isEqualTo("Historical Customer");
         assertThat(client.path("externalId").asText()).startsWith("R").hasSize(65).doesNotContain("historical-customer");
-        verifyClientReuseKeepsName(client.path("id").asLong());
         assertThat(harness.queryLong("select count(*) from m_mnzl_r_cash_source")).isEqualTo(before.get("m_mnzl_r_cash_source"));
         assertThat(harness.queryLong(
                 "select count(*) from m_mnzl_r_risk_forecast where account_key=(select record_key from m_mnzl_r_account where external_id='historical-account')"))
@@ -140,18 +139,6 @@ final class ReceivablesHistoricalPurchaseScenarios {
         assertThat(position(harness.today, null).path("stage").asText()).isEqualTo("STAGE_1");
         assertThat(position(acquisitionDate, watermark)).isEqualTo(pending);
         assertThat(harness.request("GET", BASE + "/capabilities", null, 200).path("historicalPurchaseVersion").asText()).isEqualTo("1");
-    }
-
-    /** A later purchase for the same customer reference reuses the native client and never renames it. */
-    private void verifyClientReuseKeepsName(long clientId) throws Exception {
-        ObjectNode later = harness.preparePurchase("historical-customer-again", "40000", "60000", "historical-customer-closing");
-        later.put("customerReferenceId", "historical-customer");
-        later.put("customerDisplayName", "Renamed Customer");
-        harness.request("POST", BASE + "/commands", later, 200);
-        JsonNode account = harness.request("GET", BASE + "/accounts/historical-customer-again", null, 200);
-        assertThat(account.path("nativeClientId").asLong()).isEqualTo(clientId);
-        JsonNode client = harness.request("GET", "/clients/" + clientId, null, 200);
-        assertThat(client.path("displayName").asText()).isEqualTo("Historical Customer");
     }
 
     private ObjectNode book() throws Exception {

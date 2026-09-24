@@ -41,12 +41,21 @@ final class ReceivablesAcquisitionScenarios {
         assertThat(get("/capabilities").path("acquisitionGroupingVersion").asText()).isEqualTo("1");
         assertThat(get("/capabilities").path("customerDisplayNameVersion").asText()).isEqualTo("1");
         var firstCommand = harness.preparePurchase("group-first", "50000", "50000", "closing-one");
+        firstCommand.put("customerDisplayName", "Group Buyer");
         var secondCommand = harness.preparePurchase("group-second", "30000", "70000", "closing-one");
         var firstBooking = CompletableFuture.supplyAsync(() -> book(firstCommand));
         var secondBooking = CompletableFuture.supplyAsync(() -> book(secondCommand));
         firstBooking.get();
         secondBooking.get();
-        harness.purchase("group-other", "40000", "60000", "closing-two");
+        // The second closing's purchase is a later purchase for the first buyer under a different name:
+        // the native client is reused by its reference and keeps the name it was created with.
+        var otherCommand = harness.preparePurchase("group-other", "40000", "60000", "closing-two");
+        otherCommand.put("customerReferenceId", "group-first-customer");
+        otherCommand.put("customerDisplayName", "Renamed Group Buyer");
+        book(otherCommand);
+        long buyer = get("/accounts/group-first").path("nativeClientId").asLong();
+        assertThat(get("/accounts/group-other").path("nativeClientId").asLong()).isEqualTo(buyer);
+        assertThat(harness.request("GET", "/clients/" + buyer, null, 200).path("displayName").asText()).isEqualTo("Group Buyer");
         JsonNode group = get("/acquisitions/closing-one");
         assertThat(group.path("originalAccountCount").asInt()).isEqualTo(2);
         assertThat(group.path("originalFaceMinor").asText()).isEqualTo("200000");
