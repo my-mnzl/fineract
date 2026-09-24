@@ -176,12 +176,26 @@ segment it spawns, keeps it. Rows written before the simple rule existed carry t
 daily id already, and snapshots without the field measure as daily, so no
 migration is needed. A calculation request must carry the same version as its
 basis, and `RESET`, `SETTLEMENT` and `IMPAIRMENT` requests name the version of the
-wire position they rebuild.
+wire position they rebuild. For a simple-rule position the measurement legs'
+`segmentStartDate` is the start of the rebuilt segment (all legs must agree and
+it cannot follow the measurement date), because simple legs between two cheques
+are shares of the balance walked from that start; daily legs still rebuild from
+the measurement date as before.
+
+A financial event names one version, so a command whose accounts are pinned to
+different rules (a developer settlement that mixes daily and simple lots, for
+example) is refused with `INVALID_DATA` before anything is posted; settle such
+lots in one command per version.
 
 `GET /capabilities` keeps `calculationVersion` as the daily default and adds
 `calculationVersions`, the list a caller may pin at booking. Financial events
 report the version of the accounts they touched (the default when an operation
 touches no account). `GET /configuration/runtime` is unchanged.
+
+The Docker-backed database integration test books a simple account beside a
+daily one, reloads the segment for a later impairment and reset, and checks the
+pinned version on the segment row, the event and the adjustment lot, the
+simple-rule journal amounts, and the refusal of a mixed-version settlement.
 
 ## Lightweight pricing estimates
 
