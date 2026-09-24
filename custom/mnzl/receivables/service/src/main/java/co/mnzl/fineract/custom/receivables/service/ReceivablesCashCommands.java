@@ -300,9 +300,10 @@ public class ReceivablesCashCommands {
         var flow = new ReceivablesMath.Cashflow(lotId, due, outstanding);
         var position = new ReceivablesMath.Position(e.date, outstanding, BigInteger.ZERO, outstanding, outstanding, outstanding,
                 BigInteger.ZERO, BigInteger.ZERO, dpd, major, major, List.of(new ReceivablesMath.Leg(flow, 0, outstanding, major, major)));
+        var snapshot = json.convert(json.read(string(lot, "snapshot_json")), ReceivableEvents.AdjustmentLot.class);
         BigInteger target = outstanding.signum() == 0 ? BigInteger.ZERO
-                : CreditAndFunding.impairment(position, new BigDecimal(string(lot, "rate")), stage, measurement.scenarios(forecast))
-                        .lossAllowanceMinor();
+                : CreditAndFunding.impairment(snapshot.calculationVersion(), e.date, position, new BigDecimal(string(lot, "rate")), stage,
+                        measurement.scenarios(forecast)).lossAllowanceMinor();
         var account = store.require("account", string(lot, "account_key"));
         pair(e.lines, "impairmentExpense", "developerReceivableAllowance", target.subtract(amount(lot, "allowance_minor")),
                 string(account, "external_id"), string(account, "deal_id"), "IMPAIRMENT");

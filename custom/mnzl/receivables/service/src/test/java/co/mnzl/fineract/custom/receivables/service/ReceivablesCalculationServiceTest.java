@@ -252,6 +252,61 @@ class ReceivablesCalculationServiceTest {
     }
 
     @Test
+    void simpleVersionPricesIdenticallyPinsItsOwnYieldsAndResetsUnderTheSameRule() throws Exception {
+        String simple = ReceivablesMath.SIMPLE_CALCULATION_VERSION;
+        JsonNode daily = vector("irregular-integral-fee");
+        JsonNode expected = vector("simple-irregular-integral-fee").get("expected");
+        ObjectNode basis = basis(daily);
+        basis.put("calculationVersion", simple);
+        ObjectNode request = context();
+        request.put("calculationVersion", simple);
+        request.put("calculationType", "PRICE");
+        request.set("basis", basis);
+        JsonNode result = calculate(request);
+        assertThat(result.path("calculationVersion").asText()).isEqualTo(simple);
+        JsonNode totals = result.path("pricing").path("totals");
+        assertThat(totals.path("grossPurchasePriceMinor").asText()).isEqualTo(daily.path("expected").path("grossPriceMinor").asText());
+        assertThat(totals.path("netPurchaseCashMinor").asText()).isEqualTo(daily.path("expected").path("netPurchaseCashMinor").asText());
+        JsonNode account = result.path("pricing").path("accounts").get(0);
+        for (String yield : List.of("grossYield", "netEir")) {
+            assertThat(new BigDecimal(account.path(yield).asText()).subtract(new BigDecimal(expected.path(yield).asText())).abs())
+                    .isLessThanOrEqualTo(new BigDecimal("5e-17"));
+        }
+        BigInteger income = BigInteger.ZERO;
+        for (JsonNode row : account.path("monthlyIncome")) {
+            income = income.add(new BigInteger(row.path("interestIncomeMinor").asText()));
+        }
+        assertThat(income).isEqualTo(new BigInteger(totals.path("contractualFaceMinor").asText())
+                .subtract(new BigInteger(totals.path("netPurchaseCashMinor").asText())));
+        var purchase = measurement.purchase(basis, "account-1");
+        assertThat(purchase.segment().calculationVersion()).isEqualTo(simple);
+        assertThat(ReceivablesMeasurement.calculationVersion(context())).isEqualTo(ReceivablesConfiguration.CALCULATION);
+        // A mixed request is refused: the basis names the rule the account is booked under.
+        ObjectNode mixed = context();
+        mixed.put("calculationType", "PRICE");
+        mixed.set("basis", basis);
+        assertThatThrownBy(() -> calculate(mixed)).isInstanceOf(ReceivablesException.class);
+        // The wire position rebuilds a simple segment, so a reset uses the simple present value and lot accrual.
+        ObjectNode reset = positioned(basis);
+        reset.put("calculationVersion", simple);
+        reset.put("calculationType", "RESET");
+        reset.set("remainingCashflows", basis.get("cashflows"));
+        reset.set("effectiveDate", basis.get("settlementDate"));
+        reset.put("corridorObservationId", "new-rate");
+        reset.put("corridorRate", "0.30");
+        reset.put("spread", "0");
+        reset.put("adjustmentDueDate", "2030-04-01");
+        JsonNode outcome = calculate(reset);
+        var simpleReset = ReceivableEvents.reset(purchase.segment(), purchase.segment().startDate(), Map.of(), new BigDecimal("0.30"));
+        var dailyReset = ReceivableEvents.reset(measurement.purchase(basis(daily), "account-1").segment(), purchase.segment().startDate(),
+                Map.of(), new BigDecimal("0.30"));
+        assertThat(outcome.path("calculationVersion").asText()).isEqualTo(simple);
+        assertThat(outcome.path("grossBasisChangeMinor").asText()).isEqualTo(simpleReset.deltaMinor().toString());
+        assertThat(simpleReset.deltaMinor()).isNotEqualTo(dailyReset.deltaMinor());
+        assertThat(simpleReset.futureSegment().calculationVersion()).isEqualTo(simple);
+    }
+
+    @Test
     void partialImpairedSettlementRequiresAndAllocatesActualForecastLosses() throws Exception {
         ObjectNode basis = basis(vector("irregular-integral-fee"));
         ObjectNode request = positioned(basis);

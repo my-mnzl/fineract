@@ -324,7 +324,7 @@ public class ReceivablesCalculationService {
         ReceivablesMath.allocateNet(position);
         var segment = new ReceivablesMath.Segment(date, flows, g, n,
                 new ReceivablesMath.Yield(decimal(wire, "grossYield"), BigDecimal.ZERO, 0),
-                new ReceivablesMath.Yield(decimal(wire, "netEir"), BigDecimal.ZERO, 0));
+                new ReceivablesMath.Yield(decimal(wire, "netEir"), BigDecimal.ZERO, 0), ReceivablesMeasurement.calculationVersion(input));
         return new ReceivablesMath.MeasurementState(segment, position, outstanding);
     }
 
@@ -395,8 +395,8 @@ public class ReceivablesCalculationService {
         if (!selectedFace.equals(position.contractualOutstandingMinor()) && oldAllowance.signum() > 0) {
             require(input.hasNonNull("currentForecast"), "POLICY_INCOMPLETE");
             JsonNode forecast = input.get("currentForecast");
-            var losses = CreditAndFunding.impairment(position, state.segment().netEir().rate(),
-                    Integer.parseInt(text(forecast, "stage").substring(6)), measurement.scenarios(forecast));
+            var losses = CreditAndFunding.impairment(state.segment(), position, Integer.parseInt(text(forecast, "stage").substring(6)),
+                    measurement.scenarios(forecast));
             require(!date(forecast, "asOfDate").isAfter(position.businessDate())
                     && !date(forecast, "validThroughDate").isBefore(position.businessDate()), "SOURCE_CHANGED");
             Map<String, BigDecimal> weights = new LinkedHashMap<>();
@@ -438,8 +438,7 @@ public class ReceivablesCalculationService {
                 "SOURCE_CHANGED");
         int stage = Integer.parseInt(text(forecast, "stage").substring(6));
         require(stage >= CreditAndFunding.stage(state.boundaryPosition().daysPastDue(), false, false), "SOURCE_CHANGED");
-        var impairment = CreditAndFunding.impairment(state.boundaryPosition(), state.segment().netEir().rate(), stage,
-                measurement.scenarios(forecast));
+        var impairment = CreditAndFunding.impairment(state.segment(), state.boundaryPosition(), stage, measurement.scenarios(forecast));
         result.set("forecastId", forecast.get("forecastId"));
         result.put("lossAllowanceMinor", impairment.lossAllowanceMinor().toString());
         result.put("allowanceChangeMinor",

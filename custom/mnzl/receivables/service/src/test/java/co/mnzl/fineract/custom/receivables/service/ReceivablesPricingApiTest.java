@@ -106,6 +106,21 @@ class ReceivablesPricingApiTest {
     }
 
     @Test
+    void acceptsTheSimpleAccretionVersionAndEchoesIt() {
+        ObjectNode input = request("PRICE");
+        input.put("calculationVersion", "EG_RECEIVABLES_ACT360_SIMPLE_V1");
+        ((ObjectNode) input.get("basis")).put("calculationVersion", "EG_RECEIVABLES_ACT360_SIMPLE_V1");
+        input.put("basisHash", json.hash(input.get("basis")));
+        var result = json.read(api.calculatePricing(headers, json.write(input)));
+        assertThat(result.path("calculationVersion").asText()).isEqualTo("EG_RECEIVABLES_ACT360_SIMPLE_V1");
+        assertThat(result.path("pricing").path("totals").path("grossPurchasePriceMinor").asText()).isEqualTo("100");
+        ObjectNode unknown = request("PRICE");
+        unknown.put("calculationVersion", "EG_RECEIVABLES_ACT365_SIMPLE_V1");
+        assertThatThrownBy(() -> api.calculatePricing(headers, json.write(unknown))).isInstanceOf(ReceivablesException.class);
+        verifyNoInteractions(commands);
+    }
+
+    @Test
     void retainsLedgerPolicyCheckOnOriginalCalculationRoute() {
         assertThatThrownBy(() -> api.calculate(headers, json.write(request("PRICE")))).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(commands);

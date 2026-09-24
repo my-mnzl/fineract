@@ -23,6 +23,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.number;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
+import co.mnzl.fineract.receivables.math.ReceivablesMath;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -167,18 +168,22 @@ public class ReceivablesCommandService {
 
     private JsonNode finish(ReceivablesExecution e, String payloadHash, Instant now) {
         List<JsonNode> positions = new ArrayList<>();
+        Set<String> versions = new HashSet<>();
         for (String accountKey : e.accountKeys) {
             var account = store.require("account", accountKey);
             store.update("account", accountKey, Map.of("version", number(account, "version") + 1, "last_event_key", e.eventKey,
                     "last_effective_date", e.date, "last_boundary_side", e.boundarySide));
             account = store.require("account", accountKey);
-            positions.add(measurement.wirePosition(account, measurement.position(account, e.date),
+            var state = measurement.state(account);
+            versions.add(state.segment().calculationVersion());
+            positions.add(measurement.wirePosition(account, ReceivablesMath.position(state, e.date),
                     ReceivablesMeasurement.amount(account, "allowance_minor"), e.boundarySide));
         }
         var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"),
                 string(e.configuration, "mapping_revision"), e.lines);
         var event = json.object();
-        event.put("calculationVersion", ReceivablesConfiguration.CALCULATION);
+        // The event names the rule its accounts are pinned to; operations that touch no account report the default.
+        event.put("calculationVersion", versions.size() == 1 ? versions.iterator().next() : ReceivablesConfiguration.CALCULATION);
         event.put("productPolicyCode", ReceivablesConfiguration.POLICY);
         event.put("schemaVersion", "1");
         event.put("policyRevisionId", string(e.configuration, "policy_revision"));

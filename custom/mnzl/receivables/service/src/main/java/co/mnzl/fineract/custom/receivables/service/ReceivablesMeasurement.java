@@ -98,7 +98,7 @@ public class ReceivablesMeasurement {
     public Purchase purchase(JsonNode basis, String accountId) {
         List<JsonNode> accepted = new ArrayList<>();
         basis.get("acceptedAccountPrices").forEach(accepted::add);
-        Purchase purchase = ReceivablesMath.price(date(basis, "settlementDate"),
+        Purchase purchase = ReceivablesMath.price(calculationVersion(basis), date(basis, "settlementDate"),
                 flows(json.value(java.util.stream.StreamSupport.stream(basis.get("cashflows").spliterator(), false)
                         .filter(flow -> text(flow, "receivableId").equals(accountId)).toList())),
                 decimal(basis, "corridorRate").add(decimal(basis, "spread")), decimal(basis, "feeRate"));
@@ -110,6 +110,13 @@ public class ReceivablesMeasurement {
                     && minor(price, "netPurchaseCashMinor").equals(purchase.netPurchaseCashMinor()), "SOURCE_CHANGED");
         }
         return purchase;
+    }
+
+    /** The basis names the accretion rule the account is booked under; a basis without one books the daily default. */
+    public static String calculationVersion(JsonNode basis) {
+        String version = basis.hasNonNull("calculationVersion") ? text(basis, "calculationVersion") : ReceivablesConfiguration.CALCULATION;
+        require(ReceivablesConfiguration.CALCULATIONS.contains(version), "INVALID_DATA");
+        return version;
     }
 
     public MeasurementState state(Map<String, Object> account) {
@@ -132,7 +139,7 @@ public class ReceivablesMeasurement {
         fields.put("net_basis", state.segment().netBasisMinor().toString());
         fields.put("gross_yield", state.segment().grossYield().rate().toPlainString());
         fields.put("net_eir", state.segment().netEir().rate().toPlainString());
-        fields.put("calculator_version", ReceivablesConfiguration.CALCULATION);
+        fields.put("calculator_version", state.segment().calculationVersion());
         fields.put("calculator_build", calculatorBuild);
         fields.put("snapshot_json", json.write(state));
         fields.put("source_operation_key", operationKey);
@@ -182,7 +189,7 @@ public class ReceivablesMeasurement {
         int requested = Integer.parseInt(text(forecast, "stage").substring(6));
         int stage = Math.max(requested, CreditAndFunding.stage(position.daysPastDue(), false, false));
         require(stage == requested, "SOURCE_CHANGED");
-        return CreditAndFunding.impairment(position, segment.netEir().rate(), stage, scenarios(forecast)).lossAllowanceMinor();
+        return CreditAndFunding.impairment(segment, position, stage, scenarios(forecast)).lossAllowanceMinor();
     }
 
     public ObjectNode wirePosition(Map<String, Object> account, Position p, BigInteger allowance, String side) {

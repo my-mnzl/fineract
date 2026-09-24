@@ -2691,7 +2691,10 @@
         "properties": {
           "calculationVersion": {
             "type": "string",
-            "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+            "enum": [
+              "EG_RECEIVABLES_ACT360_DAILY_V1",
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+            ]
           },
           "productPolicyCode": {
             "type": "string",
@@ -2928,7 +2931,10 @@
         "properties": {
           "calculationVersion": {
             "type": "string",
-            "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+            "enum": [
+              "EG_RECEIVABLES_ACT360_DAILY_V1",
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+            ]
           },
           "productPolicyCode": {
             "type": "string",
@@ -3653,7 +3659,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -3700,7 +3709,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -3748,7 +3760,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -3827,7 +3842,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -3918,7 +3936,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -3981,7 +4002,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -10041,7 +10065,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -10088,7 +10115,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -10340,7 +10370,10 @@
         "properties": {
           "calculationVersion": {
             "type": "string",
-            "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+            "enum": [
+              "EG_RECEIVABLES_ACT360_DAILY_V1",
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+            ]
           },
           "productPolicyCode": {
             "type": "string",
@@ -10835,6 +10868,19 @@
             "type": "string",
             "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
           },
+          "calculationVersions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "EG_RECEIVABLES_ACT360_DAILY_V1",
+                "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "description": "Every accretion rule this runtime can pin on an account at booking; calculationVersion stays the daily default."
+          },
           "productPolicyCode": {
             "type": "string",
             "const": "EG_RECEIVABLES_V1"
@@ -10932,6 +10978,7 @@
         },
         "required": [
           "calculationVersion",
+          "calculationVersions",
           "productPolicyCode",
           "schemaVersion",
           "policyRevisionId",
@@ -11731,7 +11778,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -11782,7 +11832,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -11843,7 +11896,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -11921,7 +11977,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -12008,7 +12067,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -12083,7 +12145,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
@@ -12162,7 +12227,10 @@
             "properties": {
               "calculationVersion": {
                 "type": "string",
-                "const": "EG_RECEIVABLES_ACT360_DAILY_V1"
+                "enum": [
+                  "EG_RECEIVABLES_ACT360_DAILY_V1",
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                ]
               },
               "productPolicyCode": {
                 "type": "string",
