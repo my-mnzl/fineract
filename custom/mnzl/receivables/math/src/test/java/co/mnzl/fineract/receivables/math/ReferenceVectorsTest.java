@@ -25,6 +25,7 @@ import static co.mnzl.fineract.receivables.math.ReceivableEvents.reset;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.settle;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.substitute;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.CALCULATION_VERSION;
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.SIMPLE_CALCULATION_VERSION;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.days;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.growth;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.income;
@@ -32,6 +33,7 @@ import static co.mnzl.fineract.receivables.math.ReceivablesMath.major;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.minor;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.position;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.price;
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.simpleAccrual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,6 +64,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class ReferenceVectorsTest {
@@ -355,5 +358,182 @@ class ReferenceVectorsTest {
         Position bp = position(b.segment(), date(in, "boundaryDate"), Map.of());
         money(e, "boundaryGrossBasisMinor", ap.grossPurchaseBasisMinor().add(bp.grossPurchaseBasisMinor()));
         money(e, "boundaryAmortizedCostMinor", ap.amortizedCostMinor().add(bp.amortizedCostMinor()));
+    }
+
+    private static Purchase simplePurchase(JsonNode in) {
+        assertEquals(SIMPLE_CALCULATION_VERSION, VECTORS.get("simple-irregular-integral-fee").path("calculationVersion").asText());
+        return price(SIMPLE_CALCULATION_VERSION, date(in, "settlementDate"), flows(in.path("cashflows")), d(in, "nominalAnnualRate"),
+                d(in, "feeRate"));
+    }
+
+    /**
+     * Independent simple recurrence at a different precision and without production accrual/discount functions: the
+     * pooled balance accrues {@code rate * days / 360} between cheque dates and drops by each cheque when it falls due.
+     */
+    private static BigDecimal walkedBalance(LocalDate start, List<Cashflow> flows, BigDecimal rate, BigInteger openingMinor,
+            LocalDate through, boolean beforeChequesDueOnThrough) {
+        MathContext independent = new MathContext(75);
+        BigDecimal balance = new BigDecimal(openingMinor, 2);
+        LocalDate previous = start;
+        for (LocalDate due : new TreeSet<>(flows.stream().map(Cashflow::dueDate).toList())) {
+            if (!due.isAfter(start) || due.isAfter(through) || (due.equals(through) && beforeChequesDueOnThrough)) {
+                continue;
+            }
+            BigDecimal interest = balance.multiply(rate, independent).multiply(BigDecimal.valueOf(days(previous, due)), independent)
+                    .divide(new BigDecimal("360"), independent);
+            balance = balance.add(interest, independent);
+            for (Cashflow cf : flows) {
+                if (cf.dueDate().equals(due)) {
+                    balance = balance.subtract(new BigDecimal(cf.amountMinor(), 2), independent);
+                }
+            }
+            previous = due;
+        }
+        BigDecimal interest = balance.multiply(rate, independent).multiply(BigDecimal.valueOf(days(previous, through)), independent)
+                .divide(new BigDecimal("360"), independent);
+        return balance.add(interest, independent);
+    }
+
+    @Test
+    void simpleAccretionVectors() {
+        JsonNode in = input("simple-leap");
+        JsonNode e = expected("simple-leap");
+        long leap = days(date(in, "fromDate"), date(in, "toDate"));
+        assertEquals(e.path("days").asInt(), leap);
+        BigDecimal factor = simpleAccrual(d(in, "nominalAnnualRate"), leap);
+        decimal(e, "factor", factor);
+        money(e, "closingMinor", minor(major(m(in, "openingMinor")).multiply(factor)));
+        money(e, "dailyClosingMinor", minor(major(m(in, "openingMinor")).multiply(growth(d(in, "nominalAnnualRate"), leap))));
+        assertTrue(factor.compareTo(growth(d(in, "nominalAnnualRate"), leap)) < 0);
+
+        in = input("simple-irregular-integral-fee");
+        e = expected("simple-irregular-integral-fee");
+        Purchase p = simplePurchase(in);
+        Purchase daily = purchase(in);
+        money(e, "grossPriceMinor", p.grossPurchasePriceMinor());
+        money(e, "feeMinor", p.integralFeeMinor());
+        money(e, "netPurchaseCashMinor", p.netPurchaseCashMinor());
+        money(e, "contractualFaceMinor", p.contractualFaceMinor());
+        decimal(e, "unroundedGrossPrice", p.unroundedGrossPrice());
+        decimal(e, "grossYield", p.segment().grossYield().rate());
+        decimal(e, "netEir", p.segment().netEir().rate());
+        decimal(e, "dailyGrossYield", daily.segment().grossYield().rate());
+        decimal(e, "dailyNetEir", daily.segment().netEir().rate());
+        assertEquals(daily.grossPurchasePriceMinor(), p.grossPurchasePriceMinor());
+        assertEquals(daily.netPurchaseCashMinor(), p.netPurchaseCashMinor());
+        assertEquals(SIMPLE_CALCULATION_VERSION, p.segment().calculationVersion());
+        assertEquals(CALCULATION_VERSION, daily.segment().calculationVersion());
+        assertTrue(p.segment().grossYield().residual().abs().compareTo(new BigDecimal("1e-10")) <= 0);
+        assertTrue(p.segment().netEir().residual().abs().compareTo(new BigDecimal("1e-10")) <= 0);
+        Segment s = p.segment();
+        List<Cashflow> flows = flows(in.path("cashflows"));
+        LocalDate last = flows.getLast().dueDate();
+        assertTrue(walkedBalance(s.startDate(), flows, s.grossYield().rate(), s.grossBasisMinor(), last, false).abs()
+                .compareTo(new BigDecimal("1e-8")) < 0, "gross balance closes at zero after the last cheque");
+        assertTrue(walkedBalance(s.startDate(), flows, s.netEir().rate(), s.netBasisMinor(), last, false).abs()
+                .compareTo(new BigDecimal("1e-8")) < 0, "net balance closes at zero after the last cheque");
+        Position opening = position(s, s.startDate(), Map.of());
+        for (String id : List.of("simple-first-cheque-boundary", "simple-mid-period", "simple-full-maturity")) {
+            in = input(id);
+            e = expected(id);
+            LocalDate at = date(in, "boundaryDate");
+            assertEquals(e.path("days").asLong(), days(s.startDate(), at));
+            Position before = position(s, at, collected(in));
+            money(e, "grossBasisMinor", before.grossPurchaseBasisMinor());
+            money(e, "amortizedCostMinor", before.amortizedCostMinor());
+            money(e, "deferredFeeMinor", before.deferredIntegralFeeMinor());
+            money(e, "deferredDiscountMinor", before.deferredDiscountMinor());
+            money(e, "pastDueMinor", before.pastDueMinor());
+            money(e, "notYetDueMinor", before.notYetDueMinor());
+            decimal(e, "analyticalGrossBasis", before.analyticalGrossBasis());
+            decimal(e, "analyticalNetBasis", before.analyticalNetBasis());
+            BigInteger cash = BigInteger.ZERO;
+            for (Cashflow cf : flows) {
+                if (collected(in).containsKey(cf.cashflowId())) {
+                    cash = cash.add(cf.amountMinor());
+                }
+            }
+            Income inc = income(opening, before, cash);
+            money(e, "grossIncomeSinceAcquisitionMinor", inc.grossDiscountIncomeMinor());
+            money(e, "totalIncomeSinceAcquisitionMinor", inc.interestIncomeMinor());
+            // Recurrence: every cheque due on or before the date has left the accreting balance and sits at face.
+            BigDecimal walked = walkedBalance(s.startDate(), flows, s.grossYield().rate(), s.grossBasisMinor(), at, false)
+                    .add(major(before.pastDueMinor()));
+            assertTrue(walked.subtract(before.analyticalGrossBasis()).abs().compareTo(new BigDecimal("1e-8")) < 0, id + ": " + walked);
+            if (e.has("afterCollectionGrossBasisMinor")) {
+                Map<String, BigInteger> after = new LinkedHashMap<>(collected(in));
+                flows.stream().filter(cf -> !cf.dueDate().isAfter(at)).forEach(cf -> after.put(cf.cashflowId(), BigInteger.ZERO));
+                Position afterEvents = position(s, at, after);
+                money(e, "afterCollectionGrossBasisMinor", afterEvents.grossPurchaseBasisMinor());
+                money(e, "afterCollectionAmortizedCostMinor", afterEvents.amortizedCostMinor());
+            }
+        }
+
+        in = input("simple-growing-balance");
+        e = expected("simple-growing-balance");
+        List<Cashflow> pool = flows(in.path("cashflows"));
+        Segment crown = ReceivablesMath.segment(SIMPLE_CALCULATION_VERSION, date(in, "startDate"), pool, m(in, "grossBasisMinor"),
+                m(in, "netBasisMinor"));
+        decimal(e, "grossYield", crown.grossYield().rate());
+        decimal(e, "netEir", crown.netEir().rate());
+        money(e, "contractualFaceMinor", ReceivablesMath.face(pool));
+        LocalDate month = date(e, "monthlyBoundaryDate");
+        assertEquals(e.path("monthlyBoundaryDays").asLong(), days(crown.startDate(), month));
+        money(e, "monthlyBoundaryGrossBasisMinor", position(crown, month, Map.of()).grossPurchaseBasisMinor());
+        LocalDate first = date(e, "firstChequeDate");
+        assertEquals(e.path("firstChequeDays").asLong(), days(crown.startDate(), first));
+        Position beforeFirst = position(crown, first, Map.of());
+        money(e, "beforeFirstChequeGrossBasisMinor", beforeFirst.grossPurchaseBasisMinor());
+        Map<String, BigInteger> firstCollected = Map.of(pool.getFirst().cashflowId(), BigInteger.ZERO);
+        Position afterFirst = position(crown, first, firstCollected);
+        money(e, "afterFirstChequeGrossBasisMinor", afterFirst.grossPurchaseBasisMinor());
+        money(e, "afterFirstChequeExceedsOpeningMinor", afterFirst.grossPurchaseBasisMinor().subtract(crown.grossBasisMinor()));
+        assertTrue(afterFirst.grossPurchaseBasisMinor().compareTo(crown.grossBasisMinor()) > 0, "balance grows across the first cheque");
+        assertTrue(walkedBalance(crown.startDate(), pool, crown.grossYield().rate(), crown.grossBasisMinor(), first, false)
+                .subtract(afterFirst.analyticalGrossBasis()).abs().compareTo(new BigDecimal("1e-6")) < 0);
+        Map<String, BigInteger> allButLast = new LinkedHashMap<>();
+        pool.subList(0, pool.size() - 1).forEach(cf -> allButLast.put(cf.cashflowId(), BigInteger.ZERO));
+        LocalDate lastDue = pool.getLast().dueDate();
+        money(e, "beforeLastChequeGrossBasisMinor", position(crown, lastDue, allButLast).grossPurchaseBasisMinor());
+        assertEquals(pool.getLast().amountMinor(), position(crown, lastDue, allButLast).grossPurchaseBasisMinor());
+        Map<String, BigInteger> all = new LinkedHashMap<>(allButLast);
+        all.put(pool.getLast().cashflowId(), BigInteger.ZERO);
+        money(e, "afterLastChequeGrossBasisMinor", position(crown, lastDue, all).grossPurchaseBasisMinor());
+        BigInteger lifetime = BigInteger.ZERO;
+        Position previous = position(crown, crown.startDate(), Map.of());
+        Map<String, BigInteger> running = new LinkedHashMap<>();
+        for (Cashflow cf : pool) {
+            Position atDue = position(crown, cf.dueDate(), running);
+            lifetime = lifetime.add(income(previous, atDue, BigInteger.ZERO).interestIncomeMinor());
+            running.put(cf.cashflowId(), BigInteger.ZERO);
+            previous = position(crown, cf.dueDate(), running);
+        }
+        money(e, "lifetimeInterestMinor", lifetime);
+
+        in = input("simple-reset-fall");
+        e = expected("simple-reset-fall");
+        Reset r = reset(simplePurchase(in.path("acquisitionVector").path("input")).segment(), date(in, "resetDate"), collected(in),
+                d(in, "newNominalAnnualRate"));
+        decimal(e, "oldPvSameDate", r.oldPvSameDate());
+        decimal(e, "newPvSameDate", r.newPvSameDate());
+        money(e, "oldGrossBasisMinor", r.oldGrossMinor());
+        money(e, "oldAmortizedCostMinor", r.oldNetMinor());
+        money(e, "newGrossBasisMinor", r.futureSegment().grossBasisMinor());
+        money(e, "newAmortizedCostMinor", r.futureSegment().netBasisMinor());
+        money(e, "developerAdjustmentMinor", r.deltaMinor());
+        money(e, "adjustmentSettlementMinor", r.lot().amountDueMinor());
+        money(e, "adjustmentUnwindMinor", r.lot().amountDueMinor().subtract(r.lot().principalMinor()));
+        decimal(e, "newGrossYield", r.futureSegment().grossYield().rate());
+        decimal(e, "newNetEir", r.futureSegment().netEir().rate());
+        assertEquals(e.path("developerDirection").asText(), r.lot().direction().name());
+        assertEquals(SIMPLE_CALCULATION_VERSION, r.futureSegment().calculationVersion());
+        assertEquals(SIMPLE_CALCULATION_VERSION, r.lot().calculationVersion());
+        assertEquals(r.lot().amountDueMinor(), r.lot().balanceMinor(r.lot().dueDate()));
+        assertEquals(r.lot().balanceMinor(r.lot().dueDate()), r.lot().balanceMinor(r.lot().dueDate().plusDays(60)));
+        assertEquals(r.oldGrossMinor().subtract(r.oldNetMinor()),
+                r.futureSegment().grossBasisMinor().subtract(r.futureSegment().netBasisMinor()));
+        Segment next = r.futureSegment();
+        assertTrue(walkedBalance(next.startDate(), next.cashflows(), next.grossYield().rate(), next.grossBasisMinor(),
+                next.cashflows().getLast().dueDate(), false).abs().compareTo(new BigDecimal("1e-8")) < 0);
     }
 }
