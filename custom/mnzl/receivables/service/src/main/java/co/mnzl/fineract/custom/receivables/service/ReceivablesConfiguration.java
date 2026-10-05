@@ -406,6 +406,7 @@ public class ReceivablesConfiguration {
         result.put("historicalPurchaseVersion", "1");
         result.put("acquisitionGroupingVersion", "1");
         result.put("customerDisplayNameVersion", "1");
+        result.put("projectAcquisitionRateVersion", "1");
         result.put("productCode", "MNZL_PURCHASED_RECEIVABLE");
         result.put("scheduleCode", "MNZL_FIXED_RECEIVABLE");
         result.put("chargeStrategyCode", "MNZL_NO_BORROWER_CHARGES");

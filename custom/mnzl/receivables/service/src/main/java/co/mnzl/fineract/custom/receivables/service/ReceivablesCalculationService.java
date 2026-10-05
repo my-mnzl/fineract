@@ -146,7 +146,7 @@ public class ReceivablesCalculationService {
         for (var group : groups.entrySet()) {
             require(System.nanoTime() < deadline && !Thread.currentThread().isInterrupted(), "PRICING_TIMEOUT");
             var amounts = ReceivablesMath.priceAmounts(date(basis, "settlementDate"), measurement.flows(json.value(group.getValue())),
-                    decimal(basis, "corridorRate").add(decimal(basis, "spread")), decimal(basis, "feeRate"));
+                    ReceivablesMeasurement.acquisitionRate(basis), decimal(basis, "feeRate"));
             ObjectNode account = totals(amounts.contractualFaceMinor(), amounts.grossPurchasePriceMinor(), amounts.integralFeeMinor(),
                     amounts.netPurchaseCashMinor());
             account.put("accountId", group.getKey());

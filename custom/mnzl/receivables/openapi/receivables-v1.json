@@ -2927,81 +2927,14 @@
       },
       "calculationBasis": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "calculationVersion": {
-            "type": "string",
-            "enum": [
-              "EG_RECEIVABLES_ACT360_DAILY_V1",
-              "EG_RECEIVABLES_ACT360_SIMPLE_V1"
-            ]
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/legacyCalculationBasis"
           },
-          "productPolicyCode": {
-            "type": "string",
-            "const": "EG_RECEIVABLES_V1"
-          },
-          "schemaVersion": {
-            "type": "string",
-            "const": "1"
-          },
-          "policyRevisionId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "calculatorBuild": {
-            "$ref": "#/components/schemas/id"
-          },
-          "settlementDate": {
-            "$ref": "#/components/schemas/financialDate"
-          },
-          "cashflows": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/cashflow"
-            }
-          },
-          "corridorObservationId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "corridorRate": {
-            "$ref": "#/components/schemas/rate"
-          },
-          "spread": {
-            "$ref": "#/components/schemas/decimal"
-          },
-          "feeRate": {
-            "$ref": "#/components/schemas/rate"
-          },
-          "acceptedAccountPrices": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/acceptedAccountPrice"
-            }
-          },
-          "sourceVersion": {
-            "$ref": "#/components/schemas/version"
-          },
-          "sourceHash": {
-            "$ref": "#/components/schemas/sha256"
+          {
+            "$ref": "#/components/schemas/projectCalculationBasis"
           }
-        },
-        "required": [
-          "calculationVersion",
-          "productPolicyCode",
-          "schemaVersion",
-          "policyRevisionId",
-          "calculatorBuild",
-          "settlementDate",
-          "cashflows",
-          "corridorObservationId",
-          "corridorRate",
-          "spread",
-          "feeRate",
-          "acceptedAccountPrices",
-          "sourceVersion",
-          "sourceHash"
-        ],
-        "additionalProperties": false
+        ]
       },
       "cashflow": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -10987,6 +10920,10 @@
           "customerDisplayNameVersion": {
             "type": "string",
             "const": "1"
+          },
+          "projectAcquisitionRateVersion": {
+            "type": "string",
+            "const": "1"
           }
         },
         "required": [
@@ -14357,6 +14294,302 @@
         "minLength": 1,
         "maxLength": 160,
         "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+      },
+      "acquisitionRateBasis": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "PROJECT_RATE"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "projectRateRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "projectRateContentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "effectiveDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "pricingDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "rateLookupDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "annualNominalRate": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]{0,34})(?:\\.[0-9]{1,30})?$"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "projectRateRevisionId",
+          "projectRateContentHash",
+          "effectiveDate",
+          "pricingDate",
+          "rateLookupDate",
+          "annualNominalRate"
+        ],
+        "additionalProperties": false
+      },
+      "calculationBasisCommon": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "calculationVersion": {
+            "$ref": "#/components/schemas/calculationVersion"
+          },
+          "productPolicyCode": {
+            "type": "string",
+            "const": "EG_RECEIVABLES_V1"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "policyRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "calculatorBuild": {
+            "$ref": "#/components/schemas/id"
+          },
+          "settlementDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "cashflows": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/cashflow"
+            }
+          },
+          "feeRate": {
+            "$ref": "#/components/schemas/rate"
+          },
+          "acceptedAccountPrices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/acceptedAccountPrice"
+            }
+          },
+          "sourceVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "sourceHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "calculationVersion",
+          "productPolicyCode",
+          "schemaVersion",
+          "policyRevisionId",
+          "calculatorBuild",
+          "settlementDate",
+          "cashflows",
+          "feeRate",
+          "acceptedAccountPrices",
+          "sourceVersion",
+          "sourceHash"
+        ],
+        "additionalProperties": false
+      },
+      "legacyCalculationBasis": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "calculationVersion": {
+            "$ref": "#/components/schemas/calculationVersion"
+          },
+          "productPolicyCode": {
+            "type": "string",
+            "const": "EG_RECEIVABLES_V1"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "policyRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "calculatorBuild": {
+            "$ref": "#/components/schemas/id"
+          },
+          "settlementDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "cashflows": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/cashflow"
+            }
+          },
+          "feeRate": {
+            "$ref": "#/components/schemas/rate"
+          },
+          "acceptedAccountPrices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/acceptedAccountPrice"
+            }
+          },
+          "sourceVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "sourceHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "corridorObservationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "corridorRate": {
+            "$ref": "#/components/schemas/rate"
+          },
+          "spread": {
+            "$ref": "#/components/schemas/decimal"
+          }
+        },
+        "required": [
+          "calculationVersion",
+          "productPolicyCode",
+          "schemaVersion",
+          "policyRevisionId",
+          "calculatorBuild",
+          "settlementDate",
+          "cashflows",
+          "feeRate",
+          "acceptedAccountPrices",
+          "sourceVersion",
+          "sourceHash",
+          "corridorObservationId",
+          "corridorRate",
+          "spread"
+        ],
+        "additionalProperties": false
+      },
+      "projectAcquisitionRateBasis": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "PROJECT_RATE"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "projectRateRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "projectRateContentHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "effectiveDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "pricingDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "rateLookupDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "annualNominalRate": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]{0,34})(?:\\.[0-9]{1,30})?$"
+          }
+        },
+        "required": [
+          "kind",
+          "projectId",
+          "projectRateRevisionId",
+          "projectRateContentHash",
+          "effectiveDate",
+          "pricingDate",
+          "rateLookupDate",
+          "annualNominalRate"
+        ],
+        "additionalProperties": false
+      },
+      "projectCalculationBasis": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "calculationVersion": {
+            "$ref": "#/components/schemas/calculationVersion"
+          },
+          "productPolicyCode": {
+            "type": "string",
+            "const": "EG_RECEIVABLES_V1"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "policyRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "calculatorBuild": {
+            "$ref": "#/components/schemas/id"
+          },
+          "settlementDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "cashflows": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/cashflow"
+            }
+          },
+          "feeRate": {
+            "$ref": "#/components/schemas/rate"
+          },
+          "acceptedAccountPrices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/acceptedAccountPrice"
+            }
+          },
+          "sourceVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "sourceHash": {
+            "$ref": "#/components/schemas/sha256"
+          },
+          "acquisitionRateBasis": {
+            "$ref": "#/components/schemas/projectAcquisitionRateBasis"
+          }
+        },
+        "required": [
+          "calculationVersion",
+          "productPolicyCode",
+          "schemaVersion",
+          "policyRevisionId",
+          "calculatorBuild",
+          "settlementDate",
+          "cashflows",
+          "feeRate",
+          "acceptedAccountPrices",
+          "sourceVersion",
+          "sourceHash",
+          "acquisitionRateBasis"
+        ],
+        "additionalProperties": false
+      },
+      "calculationVersion": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "string",
+        "enum": [
+          "EG_RECEIVABLES_ACT360_DAILY_V1",
+          "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+        ]
       }
     }
   }

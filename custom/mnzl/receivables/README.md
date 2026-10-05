@@ -215,6 +215,28 @@ full `PRICE` response. Estimate work checks a five-second deadline between
 accounts and rejects with `PRICING_TIMEOUT` when exceeded; a partial portfolio is
 never returned as complete.
 
+## Project acquisition rates
+
+Capabilities advertise `projectAcquisitionRateVersion: "1"`. Pricing and purchase
+commands accept either the original corridor observation/rate/spread basis or an
+`acquisitionRateBasis` with `kind: "PROJECT_RATE"`, the project and rate revision,
+revision content hash, effective date, pricing date, next-day rate lookup date,
+and `annualNominalRate`. The shapes are exclusive: project pricing never needs a
+corridor observation or synthetic spread. Full pricing and estimates use the
+same supplied annual rate; fees, ACT/360 pricing and pinned accretion versions
+remain unchanged.
+
+MNZL selects negotiated terms. Native validates the supplied dates and rate,
+includes their exact provenance in the basis hash and stores the original basis
+on booking. It does not look up a project's latest rate. Legacy bases and hashes
+remain unchanged. `RESET_RATE` rejects project-rate accounts before accrual or
+correction effects; a later corridor or project revision cannot reprice them.
+Existing legacy reset records and exact command replay remain supported.
+
+Deploy MNZL readers that accept the optional capability and both basis shapes
+before this native build advertises it. Keep that compatibility for rollback;
+an older reader or calculator cannot safely process new project-rate offers.
+
 ## Historical acquisition recording
 
 Capabilities advertise `historicalPurchaseVersion: "1"`. `BOOK_HISTORICAL_PURCHASE`
