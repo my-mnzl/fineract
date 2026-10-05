@@ -101,7 +101,7 @@ public class ReceivablesMeasurement {
         Purchase purchase = ReceivablesMath.price(calculationVersion(basis), date(basis, "settlementDate"),
                 flows(json.value(java.util.stream.StreamSupport.stream(basis.get("cashflows").spliterator(), false)
                         .filter(flow -> text(flow, "receivableId").equals(accountId)).toList())),
-                decimal(basis, "corridorRate").add(decimal(basis, "spread")), decimal(basis, "feeRate"));
+                acquisitionRate(basis), decimal(basis, "feeRate"));
         if (!accepted.isEmpty()) {
             JsonNode price = accepted.stream().filter(p -> text(p, "accountId").equals(accountId)).findFirst()
                     .orElseThrow(() -> new ReceivablesException("SOURCE_CHANGED"));
@@ -110,6 +110,21 @@ public class ReceivablesMeasurement {
                     && minor(price, "netPurchaseCashMinor").equals(purchase.netPurchaseCashMinor()), "SOURCE_CHANGED");
         }
         return purchase;
+    }
+
+    /** Resolve only the immutable rate supplied with this price; the native ledger never selects project terms. */
+    public static BigDecimal acquisitionRate(JsonNode basis) {
+        if (!basis.has("acquisitionRateBasis")) {
+            return decimal(basis, "corridorRate").add(decimal(basis, "spread"));
+        }
+        JsonNode rate = basis.get("acquisitionRateBasis");
+        require(text(rate, "kind").equals("PROJECT_RATE") && !basis.has("corridorObservationId") && !basis.has("corridorRate")
+                && !basis.has("spread"), "INVALID_DATA");
+        LocalDate lookup = date(rate, "rateLookupDate");
+        require(lookup.equals(date(rate, "pricingDate").plusDays(1)) && !date(rate, "effectiveDate").isAfter(lookup), "INVALID_DATA");
+        BigDecimal annualRate = decimal(rate, "annualNominalRate");
+        require(annualRate.signum() >= 0 && annualRate.scale() <= 30 && annualRate.precision() - annualRate.scale() <= 35, "INVALID_DATA");
+        return annualRate;
     }
 
     /** The basis names the accretion rule the account is booked under; a basis without one books the daily default. */

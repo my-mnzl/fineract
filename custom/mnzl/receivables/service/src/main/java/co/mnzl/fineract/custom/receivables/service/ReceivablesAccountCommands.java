@@ -519,6 +519,9 @@ public class ReceivablesAccountCommands {
     }
 
     public void reset(ReceivablesExecution e) {
+        // account(e) accrues and writes, so refuse fixed terms before it or any correction handling runs.
+        var original = store.require("account", e.accountKey(e.subjectId()));
+        require(!json.read(string(original, "terms_json")).has("acquisitionRateBasis"), "INVALID_DATA");
         linkResetCorrection(e);
         var account = account(e);
         String key = string(account, "record_key");

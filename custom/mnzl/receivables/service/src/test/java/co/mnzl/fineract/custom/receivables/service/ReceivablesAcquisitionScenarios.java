@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigInteger;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -40,6 +41,7 @@ final class ReceivablesAcquisitionScenarios {
     void verify() throws Exception {
         assertThat(get("/capabilities").path("acquisitionGroupingVersion").asText()).isEqualTo("1");
         assertThat(get("/capabilities").path("customerDisplayNameVersion").asText()).isEqualTo("1");
+        verifyProjectRateBookings();
         var firstCommand = harness.preparePurchase("group-first", "50000", "50000", "closing-one");
         firstCommand.put("customerDisplayName", "Group Buyer");
         var secondCommand = harness.preparePurchase("group-second", "30000", "70000", "closing-one");
@@ -98,6 +100,48 @@ final class ReceivablesAcquisitionScenarios {
         assertThat(harness.request("POST", BASE + "/commands", changed, 409).path("code").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
         assertThat(harness.counts()).isEqualTo(counts);
         assertThat(get("/acquisitions/closing-one")).isEqualTo(group);
+    }
+
+    private void verifyProjectRateBookings() throws Exception {
+        assertThat(get("/capabilities").path("projectAcquisitionRateVersion").asText()).isEqualTo("1");
+        for (String version : ReceivablesConfiguration.CALCULATIONS) {
+            String id = version.equals(ReceivablesConfiguration.CALCULATION) ? "project-daily" : "project-simple";
+            ObjectNode command = harness.preparePurchase(id, "50000", "50000", id + "-acquisition", version);
+            ObjectNode basis = (ObjectNode) command.get("basis");
+            // The issued rate was selected before settlement. Only the provenance changes from the equivalent legacy
+            // price.
+            basis.remove(List.of("corridorObservationId", "corridorRate", "spread"));
+            ObjectNode rate = basis.putObject("acquisitionRateBasis");
+            rate.put("kind", "PROJECT_RATE");
+            rate.put("projectId", "project-1");
+            rate.put("projectRateRevisionId", "issued-revision");
+            rate.put("projectRateContentHash", "a".repeat(64));
+            rate.put("effectiveDate", harness.today.minusDays(30).toString());
+            rate.put("pricingDate", harness.today.minusDays(20).toString());
+            rate.put("rateLookupDate", harness.today.minusDays(19).toString());
+            rate.put("annualNominalRate", "0.24");
+            command.put("basisHash", harness.json.hash(harness.json.normalizedBasis(basis)));
+            var result = book(command);
+            var counts = harness.counts();
+            assertThat(book(command)).isEqualTo(result);
+            assertThat(harness.counts()).isEqualTo(counts);
+            assertThat(harness.json.read(harness.queryText("select terms_json from m_mnzl_r_account where external_id=?", id)))
+                    .isEqualTo(basis);
+            assertThat(harness.queryText("select s.calculator_version from m_mnzl_r_segment s join m_mnzl_r_account a "
+                    + "on a.active_segment_key=s.record_key where a.external_id=?", id)).isEqualTo(version);
+            JsonNode account = get("/accounts/" + id);
+            ObjectNode reset = harness.command("RESET_RATE", id + "-reset", id, "RECEIVABLE");
+            reset.put("expectedVersion", harness.version(id));
+            reset.put("corridorObservationId", "later-corridor");
+            reset.put("corridorRate", "0.30");
+            reset.put("spread", "0.02");
+            reset.put("developerAdjustmentDueDate", harness.today.plusDays(45).toString());
+            assertThat(harness.request("POST", BASE + "/commands", reset, 400).path("code").asText()).isEqualTo("INVALID_DATA");
+            assertThat(harness.counts()).isEqualTo(counts);
+            assertThat(get("/accounts/" + id)).isEqualTo(account);
+            assertThat(harness.queryText("select count(*) from m_mnzl_r_developer_lot l join m_mnzl_r_account a "
+                    + "on l.account_key=a.record_key where a.external_id=?", id)).isEqualTo("0");
+        }
     }
 
     private void verifyListing() throws Exception {

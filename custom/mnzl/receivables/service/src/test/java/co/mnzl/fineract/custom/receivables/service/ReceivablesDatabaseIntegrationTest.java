@@ -164,7 +164,8 @@ class ReceivablesDatabaseIntegrationTest {
                         "office-closure-durable-replay", "period-proof-population-and-gross-controls",
                         "period-proof-zero-and-hel-exclusion", "period-proof-missing-extra-and-cross-date", "period-proof-event-integrity",
                         "simple-accretion-pinned-on-booking", "simple-accretion-impairment-and-reset-from-reloaded-segment",
-                        "simple-accretion-lot-and-event-version", "mixed-version-developer-settlement-refused")));
+                        "simple-accretion-lot-and-event-version", "mixed-version-developer-settlement-refused",
+                        "project-rate-booking-pins-basis-and-accretion", "project-rate-reset-refused-without-effects")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
