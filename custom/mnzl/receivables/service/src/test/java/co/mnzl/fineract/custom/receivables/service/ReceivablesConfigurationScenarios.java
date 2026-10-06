@@ -116,6 +116,7 @@ final class ReceivablesConfigurationScenarios {
         assertThat(harness.request("GET", BASE + "/configuration", null, 200)).isEqualTo(original);
         JsonNode migrated = harness.requestMapping("GET", BASE + "/configuration", null, "mapping-next", 200);
         verifyMigratedPurchases(upfront, deferred);
+        verifyUpfrontHistoricalPurchase();
         assertThat(harness.request("POST", BASE + "/commands", legacyBook, 200).path("payloadHash").asText())
                 .isEqualTo(harness.json.hash(legacyBook));
         var command = harness.json.read(requestBefore);
@@ -279,6 +280,13 @@ final class ReceivablesConfigurationScenarios {
         ObjectNode renamed = request.deepCopy();
         renamed.put("operationId", "legacy-names-new-operation").put("idempotencyKey", "legacy-names-new-operation");
         assertThat(harness.request("POST", BASE + "/commands", renamed, 400).path("code").asText()).isEqualTo("INVALID_DATA");
+        // The events feed returns the sealed legacy event as stored, and the read contract accepts it.
+        String cursor = "";
+        do {
+            JsonNode page = harness.request("GET", BASE + "/events?limit=50" + (cursor.isEmpty() ? "" : "&cursor=" + cursor), null, 200);
+            harness.json.validate("financialEventsPage", page);
+            cursor = page.path("nextCursor").asText("");
+        } while (!cursor.isEmpty());
         return request;
     }
 
@@ -315,6 +323,90 @@ final class ReceivablesConfigurationScenarios {
         assertThat(glOf(deferredEvent, "deferredAdminFee")).isEqualTo(harness.accounts.get("deferredAdminFee"));
         assertThat(harness.queryText("select purchase_fee_minor from m_mnzl_r_account where external_id='deferred-after-migration'"))
                 .isEqualTo(deferredFee);
+    }
+
+    /**
+     * A DAILY_V2 historical purchase earns the admin fee when it is recorded, before any cash moves; reconciling the
+     * net cash later settles acquisition clearing without touching the fee or the measured position.
+     */
+    private void verifyUpfrontHistoricalPurchase() throws Exception {
+        String id = "upfront-historical";
+        ObjectNode basis = harness.bookingCommands.get("account-1").path("basis").deepCopy();
+        basis.put("calculationVersion", UPFRONT).put("calculatorBuild", "build-next").put("settlementDate", harness.today.toString());
+        var flows = new ArrayList<co.mnzl.fineract.receivables.math.ReceivablesMath.Cashflow>();
+        int index = 0;
+        for (JsonNode flow : basis.path("cashflows")) {
+            ObjectNode value = (ObjectNode) flow;
+            value.put("receivableId", id).put("cashflowId", id + "-" + index).put("installmentId", id + "-" + index).put("dueDate",
+                    harness.today.plusDays(++index * 45).toString());
+            flows.add(new co.mnzl.fineract.receivables.math.ReceivablesMath.Cashflow(value.path("cashflowId").asText(),
+                    java.time.LocalDate.parse(value.path("dueDate").asText()),
+                    new java.math.BigInteger(value.path("amountMinor").asText())));
+        }
+        var purchase = co.mnzl.fineract.receivables.math.ReceivablesMath.price(UPFRONT, harness.today, flows,
+                new java.math.BigDecimal(basis.path("corridorRate").asText()).add(new java.math.BigDecimal(basis.path("spread").asText())),
+                new java.math.BigDecimal(basis.path("feeRate").asText()));
+        String gross = purchase.grossPurchasePriceMinor().toString();
+        String fee = purchase.adminFeeMinor().toString();
+        String net = purchase.netPurchaseCashMinor().toString();
+        basis.set("acceptedAccountPrices", harness.json.value(java.util.List.of(
+                java.util.Map.of("accountId", id, "grossPurchasePriceMinor", gross, "adminFeeMinor", fee, "netPurchaseCashMinor", net))));
+        ObjectNode book = next(harness.command("BOOK_HISTORICAL_PURCHASE", id + "-book", id, "RECEIVABLE"));
+        book.put("accountId", id).put("dealId", "deal").put("customerReferenceId", id + "-customer");
+        book.set("acquisition", harness.json.value(java.util.Map.of("id", id + "-acquisition", "developerReferenceId", "developer",
+                "sourceReferenceId", id + "-record", "effectiveDate", harness.today.toString())));
+        book.set("basis", basis);
+        book.put("basisHash", harness.json.hash(basis));
+        book.set("approverIds", harness.json.value(java.util.List.of()));
+        book.set("approvalEvidenceIds", harness.json.value(java.util.List.of()));
+        book.set("acknowledgment",
+                harness.json
+                        .value(java.util.Map.of("recordId", id + "-record", "sourceHash", basis.path("sourceHash").asText(), "basisHash",
+                                harness.json.hash(basis), "actorId", "operator", "reason", "Recorded completed upfront fee acquisition")));
+        JsonNode booked = event(harness.request("POST", BASE + "/commands", book, 200));
+        assertThat(booked.path("calculationVersion").asText()).isEqualTo(UPFRONT);
+        assertThat(lines(booked)).containsExactlyInAnyOrder("contractualReceivable DEBIT " + purchase.contractualFaceMinor() + " FACE",
+                "deferredDiscount CREDIT " + purchase.contractualFaceMinor().subtract(purchase.grossPurchasePriceMinor()) + " DISCOUNT",
+                "acquisitionClearing CREDIT " + net + " CASH", "adminFeeIncome CREDIT " + fee + " ADMIN_FEE");
+        JsonNode position = booked.path("positionsAfter").get(0);
+        assertThat(position.path("unreconciledPurchaseMinor").asText()).isEqualTo(net);
+        assertThat(position.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
+        assertThat(position.path("amortizedCostMinor").asText()).isEqualTo(gross);
+        assertThat(harness.queryText("select purchase_fee_minor from m_mnzl_r_account where external_id=?", id)).isEqualTo(fee);
+
+        ObjectNode cash = next(harness.command("RECORD_CASH_MOVEMENT", id + "-payment", "deal", "DEAL"));
+        cash.set("source",
+                harness.json.value(java.util.Map.of("bankSourceId", id + "-payment", "bankAccountReference", "test-bank",
+                        "verificationEvidenceId", "verified-later", "valueDate", harness.today.toString(), "currency", "EGP", "amountMinor",
+                        net, "direction", "OUTGOING", "allocations",
+                        java.util.List.of(java.util.Map.of("allocationId", id + "-payment-allocation", "kind", "ACQUISITION_ADVANCE",
+                                "accountId", id, "dealId", "deal", "beneficiaryReferenceId", "developer", "amountMinor", net)))));
+        harness.request("POST", BASE + "/commands", cash, 200);
+        ObjectNode reconcile = next(harness.command("RECONCILE_HISTORICAL_PURCHASE", id + "-reconcile", id, "RECEIVABLE"));
+        reconcile.put("expectedVersion", "1").put("amountMinor", net);
+        reconcile.set("acquisitionClearingAllocationIds", harness.json.value(java.util.List.of(id + "-payment-allocation")));
+        JsonNode reconciled = event(harness.request("POST", BASE + "/commands", reconcile, 200));
+        assertThat(lines(reconciled)).noneMatch(line -> line.startsWith("adminFeeIncome") || line.startsWith("deferredAdminFee"));
+        JsonNode account = harness.request("GET", BASE + "/accounts/" + id, null, 200).path("position");
+        assertThat(account.path("unreconciledPurchaseMinor").asText()).isEqualTo("0");
+        assertThat(account.path("calculationVersion").asText()).isEqualTo(UPFRONT);
+        assertThat(account.path("amortizedCostMinor").asText()).isEqualTo(gross);
+        assertThat(account.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_journal_line l join m_mnzl_r_account a on a.record_key=l.account_key "
+                + "where a.external_id='" + id + "' and l.semantic_account='adminFeeIncome' and l.side='CREDIT' and l.amount_minor='" + fee
+                + "'")).isEqualTo(1);
+        JsonNode controls = harness.request("GET", BASE + "/controls?accountId=" + id, null, 200);
+        for (JsonNode balance : controls.path("balances")) {
+            assertThat(balance.path("differenceMinor").asText()).describedAs(balance.path("accountKey").asText()).isEqualTo("0");
+            if (balance.path("accountKey").asText().equals("adminFeeIncome")) {
+                assertThat(balance.path("nativeGlMinor").asText()).isEqualTo("-" + fee);
+            }
+        }
+        assertThat(controls.path("unreconciledPurchaseMinor").asText()).isEqualTo("0");
+    }
+
+    private static ObjectNode next(ObjectNode command) {
+        return command.put("accountMappingRevisionId", "mapping-next");
     }
 
     private JsonNode event(JsonNode result) throws Exception {

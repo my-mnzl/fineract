@@ -19,6 +19,7 @@
 package co.mnzl.fineract.custom.receivables.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -78,6 +79,32 @@ class ReceivablesMixedVersionEventTest {
         assertThat(event.path("calculationVersion").asText()).isEqualTo(ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION);
         assertThat(event.path("positionsAfter"))
                 .allMatch(p -> p.path("calculationVersion").asText().equals(ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION));
+    }
+
+    /**
+     * The events feed returns sealed legacy events as stored; the read contract accepts them, the write contract never.
+     */
+    @Test
+    void sealedLegacyEventsMatchTheReadContractButNeverTheWriteContract() {
+        ObjectNode current = (ObjectNode) close(ReceivablesMath.CALCULATION_VERSION, ReceivablesMath.CALCULATION_VERSION);
+        current.putArray("journalLines").addObject().put("journalId", "1").put("sourceLineId", "line-1")
+                .put("accountKey", "deferredAdminFee").put("side", "CREDIT").put("amountMinor", "5").put("currency", "EGP")
+                .put("component", "ADMIN_FEE");
+        String stored = json.write(current).replace("\"deferredAdminFeeMinor\"", "\"deferredIntegralFeeMinor\"")
+                .replace("\"deferredAdminFee\"", "\"deferredIntegralFee\"").replace("\"ADMIN_FEE\"", "\"INTEGRAL_FEE\"");
+        ObjectNode legacy = (ObjectNode) json.read(stored);
+        legacy.path("positionsAfter").forEach(position -> ((ObjectNode) position).remove("calculationVersion"));
+        for (JsonNode event : List.of(current, legacy)) {
+            ObjectNode page = json.object().putNull("nextCursor");
+            page.putArray("items").add(event);
+            json.validate("financialEventsPage", page);
+        }
+        json.validate("financialEvent", current);
+        assertThatThrownBy(() -> json.validate("financialEvent", legacy)).isInstanceOf(ReceivablesException.class)
+                .hasMessage("INVALID_DATA");
+        ObjectNode mixedNames = current.deepCopy();
+        ((ObjectNode) mixedNames.path("journalLines").get(0)).put("component", "INTEGRAL_FEE");
+        assertThatThrownBy(() -> json.validate("financialEvent", mixedNames)).isInstanceOf(ReceivablesException.class);
     }
 
     @SuppressWarnings("unchecked")
