@@ -78,7 +78,10 @@ public final class ReceivablesJson {
     }
 
     public JsonNode validate(String schema, String value) {
-        JsonNode node = read(value);
+        return validate(schema, read(value));
+    }
+
+    public JsonNode validate(String schema, JsonNode node) {
         JsonSchema validator = schemas.computeIfAbsent(schema, name -> {
             ObjectNode root = mapper.createObjectNode();
             root.put("$schema", "https://json-schema.org/draft/2020-12/schema");

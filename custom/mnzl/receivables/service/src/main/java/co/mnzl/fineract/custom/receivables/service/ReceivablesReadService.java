@@ -155,6 +155,7 @@ public class ReceivablesReadService {
         result.put("boundarySide", boundary.side());
         result.put("grossYield", state.segment().grossYield().rate().toPlainString());
         result.put("netEir", state.segment().netEir().rate().toPlainString());
+        result.put("calculationVersion", state.segment().calculationVersion());
         return result;
     }
 
@@ -434,7 +435,7 @@ public class ReceivablesReadService {
             line.put("nativeJournalId", Long.toString(number(row, "actual_id")));
             line.put("sourceLineId", string(row, "source_line_id"));
             line.put("nativeGlAccountId", Long.toString(number(row, "actual_gl")));
-            line.put("accountKey", string(row, "semantic_account"));
+            line.put("accountKey", ReceivablesLegacy.accountKey(string(row, "semantic_account")));
             line.put("side", number(row, "actual_side") == 2 ? "DEBIT" : "CREDIT");
             line.put("amountMinor", new BigDecimal(string(row, "actual_amount")).movePointRight(2).toBigIntegerExact().toString());
             line.put("currency", string(row, "currency_code"));
@@ -622,7 +623,7 @@ public class ReceivablesReadService {
         Map<String, List<String>> journalIds = new HashMap<>();
         Map<String, List<String>> eventIds = new HashMap<>();
         for (var row : rows) {
-            String semantic = string(row, "semantic_account");
+            String semantic = ReceivablesLegacy.accountKey(string(row, "semantic_account"));
             BigInteger amount = new BigInteger(string(row, "amount_minor"));
             sub.merge(semantic, string(row, "side").equals("DEBIT") ? amount : amount.negate(), BigInteger::add);
             sourceIds.computeIfAbsent(semantic, ignored -> new ArrayList<>()).add(string(row, "source_line_id"));
@@ -667,8 +668,8 @@ public class ReceivablesReadService {
         }
         // Reconcile monetary positions independently of the journal mirror.
         Map<String, BigInteger> positionControls = new HashMap<>();
-        for (String control : List.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredIntegralFee",
-                "lossAllowance", "developerPayable", "developerReceivable", "developerReceivableAllowance")) {
+        for (String control : List.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredAdminFee", "lossAllowance",
+                "developerPayable", "developerReceivable", "developerReceivableAllowance")) {
             positionControls.put(control, BigInteger.ZERO);
         }
         for (var account : accounts) {
@@ -676,8 +677,7 @@ public class ReceivablesReadService {
             positionControls.merge("contractualReceivable", new BigInteger(text(position, "notYetDueMinor")), BigInteger::add);
             positionControls.merge("installmentDues", new BigInteger(text(position, "pastDueMinor")), BigInteger::add);
             positionControls.merge("deferredDiscount", new BigInteger(text(position, "deferredDiscountMinor")).negate(), BigInteger::add);
-            positionControls.merge("deferredIntegralFee", new BigInteger(text(position, "deferredIntegralFeeMinor")).negate(),
-                    BigInteger::add);
+            positionControls.merge("deferredAdminFee", new BigInteger(text(position, "deferredAdminFeeMinor")).negate(), BigInteger::add);
             positionControls.merge("lossAllowance", new BigInteger(text(position, "lossAllowanceMinor")).negate(), BigInteger::add);
         }
         for (var snapshot : snapshotRows(scope, boundary, "LOT")) {
@@ -819,7 +819,14 @@ public class ReceivablesReadService {
         Map<String, ObjectNode> latest = new LinkedHashMap<>();
         for (var row : events) {
             JsonNode event = json.read(string(row, "event_json"));
-            event.path("positionsAfter").forEach(position -> latest.put(text(position, "accountId"), (ObjectNode) position));
+            for (JsonNode stored : event.path("positionsAfter")) {
+                ObjectNode position = (ObjectNode) ReceivablesLegacy.current(stored);
+                if (!position.has("calculationVersion")) {
+                    // Sealed events written before positions named their version carry it once, at event level.
+                    position.put("calculationVersion", event.path("calculationVersion").asText(ReceivablesConfiguration.CALCULATION));
+                }
+                latest.put(text(position, "accountId"), position);
+            }
         }
         return latest;
     }

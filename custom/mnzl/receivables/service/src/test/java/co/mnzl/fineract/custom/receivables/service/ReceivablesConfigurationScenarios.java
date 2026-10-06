@@ -33,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 final class ReceivablesConfigurationScenarios {
 
     private static final String BASE = ReceivablesDatabaseIntegrationTest.PREFIX;
+    private static final String UPFRONT = co.mnzl.fineract.receivables.math.ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION;
     private final ReceivablesDatabaseIntegrationTest harness;
 
     ReceivablesConfigurationScenarios(ReceivablesDatabaseIntegrationTest harness) {
@@ -40,6 +41,7 @@ final class ReceivablesConfigurationScenarios {
     }
 
     void verify() throws Exception {
+        ObjectNode legacyBook = legacyHistory();
         String requestBefore = harness.queryText("select request_json from m_mnzl_r_command where operation_id='account-1-book'");
         String eventsBefore = harness.queryText("select event_json from m_mnzl_r_event where operation_key="
                 + "(select record_key from m_mnzl_r_command where operation_id='account-1-book')");
@@ -66,11 +68,29 @@ final class ReceivablesConfigurationScenarios {
         String helPath = helPathBuilder.append("&eventWatermark=").append(harness.queryLong("select max(sequence_id) from m_mnzl_r_event"))
                 .toString();
         JsonNode helBefore = harness.request("GET", helPath, null, 200);
+        // The legacy set cannot book an upfront admin fee; both purchases are prepared now and booked after migration.
+        ObjectNode upfront = harness.preparePurchase("upfront-account", "1", "99999", "acquisition-upfront", UPFRONT);
+        assertThat(harness.request("POST", BASE + "/commands", upfront, 409).path("code").asText())
+                .isEqualTo("FINERACT_CAPABILITY_MISSING");
+        ObjectNode deferred = harness.preparePurchase("deferred-after-migration", "1", "99999", "acquisition-deferred",
+                ReceivablesConfiguration.CALCULATION);
+        assertThat(harness.request("GET", BASE + "/capabilities", null, 200).path("calculationVersions"))
+                .doesNotContain(harness.json.value(UPFRONT));
         ObjectNode changed = original.deepCopy();
         changed.put("calculatorBuild", "build-next");
         assertThat(harness.request("POST", BASE + "/configuration/revisions", changed, 409).path("code").asText())
                 .isEqualTo("IDEMPOTENCY_CONFLICT");
         changed.put("accountMappingRevisionId", "mapping-next");
+        // The used scope may adopt the admin fee set only by keeping the deferred fee on its account.
+        changed.set("accountMap", harness.accountMap(true));
+        ObjectNode moved = changed.deepCopy();
+        moved.put("accountMappingRevisionId", "forbidden-deferred-fee-move");
+        for (JsonNode entry : moved.path("accountMap")) {
+            if (entry.path("accountKey").asText().equals("deferredAdminFee")) {
+                ((ObjectNode) entry).put("nativeGlAccountId", Long.toString(harness.accounts.get("adminFeeIncome")));
+            }
+        }
+        harness.request("POST", BASE + "/configuration/revisions", moved, 409);
         JsonNode staged = harness.request("POST", BASE + "/configuration/revisions", changed, 200);
         var reversed = new ArrayList<JsonNode>();
         changed.path("accountMap").forEach(reversed::add);
@@ -88,7 +108,16 @@ final class ReceivablesConfigurationScenarios {
             harness.executeSql("update m_mnzl_r_period set status=? where record_key=?", periodStatus, period);
         }
         JsonNode activated = harness.request("POST", BASE + "/configuration/activations", activation, 200);
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_account_map where account_key in ('deferredAdminFee','adminFeeIncome') "
+                + "and mapping_revision='mapping-next'")).isEqualTo(2);
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_account_map where account_key='deferredIntegralFee'")).isZero();
+        assertThat(harness.request("GET", BASE + "/capabilities", null, 200).path("calculationVersions"))
+                .contains(harness.json.value(UPFRONT));
         assertThat(harness.request("GET", BASE + "/configuration", null, 200)).isEqualTo(original);
+        JsonNode migrated = harness.requestMapping("GET", BASE + "/configuration", null, "mapping-next", 200);
+        verifyMigratedPurchases(upfront, deferred);
+        assertThat(harness.request("POST", BASE + "/commands", legacyBook, 200).path("payloadHash").asText())
+                .isEqualTo(harness.json.hash(legacyBook));
         var command = harness.json.read(requestBefore);
         JsonNode replay = harness.request("POST", BASE + "/commands", command, 200);
         assertThat(replay.path("payloadHash").asText()).isEqualTo(harness.json.hash(command));
@@ -109,7 +138,7 @@ final class ReceivablesConfigurationScenarios {
         assertThat(harness.request("GET", helPath, null, 200)).isEqualTo(helBefore);
         new ReceivablesPeriodProofScenarios(harness).verify();
         for (String field : new String[] { "bankAccountReference", "officeId", "productId", "helPaymentTypeId", "helProductId" }) {
-            ObjectNode forbidden = original.deepCopy();
+            ObjectNode forbidden = migrated.deepCopy();
             forbidden.put("accountMappingRevisionId", "forbidden-" + field);
             forbidden.put(field, field.equals("bankAccountReference") ? "changed-bank" : "999999999");
             harness.request("POST", BASE + "/configuration/revisions", forbidden, 409);
@@ -119,7 +148,7 @@ final class ReceivablesConfigurationScenarios {
         if (otherOffice == 0) {
             otherOffice = harness.queryLong("select id from m_office where name='Other Flex office'");
         }
-        ObjectNode movedOffice = original.deepCopy();
+        ObjectNode movedOffice = migrated.deepCopy();
         movedOffice.put("accountMappingRevisionId", "forbidden-valid-office").put("officeId", Long.toString(otherOffice));
         harness.request("POST", BASE + "/configuration/revisions", movedOffice, 409);
         long otherPayment = harness.request("POST", "/paymenttypes", harness.json.value(java.util.Map.of("name", "Other noncash route",
@@ -130,17 +159,21 @@ final class ReceivablesConfigurationScenarios {
                         + "where product_id=? and product_type=1 and financial_account_type=1 and payment_type=?",
                 otherPayment, Long.parseLong(original.path("helProductId").asText()),
                 Long.parseLong(original.path("helPaymentTypeId").asText()));
-        ObjectNode rerouted = original.deepCopy();
+        ObjectNode rerouted = migrated.deepCopy();
         rerouted.put("accountMappingRevisionId", "forbidden-valid-route").put("helPaymentTypeId", Long.toString(otherPayment));
         harness.request("POST", BASE + "/configuration/revisions", rerouted, 409);
-        ObjectNode remapped = original.deepCopy();
+        ObjectNode remapped = migrated.deepCopy();
         remapped.put("accountMappingRevisionId", "forbidden-map");
         ((ObjectNode) remapped.path("accountMap").get(0)).set("nativeGlAccountId",
                 remapped.path("accountMap").get(1).get("nativeGlAccountId"));
         harness.request("POST", BASE + "/configuration/revisions", remapped, 409);
-        ObjectNode left = original.deepCopy();
+        // Once migrated, the legacy set is never routing again.
+        ObjectNode reverted = original.deepCopy();
+        reverted.put("accountMappingRevisionId", "forbidden-legacy-set");
+        harness.request("POST", BASE + "/configuration/revisions", reverted, 409);
+        ObjectNode left = migrated.deepCopy();
         left.put("accountMappingRevisionId", "mapping-left");
-        ObjectNode right = original.deepCopy();
+        ObjectNode right = migrated.deepCopy();
         right.put("accountMappingRevisionId", "mapping-right");
         var leftStage = harness.request("POST", BASE + "/configuration/revisions", left, 200);
         var rightStage = harness.request("POST", BASE + "/configuration/revisions", right, 200);
@@ -183,6 +216,128 @@ final class ReceivablesConfigurationScenarios {
                     historicalJson);
         }
 
+    }
+
+    /**
+     * Rewrites one booked account into what the integral fee vocabulary stored before the rename (command, event,
+     * journal registry and terms, resealed as they were sealed then), and every segment snapshot into its legacy field,
+     * then runs the admin fee changeset. Returns the legacy command for replay.
+     */
+    private ObjectNode legacyHistory() throws Exception {
+        harness.purchase("legacy-account");
+        String operation = harness.queryText("select record_key from m_mnzl_r_command where operation_id='legacy-account-book'");
+        ObjectNode request = (ObjectNode) legacy(
+                harness.queryText("select request_json from m_mnzl_r_command where record_key=?", operation));
+        assertThat(request.path("basis").path("acceptedAccountPrices").get(0).has("integralFeeMinor")).isTrue();
+        ObjectNode result = (ObjectNode) harness.json
+                .read(harness.queryText("select result_json from m_mnzl_r_command where record_key=?", operation));
+        result.put("payloadHash", harness.json.hash(request));
+        harness.executeSql("update m_mnzl_r_command set request_json=?, payload_hash=?, result_json=? where record_key=?",
+                harness.json.write(request), harness.json.hash(request), harness.json.write(result), operation);
+        String event = harness.queryText("select record_key from m_mnzl_r_event where operation_key=?", operation);
+        ObjectNode sealed = (ObjectNode) legacy(harness.queryText("select event_json from m_mnzl_r_event where record_key=?", event));
+        sealed.remove("contentHash");
+        // Sealed events written before positions named their version carry it only at event level.
+        sealed.path("positionsAfter").forEach(position -> ((ObjectNode) position).remove("calculationVersion"));
+        String hash = harness.json.hash(sealed);
+        sealed.put("contentHash", hash);
+        assertThat(harness.json.write(sealed)).contains("\"deferredIntegralFee\"", "\"INTEGRAL_FEE\"", "\"deferredIntegralFeeMinor\"");
+        harness.executeSql("update m_mnzl_r_event set event_json=?, content_hash=? where record_key=?", harness.json.write(sealed), hash,
+                event);
+        harness.executeSql("update m_mnzl_r_journal_line set semantic_account='deferredIntegralFee' where event_key=? "
+                + "and semantic_account='deferredAdminFee'", event);
+        harness.executeSql("update m_mnzl_r_journal_line set component='INTEGRAL_FEE' where event_key=? and component='ADMIN_FEE'", event);
+        harness.executeSql("update m_mnzl_r_account set terms_json=? where external_id='legacy-account'", harness.json
+                .write(legacy(harness.queryText("select terms_json from m_mnzl_r_account where external_id='legacy-account'"))));
+        harness.executeSql("update m_mnzl_r_segment set snapshot_json=replace(snapshot_json, '\"deferredAdminFeeMinor\":', "
+                + "'\"deferredIntegralFeeMinor\":')");
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_segment where snapshot_json like '%deferredAdminFeeMinor%'")).isZero();
+        harness.migrateAdminFee();
+        assertThat(harness.queryLong("select count(*) from m_mnzl_r_segment where snapshot_json like '%deferredIntegralFeeMinor%'"))
+                .isZero();
+        // Sealed legacy records read under current names, and the deferred fee control still reconciles.
+        JsonNode account = harness.request("GET", BASE + "/accounts/legacy-account", null, 200);
+        assertThat(account.path("position").has("deferredIntegralFeeMinor")).isFalse();
+        assertThat(account.path("position").path("calculationVersion").asText()).isEqualTo(ReceivablesConfiguration.CALCULATION);
+        assertThat(account.path("position").path("deferredAdminFeeMinor").asText())
+                .isEqualTo(request.path("basis").path("acceptedAccountPrices").get(0).path("integralFeeMinor").asText());
+        JsonNode controls = harness.request("GET", BASE + "/controls?accountId=legacy-account", null, 200);
+        for (JsonNode balance : controls.path("balances")) {
+            assertThat(balance.path("differenceMinor").asText()).isEqualTo("0");
+            if (balance.path("accountKey").asText().equals("deferredAdminFee")) {
+                assertThat(balance.path("nativeGlMinor").asText())
+                        .isEqualTo("-" + account.path("position").path("deferredAdminFeeMinor").asText());
+            }
+        }
+        String journals = BASE + "/journals?operationIds=legacy-account-book&eventWatermark="
+                + harness.queryLong("select max(sequence_id) from m_mnzl_r_event");
+        assertThat(harness.request("GET", journals, null, 200).path("lines"))
+                .anyMatch(line -> line.path("accountKey").asText().equals("deferredAdminFee"));
+        // Legacy names replay their sealed command exactly, but cannot start a new one.
+        assertThat(harness.request("POST", BASE + "/commands", request, 200).path("payloadHash").asText())
+                .isEqualTo(harness.json.hash(request));
+        ObjectNode renamed = request.deepCopy();
+        renamed.put("operationId", "legacy-names-new-operation").put("idempotencyKey", "legacy-names-new-operation");
+        assertThat(harness.request("POST", BASE + "/commands", renamed, 400).path("code").asText()).isEqualTo("INVALID_DATA");
+        return request;
+    }
+
+    private JsonNode legacy(String stored) {
+        return harness.json.read(stored.replace("\"deferredAdminFeeMinor\"", "\"deferredIntegralFeeMinor\"")
+                .replace("\"adminFeeMinor\"", "\"integralFeeMinor\"").replace("\"deferredAdminFee\"", "\"deferredIntegralFee\"")
+                .replace("\"ADMIN_FEE\"", "\"INTEGRAL_FEE\""));
+    }
+
+    /** After migration the upfront fee is purchase income and the deferred fee keeps its original account. */
+    private void verifyMigratedPurchases(ObjectNode upfront, ObjectNode deferred) throws Exception {
+        for (ObjectNode book : java.util.List.of(upfront, deferred)) {
+            book.put("accountMappingRevisionId", "mapping-next");
+            ((ObjectNode) book.get("basis")).put("calculatorBuild", "build-next");
+            book.put("basisHash", harness.json.hash(book.get("basis")));
+        }
+        JsonNode accepted = upfront.path("basis").path("acceptedAccountPrices").get(0);
+        String fee = accepted.path("adminFeeMinor").asText();
+        JsonNode event = event(harness.request("POST", BASE + "/commands", upfront, 200));
+        assertThat(event.path("calculationVersion").asText()).isEqualTo(UPFRONT);
+        assertThat(lines(event)).contains("adminFeeIncome CREDIT " + fee + " ADMIN_FEE")
+                .noneMatch(line -> line.startsWith("deferredAdminFee"));
+        JsonNode position = event.path("positionsAfter").get(0);
+        assertThat(position.path("calculationVersion").asText()).isEqualTo(UPFRONT);
+        assertThat(position.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
+        assertThat(position.path("amortizedCostMinor")).isEqualTo(position.path("grossPurchaseBasisMinor"));
+        assertThat(position.path("amortizedCostMinor")).isEqualTo(accepted.path("grossPurchasePriceMinor"));
+        assertThat(harness.queryText("select purchase_fee_minor from m_mnzl_r_account where external_id='upfront-account'")).isEqualTo(fee);
+        assertThat(glOf(event, "adminFeeIncome")).isEqualTo(harness.accounts.get("adminFeeIncome"));
+        JsonNode deferredEvent = event(harness.request("POST", BASE + "/commands", deferred, 200));
+        String deferredFee = deferred.path("basis").path("acceptedAccountPrices").get(0).path("adminFeeMinor").asText();
+        assertThat(lines(deferredEvent)).contains("deferredAdminFee CREDIT " + deferredFee + " ADMIN_FEE")
+                .noneMatch(line -> line.startsWith("adminFeeIncome"));
+        assertThat(glOf(deferredEvent, "deferredAdminFee")).isEqualTo(harness.accounts.get("deferredAdminFee"));
+        assertThat(harness.queryText("select purchase_fee_minor from m_mnzl_r_account where external_id='deferred-after-migration'"))
+                .isEqualTo(deferredFee);
+    }
+
+    private JsonNode event(JsonNode result) throws Exception {
+        return harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?",
+                result.path("financialEventIds").get(0).asText()));
+    }
+
+    private static java.util.List<String> lines(JsonNode event) {
+        var lines = new ArrayList<String>();
+        java.math.BigInteger balance = java.math.BigInteger.ZERO;
+        for (JsonNode line : event.path("journalLines")) {
+            var amount = new java.math.BigInteger(line.path("amountMinor").asText());
+            balance = line.path("side").asText().equals("DEBIT") ? balance.add(amount) : balance.subtract(amount);
+            lines.add(line.path("accountKey").asText() + " " + line.path("side").asText() + " " + amount + " "
+                    + line.path("component").asText());
+        }
+        assertThat(balance).isZero();
+        return lines;
+    }
+
+    private long glOf(JsonNode event, String semantic) throws Exception {
+        return harness.queryLong("select max(native_gl_id) from m_mnzl_r_journal_line where event_key='" + event.path("eventId").asText()
+                + "' and semantic_account='" + semantic + "'");
     }
 
     private ObjectNode activation(String id, String target, JsonNode stage, String previous) {

@@ -47,11 +47,20 @@ public class ReceivablesConfiguration {
     public static final String CALCULATION = ReceivablesMath.CALCULATION_VERSION;
     public static final List<String> CALCULATIONS = ReceivablesMath.SUPPORTED_VERSIONS;
     public static final String POLICY = "EG_RECEIVABLES_V1";
-    public static final Set<String> ACCOUNTS = Set.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredIntegralFee",
-            "lossAllowance", "developerReceivable", "developerReceivableAllowance", "developerPayable", "acquisitionClearing",
-            "developerSettlementAdvance", "cashUnapplied", "helSettlementClearing", "bank", "portfolioInterestIncome",
-            "developerAdjustmentIncome", "developerAdjustmentExpense", "impairmentExpense", "modificationGainLoss",
-            "writtenOffRecoveryIncome", "fundingPrincipal", "fundingInterestPayable", "fundingExpense");
+    public static final String ADMIN_FEE_INCOME = "adminFeeIncome";
+    /** The admin fee account set: every semantic account a command can post to. */
+    public static final Set<String> ACCOUNTS = Set.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredAdminFee",
+            ADMIN_FEE_INCOME, "lossAllowance", "developerReceivable", "developerReceivableAllowance", "developerPayable",
+            "acquisitionClearing", "developerSettlementAdvance", "cashUnapplied", "helSettlementClearing", "bank",
+            "portfolioInterestIncome", "developerAdjustmentIncome", "developerAdjustmentExpense", "impairmentExpense",
+            "modificationGainLoss", "writtenOffRecoveryIncome", "fundingPrincipal", "fundingInterestPayable", "fundingExpense");
+    /**
+     * The set approved before the admin fee: the deferred fee under its legacy key and no admin fee income. Its
+     * revisions stay valid for deferred-fee versions and for their historical proofs.
+     */
+    public static final Set<String> LEGACY_ACCOUNTS = ACCOUNTS.stream().filter(key -> !key.equals(ADMIN_FEE_INCOME))
+            .map(key -> key.equals("deferredAdminFee") ? ReceivablesLegacy.DEFERRED_FEE_ACCOUNT : key)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
     private final ReceivablesStore store;
     private final ReceivablesJson json;
     private final PlatformSecurityContext security;
@@ -189,14 +198,47 @@ public class ReceivablesConfiguration {
         return normalizeConfiguration(json.read(string(rows.getFirst(), "config_json")));
     }
 
+    /** A revision's routing under current account keys; a legacy revision has no admin fee income. */
     public Map<String, Long> mappings(String scope, String id) {
+        return current(accountMap(revision(scope, id)));
+    }
+
+    /** The approved routing as keyed in the configuration, which must be exactly one known account set. */
+    static Map<String, Long> accountMap(JsonNode configuration) {
         Map<String, Long> result = new LinkedHashMap<>();
-        for (var entry : revision(scope, id).get("accountMap")) {
+        for (var entry : configuration.path("accountMap")) {
             require(result.put(text(entry, "accountKey"), Long.parseLong(text(entry, "nativeGlAccountId"))) == null,
                     "FINERACT_CAPABILITY_MISSING");
         }
-        require(result.keySet().equals(ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
+        require(result.keySet().equals(ACCOUNTS) || result.keySet().equals(LEGACY_ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
         return result;
+    }
+
+    static Map<String, Long> current(Map<String, Long> approved) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        approved.forEach((key, gl) -> result.put(ReceivablesLegacy.accountKey(key), gl));
+        return result;
+    }
+
+    /**
+     * The one account map change a used scope accepts: the legacy set gains admin fee income and keeps every other
+     * route, the deferred fee included under its current key.
+     */
+    static boolean adoptsAdminFee(JsonNode previous, JsonNode next) {
+        var before = accountMap(previous);
+        var after = new LinkedHashMap<>(accountMap(next));
+        return before.keySet().equals(LEGACY_ACCOUNTS) && after.remove(ADMIN_FEE_INCOME) != null && after.equals(current(before));
+    }
+
+    /** The versions a revision can book: an upfront admin fee needs admin fee income routed. */
+    static List<String> calculations(Map<String, Long> mappings) {
+        return CALCULATIONS.stream().filter(version -> mappings.containsKey(ADMIN_FEE_INCOME)
+                || ReceivablesMath.feeTreatment(version) == ReceivablesMath.FeeTreatment.DEFERRED).toList();
+    }
+
+    public void requireCalculation(ReceivablesExecution e, String version) {
+        require(calculations(mappings(e.scope, string(e.configuration, "mapping_revision"))).contains(version),
+                "FINERACT_CAPABILITY_MISSING");
     }
 
     private void insertRevision(JsonNode input, String state) {
@@ -209,15 +251,12 @@ public class ReceivablesConfiguration {
 
     private void validateConfiguration(JsonNode input) {
         validateProduct(Long.parseLong(text(input, "productId")));
-        Set<String> keys = new HashSet<>();
-        for (JsonNode entry : input.get("accountMap")) {
-            require(keys.add(text(entry, "accountKey")), "FINERACT_CAPABILITY_MISSING");
-            var rows = store.jdbc().queryForList("select disabled, account_usage from acc_gl_account where id=?",
-                    Long.parseLong(text(entry, "nativeGlAccountId")));
+        var accounts = accountMap(input);
+        for (long gl : accounts.values()) {
+            var rows = store.jdbc().queryForList("select disabled, account_usage from acc_gl_account where id=?", gl);
             require(rows.size() == 1 && !disabled(rows.getFirst().get("disabled"))
                     && ((Number) rows.getFirst().get("account_usage")).intValue() == 1, "FINERACT_CAPABILITY_MISSING");
         }
-        require(keys.equals(ACCOUNTS), "FINERACT_CAPABILITY_MISSING");
         require(store.jdbc().queryForObject("select count(*) from m_office where id=?", Long.class,
                 Long.parseLong(text(input, "officeId"))) == 1, "FINERACT_CAPABILITY_MISSING");
         require(store.jdbc().queryForObject("select count(*) from m_appuser where id=? and enabled=? and is_deleted=?", Long.class,
@@ -232,12 +271,7 @@ public class ReceivablesConfiguration {
             require(products.findById(helProduct).isPresent(), "FINERACT_CAPABILITY_MISSING");
             var strategy = strategies.findOne(helProduct);
             require(!"MNZL_PURCHASED_RECEIVABLE".equals(strategy.getInstrumentCode()), "FINERACT_CAPABILITY_MISSING");
-            long clearing = 0;
-            for (var entry : input.get("accountMap")) {
-                if (text(entry, "accountKey").equals("helSettlementClearing")) {
-                    clearing = Long.parseLong(text(entry, "nativeGlAccountId"));
-                }
-            }
+            long clearing = accounts.get("helSettlementClearing");
             require(store.jdbc().queryForObject(
                     "select count(*) from acc_product_mapping where product_id=? and product_type=1 "
                             + "and financial_account_type=1 and payment_type=? and gl_account_id=?",
@@ -245,7 +279,8 @@ public class ReceivablesConfiguration {
         }
     }
 
-    private void verifyActiveProjection(Map<String, Object> config) {
+    /** The active revision's routing, once the configuration row and account map projection both match it. */
+    private Map<String, Long> verifyActiveProjection(Map<String, Object> config) {
         String scope = string(config, "scope_key");
         var snapshot = revision(scope, string(config, "mapping_revision"));
         require(snapshot.equals(normalizeConfiguration(json.read(string(config, "config_json")))), "FINERACT_CAPABILITY_MISSING");
@@ -258,9 +293,12 @@ public class ReceivablesConfiguration {
         Map<String, Long> actual = new LinkedHashMap<>();
         for (var row : store.scoped("account_map", scope)) {
             require(string(config, "mapping_revision").equals(string(row, "mapping_revision"))
-                    && actual.put(string(row, "account_key"), number(row, "native_gl_id")) == null, "FINERACT_CAPABILITY_MISSING");
+                    && actual.put(ReceivablesLegacy.accountKey(string(row, "account_key")), number(row, "native_gl_id")) == null,
+                    "FINERACT_CAPABILITY_MISSING");
         }
-        require(actual.equals(mappings(scope, string(config, "mapping_revision"))), "FINERACT_CAPABILITY_MISSING");
+        var approved = mappings(scope, string(config, "mapping_revision"));
+        require(actual.equals(approved), "FINERACT_CAPABILITY_MISSING");
+        return approved;
     }
 
     private static boolean disabled(Object value) {
@@ -315,7 +353,8 @@ public class ReceivablesConfiguration {
         boolean used = store.jdbc().queryForObject("select count(*) from m_mnzl_r_command where scope_key=?", Long.class, scope) > 0;
         if (used) {
             for (String field : java.util.List.of("productId", "accountMap", "bankAccountReference", "helProductId", "helPaymentTypeId")) {
-                require(previous.get(field).equals(input.get(field)), "FINERACT_CAPABILITY_MISSING");
+                require(previous.get(field).equals(input.get(field)) || field.equals("accountMap") && adoptsAdminFee(previous, input),
+                        "FINERACT_CAPABILITY_MISSING");
             }
         }
     }
@@ -357,10 +396,17 @@ public class ReceivablesConfiguration {
         fields.put("config_json", json.write(snapshot));
         fields.put("version", number(active, "version") + 1);
         store.update("configuration", scope, fields);
-        for (var entry : snapshot.get("accountMap")) {
-            store.update("account_map", ReceivablesStore.key(scope, "map", text(entry, "accountKey")),
-                    Map.of("mapping_revision", target, "native_gl_id", Long.parseLong(text(entry, "nativeGlAccountId"))));
+        // Project the target routing; keys the target introduces gain rows and keys it renames lose theirs.
+        for (var entry : accountMap(snapshot).entrySet()) {
+            String mapKey = ReceivablesStore.key(scope, "map", entry.getKey());
+            if (store.find("account_map", mapKey) == null) {
+                store.insert("account_map", mapKey, Map.of("scope_key", scope, "account_key", entry.getKey(), "native_gl_id",
+                        entry.getValue(), "mapping_revision", target));
+            } else {
+                store.update("account_map", mapKey, Map.of("mapping_revision", target, "native_gl_id", entry.getValue()));
+            }
         }
+        store.jdbc().update("delete from m_mnzl_r_account_map where scope_key=? and mapping_revision<>?", scope, target);
         store.jdbc().update("update m_mnzl_r_configuration_revision set state='RETIRED' where scope_key=? and state='ACTIVE'", scope);
         store.update("configuration_revision", string(rows.getFirst(), "record_key"), Map.of("state", "ACTIVE"));
         var result = json.object().put("activationId", text(input, "activationId"))
@@ -387,16 +433,18 @@ public class ReceivablesConfiguration {
     public JsonNode capabilities(JsonNode scope, boolean checkUser) {
         Map<String, Object> config = checkUser ? authorize(scope, false) : store.require("configuration", scopeKey(scope));
         boolean ready;
+        List<String> versions;
         try {
-            verifyActiveProjection(config);
+            versions = calculations(verifyActiveProjection(config));
             validateConfiguration(json.read(string(config, "config_json")));
             ready = true;
         } catch (ReceivablesException e) {
+            versions = calculations(Map.of());
             ready = false;
         }
         ObjectNode result = json.object();
         result.put("calculationVersion", CALCULATION);
-        result.set("calculationVersions", json.value(CALCULATIONS));
+        result.set("calculationVersions", json.value(versions));
         result.put("productPolicyCode", POLICY);
         result.put("schemaVersion", "1");
         result.put("policyRevisionId", string(config, "policy_revision"));

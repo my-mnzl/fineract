@@ -78,7 +78,7 @@ final class ReceivablesSimpleAccretionScenarios {
         dailyReset.put("developerAdjustmentDueDate", acquisition.plusDays(45).toString());
         assertThat(event(execute(dailyReset)).path("calculationVersion").asText()).isEqualTo(DAILY);
 
-        mixedSettlementRefusedThenSettledPerVersion(simple, daily, acquisition.plusDays(45), expectedReset);
+        mixedSettlementSettlesEachLotUnderItsVersion(simple, daily, acquisition.plusDays(45), expectedReset);
     }
 
     private void pinnedOnBooking(String id, String version, Segment expected) throws Exception {
@@ -159,10 +159,10 @@ final class ReceivablesSimpleAccretionScenarios {
     }
 
     /**
-     * One developer settlement across a daily and a simple lot cannot be reported under one version, so it is refused
-     * without effects; settled per account, each event names its account's rule.
+     * One developer settlement across a daily and a simple lot settles each lot under its own rule; the event names no
+     * single version and each position names its account's.
      */
-    private void mixedSettlementRefusedThenSettledPerVersion(String simple, String daily, LocalDate due,
+    private void mixedSettlementSettlesEachLotUnderItsVersion(String simple, String daily, LocalDate due,
             ReceivableEvents.Reset expectedReset) throws Exception {
         harness.moveDate(due);
         JsonNode lots = harness.request("GET", PREFIX + "/developer-lots?businessDate=" + due + "&boundarySide=AFTER_EVENTS", null, 200);
@@ -170,24 +170,18 @@ final class ReceivablesSimpleAccretionScenarios {
         long dailyOutstanding = outstanding(lots, daily);
         assertThat(simpleOutstanding).isEqualTo(expectedReset.lot().balanceMinor(due).longValueExact());
         harness.recordReceipt("simple-accretion-cash", simple, Long.toString(simpleOutstanding + dailyOutstanding));
-        Map<String, Long> before = harness.counts();
         ObjectNode mixed = settlement("simple-accretion-mixed-settle", simple, List
                 .of(lot("simple-accretion-reset:reset", simpleOutstanding), lot("simple-accretion-daily-reset:reset", dailyOutstanding)));
         mixed.set("affectedAccountVersions",
                 harness.json.value(List.of(Map.of("accountId", daily, "expectedVersion", harness.version(daily)))));
-        JsonNode refused = harness.request("POST", PREFIX + "/commands", mixed, 400);
-        assertThat(refused.path("code").asText()).isEqualTo("INVALID_DATA");
-        assertThat(harness.counts()).isEqualTo(before);
-
-        JsonNode settledSimple = execute(
-                settlement("simple-accretion-settle", simple, List.of(lot("simple-accretion-reset:reset", simpleOutstanding))));
-        assertThat(event(settledSimple).path("calculationVersion").asText()).isEqualTo(SIMPLE);
-        JsonNode settledDaily = execute(
-                settlement("simple-accretion-settle-daily", daily, List.of(lot("simple-accretion-daily-reset:reset", dailyOutstanding))));
-        assertThat(event(settledDaily).path("calculationVersion").asText()).isEqualTo(DAILY);
-        assertThat(outstanding(
-                harness.request("GET", PREFIX + "/developer-lots?businessDate=" + due + "&boundarySide=AFTER_EVENTS", null, 200), simple))
-                .isZero();
+        JsonNode event = event(execute(mixed));
+        assertThat(event.has("calculationVersion")).isFalse();
+        Map<String, String> versions = new java.util.HashMap<>();
+        event.path("positionsAfter").forEach(p -> versions.put(p.path("accountId").asText(), p.path("calculationVersion").asText()));
+        assertThat(versions).isEqualTo(Map.of(simple, SIMPLE, daily, DAILY));
+        JsonNode after = harness.request("GET", PREFIX + "/developer-lots?businessDate=" + due + "&boundarySide=AFTER_EVENTS", null, 200);
+        assertThat(outstanding(after, simple)).isZero();
+        assertThat(outstanding(after, daily)).isZero();
     }
 
     private ObjectNode settlement(String operation, String account, List<JsonNode> lots) throws Exception {

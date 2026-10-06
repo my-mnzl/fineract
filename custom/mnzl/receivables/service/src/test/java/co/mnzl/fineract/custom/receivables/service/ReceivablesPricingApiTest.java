@@ -121,6 +121,19 @@ class ReceivablesPricingApiTest {
     }
 
     @Test
+    void acceptsTheUpfrontAdminFeeVersionAndEchoesIt() {
+        ObjectNode input = request("PRICE");
+        input.put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V2");
+        ((ObjectNode) input.get("basis")).put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V2");
+        input.put("basisHash", json.hash(input.get("basis")));
+        var result = json.read(api.calculatePricing(headers, json.write(input)));
+        assertThat(result.path("calculationVersion").asText()).isEqualTo("EG_RECEIVABLES_ACT360_DAILY_V2");
+        assertThat(result.path("pricing").path("totals").path("grossPurchasePriceMinor").asText()).isEqualTo("100");
+        assertThat(result.path("pricing").path("totals").has("adminFeeMinor")).isTrue();
+        verifyNoInteractions(commands);
+    }
+
+    @Test
     void retainsLedgerPolicyCheckOnOriginalCalculationRoute() {
         assertThatThrownBy(() -> api.calculate(headers, json.write(request("PRICE")))).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(commands);

@@ -26,6 +26,7 @@ import static co.mnzl.fineract.receivables.math.ReceivableEvents.settle;
 import static co.mnzl.fineract.receivables.math.ReceivableEvents.substitute;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.CALCULATION_VERSION;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.SIMPLE_CALCULATION_VERSION;
+import static co.mnzl.fineract.receivables.math.ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.days;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.growth;
 import static co.mnzl.fineract.receivables.math.ReceivablesMath.income;
@@ -160,12 +161,12 @@ class ReferenceVectorsTest {
 
     @Test
     void allPriceVectorsAndIndependentExpectedValues() {
-        for (String id : List.of("zero-rate", "irregular-integral-fee", "small-cheque", "late-partial", "signed-fee-movement")) {
+        for (String id : List.of("zero-rate", "irregular-admin-fee", "small-cheque", "late-partial", "signed-fee-movement")) {
             JsonNode in = input(id);
             JsonNode e = expected(id);
             Purchase p = purchase(in);
             money(e, "grossPriceMinor", p.grossPurchasePriceMinor());
-            money(e, "feeMinor", p.integralFeeMinor());
+            money(e, "feeMinor", p.adminFeeMinor());
             money(e, "netPurchaseCashMinor", p.netPurchaseCashMinor());
             money(e, "contractualFaceMinor", p.contractualFaceMinor());
             decimal(e, "grossYield", p.segment().grossYield().rate());
@@ -196,8 +197,8 @@ class ReferenceVectorsTest {
                 Income inc = income(opening, next, BigInteger.ZERO);
                 money(e, "grossIncomeMinor", inc.grossDiscountIncomeMinor());
                 money(e, "netEirIncomeMinor", inc.interestIncomeMinor());
-                money(e, "feeIncomeMinor", inc.integralFeeIncomeMinor());
-                money(e, "closingDeferredFeeMinor", next.deferredIntegralFeeMinor());
+                money(e, "feeIncomeMinor", inc.adminFeeIncomeMinor());
+                money(e, "closingDeferredFeeMinor", next.deferredAdminFeeMinor());
             }
         }
     }
@@ -217,9 +218,9 @@ class ReferenceVectorsTest {
         Income inc = income(position(p.segment(), p.segment().startDate(), Map.of()), next, BigInteger.ZERO);
         money(e, "grossBasisMinor", next.grossPurchaseBasisMinor());
         money(e, "amortizedCostMinor", next.amortizedCostMinor());
-        money(e, "deferredFeeMinor", next.deferredIntegralFeeMinor());
+        money(e, "deferredFeeMinor", next.deferredAdminFeeMinor());
         money(e, "grossIncomeMinor", inc.grossDiscountIncomeMinor());
-        money(e, "feeIncomeMinor", inc.integralFeeIncomeMinor());
+        money(e, "feeIncomeMinor", inc.adminFeeIncomeMinor());
         money(e, "totalIncomeMinor", inc.interestIncomeMinor());
     }
 
@@ -259,7 +260,7 @@ class ReferenceVectorsTest {
         money(e, "developerShareMinor", s.developerShareMinor());
         money(e, "financierIncomeMinor", s.financierIncomeMinor());
         money(e, "deferredDiscountMinor", s.deferredDiscountMinor());
-        money(e, "deferredFeeMinor", s.deferredIntegralFeeMinor());
+        money(e, "deferredFeeMinor", s.deferredAdminFeeMinor());
         in = input("cashless-substitution");
         e = expected("cashless-substitution");
         Substitution sub = substitute(pos, flows(in.path("replacementCashflows")), BigInteger.ZERO);
@@ -350,7 +351,7 @@ class ReferenceVectorsTest {
         Purchase a = purchase(in.path("firstAccountVector").path("input"));
         Purchase b = purchase(in.path("secondAccount"));
         money(e, "secondGrossPriceMinor", b.grossPurchasePriceMinor());
-        money(e, "secondFeeMinor", b.integralFeeMinor());
+        money(e, "secondFeeMinor", b.adminFeeMinor());
         decimal(e, "secondGrossYield", b.segment().grossYield().rate());
         decimal(e, "secondNetEir", b.segment().netEir().rate());
         money(e, "portfolioGrossPriceMinor", a.grossPurchasePriceMinor().add(b.grossPurchasePriceMinor()));
@@ -361,7 +362,7 @@ class ReferenceVectorsTest {
     }
 
     private static Purchase simplePurchase(JsonNode in) {
-        assertEquals(SIMPLE_CALCULATION_VERSION, VECTORS.get("simple-irregular-integral-fee").path("calculationVersion").asText());
+        assertEquals(SIMPLE_CALCULATION_VERSION, VECTORS.get("simple-irregular-admin-fee").path("calculationVersion").asText());
         return price(SIMPLE_CALCULATION_VERSION, date(in, "settlementDate"), flows(in.path("cashflows")), d(in, "nominalAnnualRate"),
                 d(in, "feeRate"));
     }
@@ -406,12 +407,12 @@ class ReferenceVectorsTest {
         money(e, "dailyClosingMinor", minor(major(m(in, "openingMinor")).multiply(growth(d(in, "nominalAnnualRate"), leap))));
         assertTrue(factor.compareTo(growth(d(in, "nominalAnnualRate"), leap)) < 0);
 
-        in = input("simple-irregular-integral-fee");
-        e = expected("simple-irregular-integral-fee");
+        in = input("simple-irregular-admin-fee");
+        e = expected("simple-irregular-admin-fee");
         Purchase p = simplePurchase(in);
         Purchase daily = purchase(in);
         money(e, "grossPriceMinor", p.grossPurchasePriceMinor());
-        money(e, "feeMinor", p.integralFeeMinor());
+        money(e, "feeMinor", p.adminFeeMinor());
         money(e, "netPurchaseCashMinor", p.netPurchaseCashMinor());
         money(e, "contractualFaceMinor", p.contractualFaceMinor());
         decimal(e, "unroundedGrossPrice", p.unroundedGrossPrice());
@@ -441,7 +442,7 @@ class ReferenceVectorsTest {
             Position before = position(s, at, collected(in));
             money(e, "grossBasisMinor", before.grossPurchaseBasisMinor());
             money(e, "amortizedCostMinor", before.amortizedCostMinor());
-            money(e, "deferredFeeMinor", before.deferredIntegralFeeMinor());
+            money(e, "deferredFeeMinor", before.deferredAdminFeeMinor());
             money(e, "deferredDiscountMinor", before.deferredDiscountMinor());
             money(e, "pastDueMinor", before.pastDueMinor());
             money(e, "notYetDueMinor", before.notYetDueMinor());
@@ -535,5 +536,76 @@ class ReferenceVectorsTest {
         Segment next = r.futureSegment();
         assertTrue(walkedBalance(next.startDate(), next.cashflows(), next.grossYield().rate(), next.grossBasisMinor(),
                 next.cashflows().getLast().dueDate(), false).abs().compareTo(new BigDecimal("1e-8")) < 0);
+    }
+
+    /**
+     * The upfront admin fee is income at purchase: the vector's journal balances with no deferred fee, amortised cost
+     * starts at the gross price and later income is gross discount only.
+     */
+    @Test
+    void upfrontAdminFeeVectors() {
+        JsonNode vector = VECTORS.get("daily-v2-irregular-admin-fee");
+        assertEquals(UPFRONT_FEE_CALCULATION_VERSION, vector.path("calculationVersion").asText());
+        JsonNode in = input("daily-v2-irregular-admin-fee");
+        JsonNode e = expected("daily-v2-irregular-admin-fee");
+        Purchase p = price(UPFRONT_FEE_CALCULATION_VERSION, date(in, "settlementDate"), flows(in.path("cashflows")),
+                d(in, "nominalAnnualRate"), d(in, "feeRate"));
+        Purchase daily = purchase(in);
+        money(e, "grossPriceMinor", p.grossPurchasePriceMinor());
+        money(e, "feeMinor", p.adminFeeMinor());
+        money(e, "netPurchaseCashMinor", p.netPurchaseCashMinor());
+        money(e, "contractualFaceMinor", p.contractualFaceMinor());
+        decimal(e, "unroundedGrossPrice", p.unroundedGrossPrice());
+        decimal(e, "grossYield", p.segment().grossYield().rate());
+        decimal(e, "netEir", p.segment().netEir().rate());
+        assertEquals(daily.segment().grossYield(), p.segment().grossYield());
+        Position opening = position(p.segment(), p.segment().startDate(), Map.of());
+        money(e, "deferredDiscountMinor", opening.deferredDiscountMinor());
+        money(e, "deferredFeeMinor", opening.deferredAdminFeeMinor());
+        money(e, "amortizedCostMinor", opening.amortizedCostMinor());
+        money(e, "purchaseFeeIncomeMinor", p.adminFeeMinor());
+        Map<String, BigInteger> journal = new LinkedHashMap<>();
+        BigInteger balance = BigInteger.ZERO;
+        for (JsonNode line : e.path("journal")) {
+            BigInteger amount = m(line, "amountMinor");
+            journal.put(line.path("account").asText() + ":" + line.path("side").asText(), amount);
+            balance = balance.add(line.path("side").asText().equals("DEBIT") ? amount : amount.negate());
+        }
+        assertEquals(BigInteger.ZERO, balance);
+        assertEquals(
+                Map.of("contractualReceivable:DEBIT", p.contractualFaceMinor(), "deferredDiscount:CREDIT", opening.deferredDiscountMinor(),
+                        "acquisitionClearing:CREDIT", p.netPurchaseCashMinor(), "adminFeeIncome:CREDIT", p.adminFeeMinor()),
+                journal);
+        BigInteger gross = BigInteger.ZERO;
+        BigInteger fee = BigInteger.ZERO;
+        BigInteger total = BigInteger.ZERO;
+        Position previous = opening;
+        Map<String, BigInteger> running = new LinkedHashMap<>();
+        for (Cashflow cf : p.segment().cashflows()) {
+            Income inc = income(previous, position(p.segment(), cf.dueDate(), running), BigInteger.ZERO);
+            gross = gross.add(inc.grossDiscountIncomeMinor());
+            fee = fee.add(inc.adminFeeIncomeMinor());
+            total = total.add(inc.interestIncomeMinor());
+            running.put(cf.cashflowId(), BigInteger.ZERO);
+            previous = position(p.segment(), cf.dueDate(), running);
+        }
+        money(e, "lifetimeGrossIncomeMinor", gross);
+        money(e, "lifetimeFeeIncomeMinor", fee);
+        money(e, "lifetimeTotalIncomeMinor", total);
+
+        in = input("daily-v2-no-cheque-month");
+        e = expected("daily-v2-no-cheque-month");
+        assertEquals(UPFRONT_FEE_CALCULATION_VERSION, VECTORS.get("daily-v2-no-cheque-month").path("calculationVersion").asText());
+        assertEquals(e.path("days").asLong(), days(p.segment().startDate(), date(in, "boundaryDate")));
+        Position next = position(p.segment(), date(in, "boundaryDate"), Map.of());
+        Income inc = income(opening, next, BigInteger.ZERO);
+        money(e, "grossBasisMinor", next.grossPurchaseBasisMinor());
+        money(e, "amortizedCostMinor", next.amortizedCostMinor());
+        money(e, "deferredFeeMinor", next.deferredAdminFeeMinor());
+        money(e, "grossIncomeMinor", inc.grossDiscountIncomeMinor());
+        money(e, "feeIncomeMinor", inc.adminFeeIncomeMinor());
+        money(e, "totalIncomeMinor", inc.interestIncomeMinor());
+        money(e, "contractualOutstandingMinor", next.contractualOutstandingMinor());
+        money(e, "grossBasisMinor", position(daily.segment(), date(in, "boundaryDate"), Map.of()).grossPurchaseBasisMinor());
     }
 }

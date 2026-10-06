@@ -92,7 +92,7 @@ class ReceivablesCalculationServiceTest {
 
     @Test
     void priceAndProjectedIncomeMatchAcceptedReferenceVectors() throws Exception {
-        for (String id : List.of("zero-rate", "irregular-integral-fee")) {
+        for (String id : List.of("zero-rate", "irregular-admin-fee")) {
             JsonNode vector = vector(id);
             ObjectNode request = context();
             request.put("calculationType", "PRICE");
@@ -100,7 +100,7 @@ class ReceivablesCalculationServiceTest {
             JsonNode result = calculate(request).get("pricing");
             JsonNode expected = vector.get("expected");
             assertThat(result.path("totals").path("grossPurchasePriceMinor").asText()).isEqualTo(expected.path("grossPriceMinor").asText());
-            assertThat(result.path("totals").path("integralFeeMinor").asText()).isEqualTo(expected.path("feeMinor").asText());
+            assertThat(result.path("totals").path("adminFeeMinor").asText()).isEqualTo(expected.path("feeMinor").asText());
             assertThat(result.path("totals").path("netPurchaseCashMinor").asText())
                     .isEqualTo(expected.path("netPurchaseCashMinor").asText());
             BigInteger income = BigInteger.ZERO;
@@ -117,6 +117,54 @@ class ReceivablesCalculationServiceTest {
             request.put("basisHash", "0".repeat(64));
             assertThatThrownBy(() -> service.calculate(json.write(request))).isInstanceOf(ReceivablesException.class);
         }
+    }
+
+    /** The upfront admin fee is the purchase month's fee income; afterwards only the gross discount accretes. */
+    @Test
+    void upfrontAdminFeeVersionReportsTheFeeInThePurchaseMonthAndDefersNothing() throws Exception {
+        String upfront = ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION;
+        JsonNode vector = vector("daily-v2-irregular-admin-fee");
+        JsonNode expected = vector.get("expected");
+        ObjectNode basis = basis(vector);
+        basis.put("calculationVersion", upfront);
+        ObjectNode request = context();
+        request.put("calculationVersion", upfront);
+        request.put("calculationType", "PRICE");
+        request.set("basis", basis);
+        JsonNode result = calculate(request);
+        assertThat(result.path("calculationVersion").asText()).isEqualTo(upfront);
+        JsonNode totals = result.path("pricing").path("totals");
+        assertThat(totals.path("adminFeeMinor").asText()).isEqualTo(expected.path("feeMinor").asText());
+        assertThat(totals.path("netPurchaseCashMinor").asText()).isEqualTo(expected.path("netPurchaseCashMinor").asText());
+        JsonNode account = result.path("pricing").path("accounts").get(0);
+        assertThat(account.path("netEir")).isEqualTo(account.path("grossYield"));
+        JsonNode first = account.path("monthlyIncome").get(0);
+        assertThat(first.path("period").asText()).isEqualTo("2030-01");
+        assertThat(first.path("adminFeeIncomeMinor").asText()).isEqualTo(expected.path("purchaseFeeIncomeMinor").asText());
+        assertThat(first.path("grossDiscountIncomeMinor").asText())
+                .isEqualTo(vector("daily-v2-no-cheque-month").path("expected").path("grossIncomeMinor").asText());
+        BigInteger fee = BigInteger.ZERO;
+        BigInteger interest = BigInteger.ZERO;
+        for (JsonNode row : account.path("monthlyIncome")) {
+            fee = fee.add(new BigInteger(row.path("adminFeeIncomeMinor").asText()));
+            interest = interest.add(new BigInteger(row.path("interestIncomeMinor").asText()));
+            assertThat(row.path("interestIncomeMinor")).isEqualTo(row.path("grossDiscountIncomeMinor"));
+        }
+        assertThat(fee.toString()).isEqualTo(expected.path("feeMinor").asText());
+        assertThat(interest.toString()).isEqualTo(expected.path("lifetimeTotalIncomeMinor").asText());
+        for (JsonNode position : account.path("positions")) {
+            assertThat(position.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
+            assertThat(position.path("amortizedCostMinor")).isEqualTo(position.path("grossPurchaseBasisMinor"));
+        }
+        ObjectNode settlement = positioned(basis);
+        settlement.put("calculationVersion", upfront);
+        settlement.put("calculationType", "SETTLEMENT");
+        settlement.set("settlementDate", basis.get("settlementDate"));
+        settlement.set("cashflowIds", json.value(List.of("cf-01")));
+        settlement.put("payoffMinor", "4000000");
+        JsonNode settled = calculate(settlement);
+        assertThat(settled.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
+        assertThat(settled.path("positionAfter").path("deferredAdminFeeMinor").asText()).isEqualTo("0");
     }
 
     private ObjectNode positioned(ObjectNode basis) {
@@ -169,7 +217,7 @@ class ReceivablesCalculationServiceTest {
 
     @Test
     void partialSettlementKeepsAcceptedMathAllocationAndPreciseBases() throws Exception {
-        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode basis = basis(vector("irregular-admin-fee"));
         ObjectNode request = positioned(basis);
         request.put("calculationType", "SETTLEMENT");
         request.set("settlementDate", basis.get("settlementDate"));
@@ -187,7 +235,7 @@ class ReceivablesCalculationServiceTest {
 
     @Test
     void partialLegSettlementRetainsUnselectedFaceAndRejectsInvalidPortions() throws Exception {
-        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode basis = basis(vector("irregular-admin-fee"));
         ObjectNode request = positioned(basis);
         request.put("calculationType", "SETTLEMENT");
         request.set("settlementDate", basis.get("settlementDate"));
@@ -214,7 +262,7 @@ class ReceivablesCalculationServiceTest {
 
     @Test
     void resetAndInstantaneousImpairmentUseSameNativeMath() throws Exception {
-        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode basis = basis(vector("irregular-admin-fee"));
         ObjectNode request = positioned(basis);
         request.put("calculationType", "RESET");
         request.set("remainingCashflows", basis.get("cashflows"));
@@ -261,8 +309,8 @@ class ReceivablesCalculationServiceTest {
     @Test
     void simpleVersionPricesIdenticallyPinsItsOwnYieldsAndResetsUnderTheSameRule() throws Exception {
         String simple = ReceivablesMath.SIMPLE_CALCULATION_VERSION;
-        JsonNode daily = vector("irregular-integral-fee");
-        JsonNode expected = vector("simple-irregular-integral-fee").get("expected");
+        JsonNode daily = vector("irregular-admin-fee");
+        JsonNode expected = vector("simple-irregular-admin-fee").get("expected");
         ObjectNode basis = basis(daily);
         basis.put("calculationVersion", simple);
         ObjectNode request = context();
@@ -362,7 +410,7 @@ class ReceivablesCalculationServiceTest {
     @Test
     void simpleAccountCalculatesBetweenChequesAndOnChequeDatesAfterEvents() throws Exception {
         String simple = ReceivablesMath.SIMPLE_CALCULATION_VERSION;
-        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode basis = basis(vector("irregular-admin-fee"));
         basis.put("calculationVersion", simple);
         var segment = measurement.purchase(basis, "account-1").segment();
         LocalDate mid = LocalDate.of(2030, 5, 1);
@@ -421,7 +469,7 @@ class ReceivablesCalculationServiceTest {
      */
     @Test
     void dailyAccountStillCalculatesBetweenChequesFromTheMeasurementDate() throws Exception {
-        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode basis = basis(vector("irregular-admin-fee"));
         var segment = measurement.purchase(basis, "account-1").segment();
         LocalDate mid = LocalDate.of(2030, 5, 1);
         Map<String, BigInteger> afterFirst = Map.of("cf-01", BigInteger.ZERO);
@@ -435,7 +483,7 @@ class ReceivablesCalculationServiceTest {
 
     @Test
     void partialImpairedSettlementRequiresAndAllocatesActualForecastLosses() throws Exception {
-        ObjectNode basis = basis(vector("irregular-integral-fee"));
+        ObjectNode basis = basis(vector("irregular-admin-fee"));
         ObjectNode request = positioned(basis);
         request.put("calculationType", "SETTLEMENT");
         ObjectNode position = (ObjectNode) request.get("position");

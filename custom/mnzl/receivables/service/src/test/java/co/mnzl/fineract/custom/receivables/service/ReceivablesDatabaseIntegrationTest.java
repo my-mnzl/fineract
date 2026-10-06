@@ -164,8 +164,12 @@ class ReceivablesDatabaseIntegrationTest {
                         "office-closure-durable-replay", "period-proof-population-and-gross-controls",
                         "period-proof-zero-and-hel-exclusion", "period-proof-missing-extra-and-cross-date", "period-proof-event-integrity",
                         "simple-accretion-pinned-on-booking", "simple-accretion-impairment-and-reset-from-reloaded-segment",
-                        "simple-accretion-lot-and-event-version", "mixed-version-developer-settlement-refused",
-                        "project-rate-booking-pins-basis-and-accretion", "project-rate-reset-refused-without-effects")));
+                        "simple-accretion-lot-and-event-version", "mixed-version-developer-settlement-per-position-versions",
+                        "project-rate-booking-pins-basis-and-accretion", "project-rate-reset-refused-without-effects",
+                        "admin-fee-legacy-history-read-under-current-names", "admin-fee-legacy-command-replay",
+                        "admin-fee-segment-snapshot-migration", "admin-fee-upfront-refused-on-legacy-account-set",
+                        "admin-fee-account-set-migration", "admin-fee-upfront-purchase-journal", "admin-fee-deferred-fee-route-preserved",
+                        "admin-fee-legacy-revision-period-proof")));
                 Files.writeString(Path.of("build/receivables-database-evidence.json"), json.write(evidence));
 
             }
@@ -298,14 +302,7 @@ class ReceivablesDatabaseIntegrationTest {
         configuration.put("helPaymentTypeId", Long.toString(helPaymentTypeId));
         configuration.put("helProductId", Long.toString(ordinaryProductId));
         configuration.put("bankAccountReference", "test-bank");
-        List<JsonNode> mapping = new ArrayList<>();
-        accounts.forEach((key, id) -> {
-            ObjectNode row = json.object();
-            row.put("accountKey", key);
-            row.put("nativeGlAccountId", id.toString());
-            mapping.add(row);
-        });
-        configuration.set("accountMap", json.value(mapping));
+        configuration.set("accountMap", accountMap(false));
         assertThat(request("POST", PREFIX + "/configuration", configuration, 200).path("productConfigurationReady").asBoolean()).isTrue();
         ObjectNode readback = (ObjectNode) request("GET", PREFIX + "/configuration", null, 200);
         assertThat(readback.path("accountMap")).containsExactlyInAnyOrderElementsOf(configuration.path("accountMap"));
@@ -313,6 +310,24 @@ class ReceivablesDatabaseIntegrationTest {
         ObjectNode expected = configuration.deepCopy();
         expected.remove("accountMap");
         assertThat(readback).isEqualTo(expected);
+    }
+
+    /**
+     * Production history starts on the legacy account set, so mapping-1 routes the deferred fee under its legacy key
+     * and has no admin fee income; the admin fee set routes the same deferred fee account under its current key.
+     */
+    JsonNode accountMap(boolean adminFee) {
+        List<JsonNode> mapping = new ArrayList<>();
+        accounts.forEach((key, id) -> {
+            if (!adminFee && key.equals(ReceivablesConfiguration.ADMIN_FEE_INCOME)) {
+                return;
+            }
+            ObjectNode row = json.object();
+            row.put("accountKey", !adminFee && key.equals("deferredAdminFee") ? ReceivablesLegacy.DEFERRED_FEE_ACCOUNT : key);
+            row.put("nativeGlAccountId", id.toString());
+            mapping.add(row);
+        });
+        return json.value(mapping);
     }
 
     JsonNode purchase(String id) throws Exception {
@@ -366,7 +381,7 @@ class ReceivablesDatabaseIntegrationTest {
         calculate.put("basisHash", json.hash(basis));
         JsonNode pricing = request("POST", PREFIX + "/calculate", calculate, 200).path("pricing").path("accounts").get(0);
         ObjectNode accepted = json.object();
-        for (String field : List.of("accountId", "grossPurchasePriceMinor", "integralFeeMinor", "netPurchaseCashMinor")) {
+        for (String field : List.of("accountId", "grossPurchasePriceMinor", "adminFeeMinor", "netPurchaseCashMinor")) {
             accepted.set(field, pricing.get(field));
         }
         basis.set("acceptedAccountPrices", json.value(List.of(accepted)));
@@ -491,6 +506,19 @@ class ReceivablesDatabaseIntegrationTest {
             var database = liquibase.database.DatabaseFactory.getInstance()
                     .findCorrectDatabaseImplementation(new liquibase.database.jvm.JdbcConnection(connection));
             try (var migration = new liquibase.Liquibase("db/custom-changelog/0003_mnzl_receivables_configuration_revisions.xml",
+                    new liquibase.resource.ClassLoaderResourceAccessor(), database)) {
+                migration.update(new liquibase.Contexts());
+            }
+        }
+    }
+
+    /** Re-runs the admin fee changeset over whatever segment snapshots the database now holds. */
+    void migrateAdminFee() throws Exception {
+        executeSql("delete from DATABASECHANGELOG where id='mnzl-receivables-admin-fee-8'");
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword)) {
+            var database = liquibase.database.DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new liquibase.database.jvm.JdbcConnection(connection));
+            try (var migration = new liquibase.Liquibase("db/custom-changelog/0008_mnzl_receivables_admin_fee.xml",
                     new liquibase.resource.ClassLoaderResourceAccessor(), database)) {
                 migration.update(new liquibase.Contexts());
             }

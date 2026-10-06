@@ -63,7 +63,7 @@
       }
     },
     {
-      "id": "irregular-integral-fee",
+      "id": "irregular-admin-fee",
       "operation": "price",
       "input": {
         "settlementDate": "2030-01-01",
@@ -107,7 +107,7 @@
       "id": "no-cheque-month",
       "operation": "position",
       "input": {
-        "acquisitionVector": "irregular-integral-fee",
+        "acquisitionVector": "irregular-admin-fee",
         "boundaryDate": "2030-02-01",
         "boundarySide": "BEFORE_EVENTS",
         "collections": []
@@ -156,7 +156,7 @@
       "id": "reset-fall",
       "operation": "reset",
       "input": {
-        "acquisitionVector": "irregular-integral-fee",
+        "acquisitionVector": "irregular-admin-fee",
         "resetDate": "2030-05-01",
         "collectedCashflowIds": ["cf-01"],
         "newNominalAnnualRate": "0.20"
@@ -185,7 +185,7 @@
       "id": "reset-rise",
       "operation": "reset",
       "input": {
-        "acquisitionVector": "irregular-integral-fee",
+        "acquisitionVector": "irregular-admin-fee",
         "resetDate": "2030-05-01",
         "collectedCashflowIds": ["cf-01"],
         "newNominalAnnualRate": "0.28"
@@ -214,7 +214,7 @@
       "id": "early-settlement",
       "operation": "settle",
       "input": {
-        "acquisitionVector": "irregular-integral-fee",
+        "acquisitionVector": "irregular-admin-fee",
         "settlementDate": "2030-05-01",
         "collectedCashflowIds": ["cf-01"],
         "agreedPayoffMinor": "11000000",
@@ -246,7 +246,7 @@
             "amountMinor": "1279161"
           },
           {
-            "account": "deferredIntegralFee",
+            "account": "deferredAdminFee",
             "side": "DEBIT",
             "amountMinor": "74196"
           },
@@ -419,7 +419,7 @@
       "id": "sum-two-accounts",
       "operation": "aggregate",
       "input": {
-        "firstAccountVector": "irregular-integral-fee",
+        "firstAccountVector": "irregular-admin-fee",
         "secondAccount": {
           "settlementDate": "2030-01-01",
           "nominalAnnualRate": "0.18",
@@ -487,7 +487,7 @@
       "id": "cashless-substitution",
       "operation": "substitute",
       "input": {
-        "acquisitionVector": "irregular-integral-fee",
+        "acquisitionVector": "irregular-admin-fee",
         "effectiveDate": "2030-05-01",
         "collectedCashflowIds": ["cf-01"],
         "replacementCashflows": [
@@ -531,7 +531,7 @@
             "amountMinor": "1279161"
           },
           {
-            "account": "deferredIntegralFee",
+            "account": "deferredAdminFee",
             "subject": "old",
             "side": "DEBIT",
             "amountMinor": "74196"
@@ -549,7 +549,7 @@
             "amountMinor": "2279161"
           },
           {
-            "account": "deferredIntegralFee",
+            "account": "deferredAdminFee",
             "subject": "new",
             "side": "CREDIT",
             "amountMinor": "74196"
@@ -611,7 +611,7 @@
       }
     },
     {
-      "id": "simple-irregular-integral-fee",
+      "id": "simple-irregular-admin-fee",
       "operation": "priceSimple",
       "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
       "input": {
@@ -657,7 +657,7 @@
       "operation": "positionSimple",
       "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
       "input": {
-        "acquisitionVector": "simple-irregular-integral-fee",
+        "acquisitionVector": "simple-irregular-admin-fee",
         "boundaryDate": "2030-04-01",
         "boundarySide": "BEFORE_EVENTS",
         "collectedCashflowIds": []
@@ -683,7 +683,7 @@
       "operation": "positionSimple",
       "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
       "input": {
-        "acquisitionVector": "simple-irregular-integral-fee",
+        "acquisitionVector": "simple-irregular-admin-fee",
         "boundaryDate": "2030-05-01",
         "boundarySide": "BEFORE_EVENTS",
         "collectedCashflowIds": ["cf-01"]
@@ -708,7 +708,7 @@
       "operation": "positionSimple",
       "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
       "input": {
-        "acquisitionVector": "simple-irregular-integral-fee",
+        "acquisitionVector": "simple-irregular-admin-fee",
         "boundaryDate": "2031-01-26",
         "boundarySide": "BEFORE_EVENTS",
         "collectedCashflowIds": ["cf-01", "cf-02"]
@@ -812,7 +812,7 @@
       "operation": "resetSimple",
       "calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1",
       "input": {
-        "acquisitionVector": "simple-irregular-integral-fee",
+        "acquisitionVector": "simple-irregular-admin-fee",
         "resetDate": "2030-05-01",
         "collectedCashflowIds": ["cf-01"],
         "newNominalAnnualRate": "0.20"
@@ -835,6 +835,92 @@
         "newNetEir": "0.215392594902656837",
         "customerFaceBeforeAndAfterMinor": "11000000",
         "immediateIncomeMinor": "0"
+      }
+    },
+    {
+      "id": "daily-v2-irregular-admin-fee",
+      "operation": "priceUpfrontAdminFee",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_DAILY_V2",
+      "input": {
+        "settlementDate": "2030-01-01",
+        "nominalAnnualRate": "0.24",
+        "feeRate": "0.01",
+        "cashflows": [
+          {
+            "id": "cf-01",
+            "dueDate": "2030-04-01",
+            "amountMinor": "4000000"
+          },
+          {
+            "id": "cf-02",
+            "dueDate": "2030-07-30",
+            "amountMinor": "5000000"
+          },
+          {
+            "id": "cf-03",
+            "dueDate": "2031-01-26",
+            "amountMinor": "6000000"
+          }
+        ]
+      },
+      "expected": {
+        "unroundedGrossPrice": "127408.376855474932960524",
+        "contractualFaceMinor": "15000000",
+        "grossPriceMinor": "12740838",
+        "feeMinor": "127408",
+        "netPurchaseCashMinor": "12613430",
+        "deferredDiscountMinor": "2259162",
+        "deferredFeeMinor": "0",
+        "amortizedCostMinor": "12740838",
+        "grossYield": "0.239999962936445851",
+        "netEir": "0.239999962936445851",
+        "purchaseFeeIncomeMinor": "127408",
+        "lifetimeGrossIncomeMinor": "2259162",
+        "lifetimeFeeIncomeMinor": "0",
+        "lifetimeTotalIncomeMinor": "2259162",
+        "journal": [
+          {
+            "account": "contractualReceivable",
+            "side": "DEBIT",
+            "amountMinor": "15000000"
+          },
+          {
+            "account": "deferredDiscount",
+            "side": "CREDIT",
+            "amountMinor": "2259162"
+          },
+          {
+            "account": "acquisitionClearing",
+            "side": "CREDIT",
+            "amountMinor": "12613430"
+          },
+          {
+            "account": "adminFeeIncome",
+            "side": "CREDIT",
+            "amountMinor": "127408"
+          }
+        ]
+      }
+    },
+    {
+      "id": "daily-v2-no-cheque-month",
+      "operation": "positionUpfrontAdminFee",
+      "calculationVersion": "EG_RECEIVABLES_ACT360_DAILY_V2",
+      "input": {
+        "acquisitionVector": "daily-v2-irregular-admin-fee",
+        "boundaryDate": "2030-02-01",
+        "boundarySide": "BEFORE_EVENTS",
+        "collections": []
+      },
+      "expected": {
+        "days": 31,
+        "grossBasisMinor": "13006799",
+        "amortizedCostMinor": "13006799",
+        "deferredFeeMinor": "0",
+        "grossIncomeMinor": "265961",
+        "feeIncomeMinor": "0",
+        "totalIncomeMinor": "265961",
+        "contractualOutstandingMinor": "15000000"
       }
     }
   ]
