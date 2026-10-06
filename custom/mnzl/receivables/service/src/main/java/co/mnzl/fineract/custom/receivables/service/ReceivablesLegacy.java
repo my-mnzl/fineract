@@ -72,8 +72,8 @@ public final class ReceivablesLegacy {
     }
 
     private static boolean legacyValue(String name, JsonNode value) {
-        return value.isTextual() && (name.equals("accountKey") && ACCOUNT_KEYS.containsKey(value.textValue())
-                || name.equals("component") && COMPONENTS.containsKey(value.textValue()));
+        return value.isTextual() && ((name.equals("accountKey") && ACCOUNT_KEYS.containsKey(value.textValue()))
+                || (name.equals("component") && COMPONENTS.containsKey(value.textValue())));
     }
 
     private static JsonNode alias(JsonNode node) {

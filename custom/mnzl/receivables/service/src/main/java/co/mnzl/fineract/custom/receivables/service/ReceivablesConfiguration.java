@@ -353,7 +353,7 @@ public class ReceivablesConfiguration {
         boolean used = store.jdbc().queryForObject("select count(*) from m_mnzl_r_command where scope_key=?", Long.class, scope) > 0;
         if (used) {
             for (String field : java.util.List.of("productId", "accountMap", "bankAccountReference", "helProductId", "helPaymentTypeId")) {
-                require(previous.get(field).equals(input.get(field)) || field.equals("accountMap") && adoptsAdminFee(previous, input),
+                require(previous.get(field).equals(input.get(field)) || (field.equals("accountMap") && adoptsAdminFee(previous, input)),
                         "FINERACT_CAPABILITY_MISSING");
             }
         }

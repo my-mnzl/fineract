@@ -59,8 +59,7 @@ public class ReceivablesCommandService {
     public JsonNode execute(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
         // The payload is hashed exactly as sent. A payload stored before the admin fee rename keeps its legacy names:
-        // they
-        // are aliased to validate its replay, and a new command must already use the current names.
+        // they are aliased to validate its replay, and a new command must already use the current names.
         JsonNode input = json.read(request);
         JsonNode command = ReceivablesLegacy.current(input);
         String type = text(command, "commandType");
@@ -80,7 +79,7 @@ public class ReceivablesCommandService {
             require(existing.get("result_json") != null, "RECOVERY_REQUIRED");
             return json.read(string(existing, "result_json"));
         }
-        require(command == input, "INVALID_DATA");
+        require(!ReceivablesLegacy.legacy(input), "INVALID_DATA");
         // Lock before any core or custom financial effects. Exact durable replay above never needs this lock.
         ledger.lockOffice(number(config, "office_id"));
         configuration.validateExecution(command, config, payloadHash);
