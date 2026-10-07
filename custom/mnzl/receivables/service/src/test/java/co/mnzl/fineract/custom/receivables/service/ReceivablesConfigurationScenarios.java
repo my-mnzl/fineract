@@ -392,9 +392,10 @@ final class ReceivablesConfigurationScenarios {
         assertThat(account.path("calculationVersion").asText()).isEqualTo(UPFRONT);
         assertThat(account.path("amortizedCostMinor").asText()).isEqualTo(gross);
         assertThat(account.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
-        assertThat(harness.queryLong("select count(*) from m_mnzl_r_journal_line l join m_mnzl_r_account a on a.record_key=l.account_key "
-                + "where a.external_id='" + id + "' and l.semantic_account='adminFeeIncome' and l.side='CREDIT' and l.amount_minor='" + fee
-                + "'")).isEqualTo(1);
+        assertThat(harness.queryText(
+                "select count(*) from m_mnzl_r_journal_line l join m_mnzl_r_account a on a.record_key=l.account_key "
+                        + "where a.external_id=? and l.semantic_account='adminFeeIncome' and l.side='CREDIT' and l.amount_minor=?",
+                id, fee)).isEqualTo("1");
         JsonNode controls = harness.request("GET", BASE + "/controls?accountId=" + id, null, 200);
         for (JsonNode balance : controls.path("balances")) {
             assertThat(balance.path("differenceMinor").asText()).describedAs(balance.path("accountKey").asText()).isEqualTo("0");
@@ -428,8 +429,9 @@ final class ReceivablesConfigurationScenarios {
     }
 
     private long glOf(JsonNode event, String semantic) throws Exception {
-        return harness.queryLong("select max(native_gl_id) from m_mnzl_r_journal_line where event_key='" + event.path("eventId").asText()
-                + "' and semantic_account='" + semantic + "'");
+        return Long
+                .parseLong(harness.queryText("select max(native_gl_id) from m_mnzl_r_journal_line where event_key=? and semantic_account=?",
+                        event.path("eventId").asText(), semantic));
     }
 
     private ObjectNode activation(String id, String target, JsonNode stage, String previous) {
