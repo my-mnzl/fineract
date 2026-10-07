@@ -34,17 +34,30 @@ import java.util.NavigableSet;
 import java.util.TreeSet;
 
 /**
- * Pure Actual/360 measurement. Analytical amounts are major EGP; posted amounts are integer piastres. Two accretion
- * rules share pricing, rounding, boundaries and income: the daily-compounded default and the simple rule that
- * capitalises interest only on cheque due dates. A segment pins the rule it was booked under.
+ * Pure Actual/360 measurement. Analytical amounts are major EGP; posted amounts are integer piastres. A calculation
+ * version names an accretion rule and an admin fee treatment. Two accretion rules share pricing, rounding, boundaries
+ * and income: the daily-compounded default and the simple rule that capitalises interest only on cheque due dates. The
+ * admin fee is either deferred into the net EIR or recognised in full at purchase. A segment pins the version it was
+ * booked under.
  */
 public final class ReceivablesMath {
 
-    /** Daily compounding: {@code growth = (1 + r/360)^actualDays}. The default when no version is pinned. */
+    /**
+     * Daily compounding: {@code growth = (1 + r/360)^actualDays}, admin fee deferred. The default when no version is
+     * pinned.
+     */
     public static final String CALCULATION_VERSION = "EG_RECEIVABLES_ACT360_DAILY_V1";
-    /** Simple interest between cheques, capitalised at each cheque due date: {@code B = B(1 + r*days/360) - C}. */
+    /**
+     * Simple interest between cheques, capitalised at each cheque due date: {@code B = B(1 + r*days/360) - C}, admin
+     * fee deferred.
+     */
     public static final String SIMPLE_CALCULATION_VERSION = "EG_RECEIVABLES_ACT360_SIMPLE_V1";
-    public static final List<String> SUPPORTED_VERSIONS = List.of(CALCULATION_VERSION, SIMPLE_CALCULATION_VERSION);
+    /**
+     * Daily compounding with the admin fee recognised as income in full at purchase: the net basis is the gross basis.
+     */
+    public static final String UPFRONT_FEE_CALCULATION_VERSION = "EG_RECEIVABLES_ACT360_DAILY_V2";
+    public static final List<String> SUPPORTED_VERSIONS = List.of(CALCULATION_VERSION, SIMPLE_CALCULATION_VERSION,
+            UPFRONT_FEE_CALCULATION_VERSION);
     public static final MathContext MC = new MathContext(60, RoundingMode.HALF_EVEN);
     private static final BigDecimal DAYS = new BigDecimal("360");
     private static final BigDecimal TWO = new BigDecimal("2");
@@ -65,13 +78,18 @@ public final class ReceivablesMath {
     public record Yield(BigDecimal rate, BigDecimal residual, int iterations) {
     }
 
-    /** A segment pins its accretion rule; snapshots written before versions existed deserialise as daily. */
+    /**
+     * A segment pins its calculation version; snapshots written before versions existed deserialise as daily. An
+     * upfront admin fee leaves nothing to defer, so such a segment's net basis is its gross basis.
+     */
     public record Segment(LocalDate startDate, List<Cashflow> cashflows, BigInteger grossBasisMinor, BigInteger netBasisMinor,
             Yield grossYield, Yield netEir, String calculationVersion) {
 
         public Segment {
             cashflows = List.copyOf(cashflows);
             calculationVersion = version(calculationVersion);
+            require(feeTreatment(calculationVersion) == FeeTreatment.DEFERRED || grossBasisMinor.equals(netBasisMinor),
+                    "Upfront admin fee segment cannot defer a fee");
         }
 
         public Segment(LocalDate startDate, List<Cashflow> cashflows, BigInteger grossBasisMinor, BigInteger netBasisMinor,
@@ -89,13 +107,27 @@ public final class ReceivablesMath {
         return calculationVersion;
     }
 
+    /**
+     * How the admin fee ({@code A = round(G * feeRate)}, paid out of the gross price) is recognised: deferred and
+     * amortised through the net EIR, or as income in full at purchase.
+     */
+    public enum FeeTreatment {
+
+        DEFERRED("H=G-N"), UPFRONT("N=G; H=0; A recognised at purchase");
+
+        private final String formula;
+
+        FeeTreatment(String formula) {
+            this.formula = formula;
+        }
+    }
+
     /** The accretion rule behind a version id. Pricing never depends on it; accretion after purchase does. */
     interface Accretion {
 
-        String id();
-
         String compounding();
 
+        /** Pricing and gross discount: {@code PV}, then {@code U=F-G}. */
         String formula();
 
         /** Value growth of one unit over {@code days} with no cheque boundary in between. */
@@ -114,18 +146,13 @@ public final class ReceivablesMath {
     private static final Accretion DAILY = new Accretion() {
 
         @Override
-        public String id() {
-            return CALCULATION_VERSION;
-        }
-
-        @Override
         public String compounding() {
             return "DAILY";
         }
 
         @Override
         public String formula() {
-            return "PV=sum(C/(1+r/360)^actualDays); U=F-G; H=G-N";
+            return "PV=sum(C/(1+r/360)^actualDays); U=F-G";
         }
 
         @Override
@@ -143,18 +170,13 @@ public final class ReceivablesMath {
     private static final Accretion SIMPLE = new Accretion() {
 
         @Override
-        public String id() {
-            return SIMPLE_CALCULATION_VERSION;
-        }
-
-        @Override
         public String compounding() {
             return "SIMPLE_AT_CHEQUES";
         }
 
         @Override
         public String formula() {
-            return "B(d)=B(prev)*(1+r*actualDays/360)-C at each cheque date; PV=sum(C/prod(1+r*actualDays_k/360)); U=F-G; H=G-N";
+            return "B(d)=B(prev)*(1+r*actualDays/360)-C at each cheque date; PV=sum(C/prod(1+r*actualDays_k/360)); U=F-G";
         }
 
         @Override
@@ -177,8 +199,29 @@ public final class ReceivablesMath {
         }
     };
 
+    private record Rule(Accretion accretion, FeeTreatment feeTreatment) {
+    }
+
+    /** Every supported version maps explicitly to its rule; an unlisted version is never assumed to be daily. */
+    private static final Map<String, Rule> RULES = Map.of(CALCULATION_VERSION, new Rule(DAILY, FeeTreatment.DEFERRED),
+            SIMPLE_CALCULATION_VERSION, new Rule(SIMPLE, FeeTreatment.DEFERRED), UPFRONT_FEE_CALCULATION_VERSION,
+            new Rule(DAILY, FeeTreatment.UPFRONT));
+
+    private static Rule rule(String calculationVersion) {
+        return RULES.get(version(calculationVersion));
+    }
+
     static Accretion accretion(String calculationVersion) {
-        return version(calculationVersion).equals(SIMPLE_CALCULATION_VERSION) ? SIMPLE : DAILY;
+        return rule(calculationVersion).accretion();
+    }
+
+    public static FeeTreatment feeTreatment(String calculationVersion) {
+        return rule(calculationVersion).feeTreatment();
+    }
+
+    /** {@code DAILY} or {@code SIMPLE_AT_CHEQUES}: how the version accretes between purchase and maturity. */
+    public static String compounding(String calculationVersion) {
+        return accretion(calculationVersion).compounding();
     }
 
     private static NavigableSet<LocalDate> boundaries(List<Cashflow> flows) {
@@ -242,11 +285,11 @@ public final class ReceivablesMath {
     }
 
     public record Purchase(BigDecimal quotedRate, BigDecimal feeRate, BigDecimal unroundedGrossPrice, BigInteger contractualFaceMinor,
-            BigInteger grossPurchasePriceMinor, BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor, Segment segment) {
+            BigInteger grossPurchasePriceMinor, BigInteger adminFeeMinor, BigInteger netPurchaseCashMinor, Segment segment) {
     }
 
     public record PortfolioPurchase(List<Purchase> accounts, BigInteger contractualFaceMinor, BigInteger grossPurchasePriceMinor,
-            BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor) {
+            BigInteger adminFeeMinor, BigInteger netPurchaseCashMinor) {
 
         public PortfolioPurchase {
             accounts = List.copyOf(accounts);
@@ -262,7 +305,7 @@ public final class ReceivablesMath {
         for (Purchase account : accounts) {
             face = face.add(account.contractualFaceMinor());
             gross = gross.add(account.grossPurchasePriceMinor());
-            fee = fee.add(account.integralFeeMinor());
+            fee = fee.add(account.adminFeeMinor());
             cash = cash.add(account.netPurchaseCashMinor());
         }
         return new PortfolioPurchase(accounts, face, gross, fee, cash);
@@ -273,7 +316,7 @@ public final class ReceivablesMath {
 
     public record Position(LocalDate businessDate, BigInteger contractualOutstandingMinor, BigInteger notYetDueMinor,
             BigInteger pastDueMinor, BigInteger grossPurchaseBasisMinor, BigInteger amortizedCostMinor, BigInteger deferredDiscountMinor,
-            BigInteger deferredIntegralFeeMinor, int daysPastDue, BigDecimal analyticalGrossBasis, BigDecimal analyticalNetBasis,
+            BigInteger deferredAdminFeeMinor, int daysPastDue, BigDecimal analyticalGrossBasis, BigDecimal analyticalNetBasis,
             List<Leg> legs) {
 
         public Position {
@@ -286,7 +329,7 @@ public final class ReceivablesMath {
         }
     }
 
-    public record Income(BigInteger grossDiscountIncomeMinor, BigInteger integralFeeIncomeMinor, BigInteger interestIncomeMinor) {
+    public record Income(BigInteger grossDiscountIncomeMinor, BigInteger adminFeeIncomeMinor, BigInteger interestIncomeMinor) {
     }
 
     public record Explanation(String calculationVersion, String currency, String dayCount, String compounding, String rounding,
@@ -393,13 +436,13 @@ public final class ReceivablesMath {
     }
 
     public record PriceAmounts(BigDecimal unroundedGrossPrice, BigInteger contractualFaceMinor, BigInteger grossPurchasePriceMinor,
-            BigInteger integralFeeMinor, BigInteger netPurchaseCashMinor) {
+            BigInteger adminFeeMinor, BigInteger netPurchaseCashMinor) {
     }
 
     /** Shared monetary pricing; estimates do not need analytical yield solvers. */
     public static PriceAmounts priceAmounts(LocalDate date, List<Cashflow> flows, BigDecimal quotedRate, BigDecimal feeRate) {
         validateFuture(date, flows);
-        require(feeRate.signum() >= 0 && feeRate.compareTo(BigDecimal.ONE) < 0, "Invalid integral fee rate");
+        require(feeRate.signum() >= 0 && feeRate.compareTo(BigDecimal.ONE) < 0, "Invalid admin fee rate");
         BigDecimal raw = pv(date, flows, quotedRate);
         BigInteger gross = minor(raw);
         BigInteger fee = minor(major(gross).multiply(feeRate, MC));
@@ -414,24 +457,29 @@ public final class ReceivablesMath {
 
     /**
      * The price is the daily PV at the quoted rate under every version; the version only decides how the paid amount
-     * accretes afterwards, so the same cash buys different solved yields.
+     * accretes afterwards, so the same cash buys different solved yields. A deferred admin fee makes the net cash the
+     * net basis; an upfront one is income at purchase, leaving the gross price as the basis.
      */
     public static Purchase price(String calculationVersion, LocalDate date, List<Cashflow> flows, BigDecimal quotedRate,
             BigDecimal feeRate) {
         var amounts = priceAmounts(date, flows, quotedRate, feeRate);
-        Segment segment = segment(calculationVersion, date, flows, amounts.grossPurchasePriceMinor(), amounts.netPurchaseCashMinor());
+        Segment segment = segment(calculationVersion, date, flows, amounts.grossPurchasePriceMinor(),
+                feeTreatment(calculationVersion) == FeeTreatment.UPFRONT ? amounts.grossPurchasePriceMinor()
+                        : amounts.netPurchaseCashMinor());
         return new Purchase(quotedRate, feeRate, amounts.unroundedGrossPrice(), amounts.contractualFaceMinor(),
-                amounts.grossPurchasePriceMinor(), amounts.integralFeeMinor(), amounts.netPurchaseCashMinor(), segment);
+                amounts.grossPurchasePriceMinor(), amounts.adminFeeMinor(), amounts.netPurchaseCashMinor(), segment);
     }
 
     public static Segment segment(LocalDate date, List<Cashflow> flows, BigInteger gross, BigInteger net) {
         return segment(CALCULATION_VERSION, date, flows, gross, net);
     }
 
+    /** Equal bases share one solved yield; an upfront admin fee always has equal bases. */
     public static Segment segment(String calculationVersion, LocalDate date, List<Cashflow> flows, BigInteger gross, BigInteger net) {
         String version = version(calculationVersion);
         require(net.signum() > 0 && net.compareTo(gross) <= 0, "Invalid gross/net segment bases");
-        return new Segment(date, flows, gross, net, solve(version, date, flows, gross), solve(version, date, flows, net), version);
+        Yield grossYield = solve(version, date, flows, gross);
+        return new Segment(date, flows, gross, net, grossYield, net.equals(gross) ? grossYield : solve(version, date, flows, net), version);
     }
 
     /** Outstanding is the remaining face after committed events; omitted IDs retain full face. */
@@ -526,9 +574,10 @@ public final class ReceivablesMath {
     }
 
     public static Explanation explain(Segment segment, Position position) {
-        Accretion accretion = accretion(segment.calculationVersion());
-        return new Explanation(accretion.id(), "EGP", "Actual/360", accretion.compounding(), "HALF_UP", "START_OF_DAY", accretion.formula(),
-                segment.startDate(), segment.grossBasisMinor(), segment.netBasisMinor(), segment.grossYield(), segment.netEir(), position);
+        Rule rule = rule(segment.calculationVersion());
+        return new Explanation(segment.calculationVersion(), "EGP", "Actual/360", rule.accretion().compounding(), "HALF_UP", "START_OF_DAY",
+                rule.accretion().formula() + "; " + rule.feeTreatment().formula, segment.startDate(), segment.grossBasisMinor(),
+                segment.netBasisMinor(), segment.grossYield(), segment.netEir(), position);
     }
 
     /** Largest remainders allocate an existing monetary target; IDs provide deterministic ties. */

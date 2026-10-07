@@ -1,21 +1,42 @@
 # Egyptian receivables mathematics
 
-This Java 21 module implements two Actual/360 accretion rules without Spring,
+This Java 21 module implements Actual/360 calculation versions without Spring,
 network, database or borrower dependencies. Native services call these functions;
 other services consume native results rather than duplicating the calculations.
+Each version maps explicitly to an accretion rule and an admin fee treatment:
 
 - `EG_RECEIVABLES_ACT360_DAILY_V1` (`ReceivablesMath.CALCULATION_VERSION`, the
-  default): daily compounding, `growth = (1 + r/360)^actualDays`.
+  default): daily compounding, `growth = (1 + r/360)^actualDays`; admin fee
+  deferred.
 - `EG_RECEIVABLES_ACT360_SIMPLE_V1` (`ReceivablesMath.SIMPLE_CALCULATION_VERSION`):
   simple interest between cheques, capitalised only on cheque due dates:
-  `B(d_i) = B(d_{i-1}) × (1 + r × days(d_{i-1}, d_i)/360) − C_i`.
+  `B(d_i) = B(d_{i-1}) × (1 + r × days(d_{i-1}, d_i)/360) − C_i`; admin fee
+  deferred.
+- `EG_RECEIVABLES_ACT360_DAILY_V2`
+  (`ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION`): daily compounding; admin fee
+  recognised as income in full at purchase.
 
-`ReceivablesMath.SUPPORTED_VERSIONS` lists both. A `Segment` pins the rule it was
-booked under (`calculationVersion`); every position, reset, substitution,
-modification, lot and forecast discounting reads it from the segment, so a book
-can hold accounts under either rule. Overloads without a version parameter are
-the daily rule, unchanged. Snapshots and lots written before versions existed carry
-no field and deserialise as daily.
+`ReceivablesMath.SUPPORTED_VERSIONS` lists all three; `feeTreatment(version)` and
+`compounding(version)` expose the mapping, and an unlisted version is rejected,
+never assumed daily. A `Segment` pins the version it was booked under
+(`calculationVersion`); every position, reset, substitution, modification, lot and
+forecast discounting reads it from the segment, so a book can hold accounts under
+any version. Overloads without a version parameter are the daily rule, unchanged.
+Snapshots and lots written before versions existed carry no field and deserialise
+as daily.
+
+## The admin fee
+
+Pricing never depends on the version: `G = round(PV at the quoted rate)`,
+admin fee `A = round(G × feeRate)` and net cash `N = G − A`. A **deferred** fee
+makes the net cash the net basis, so the fee `H = G − N` amortises through the net
+EIR as `adminFeeIncomeMinor` inside interest income. An **upfront** fee (DAILY_V2)
+is income at purchase: the segment's net basis is its gross basis, the net EIR is
+the gross yield, the deferred admin fee and its accretion are always zero, and
+amortised cost starts at `G`. The `Segment` constructor refuses an upfront segment
+whose bases differ, and resets, substitutions and modifications preserve the
+equality because they carry the net basis from the gross one. `explain` reports
+the pinned version, the accretion formula and the fee treatment.
 
 ## The simple rule
 
@@ -117,7 +138,11 @@ The test resource `reference-vectors.json` is byte-identical to MNZL's canonical
 Flex fixture. The test loader expands fixture references before calling this
 module. Independent daily recurrence checks use a different precision and no
 production growth/PV functions, comparing every intermediate monetary position
-and lifetime totals. Vectors for the simple rule carry
+and lifetime totals. Vectors for the upfront admin fee carry
+`"calculationVersion": "EG_RECEIVABLES_ACT360_DAILY_V2"` and use the operations
+`priceUpfrontAdminFee` (price, zero deferred fee, the balanced purchase journal and
+lifetime income) and `positionUpfrontAdminFee` (the month boundary with no fee
+accretion). Vectors for the simple rule carry
 `"calculationVersion": "EG_RECEIVABLES_ACT360_SIMPLE_V1"` on the vector itself
 (the fixture root stays daily) and use the operations `simpleAccrual`,
 `priceSimple`, `positionSimple`, `segmentSimple` and `resetSimple`; their expected

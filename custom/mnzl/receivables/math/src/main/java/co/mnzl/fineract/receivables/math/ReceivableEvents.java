@@ -87,7 +87,7 @@ public final class ReceivableEvents {
     }
 
     public record Settlement(BigInteger faceExtinguishedMinor, BigInteger grossBasisMinor, BigInteger amortizedCostMinor,
-            BigInteger deferredDiscountMinor, BigInteger deferredIntegralFeeMinor, BigInteger payoffMinor, BigInteger developerShareMinor,
+            BigInteger deferredDiscountMinor, BigInteger deferredAdminFeeMinor, BigInteger payoffMinor, BigInteger developerShareMinor,
             BigInteger financierIncomeMinor, BigInteger allowanceReleasedMinor) {
     }
 

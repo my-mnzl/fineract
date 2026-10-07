@@ -284,7 +284,7 @@ final class ReceivablesCommandDatabaseScenarios {
                 JsonNode position = account(replacement).path("position");
                 assertThat(position.path("contractualOutstandingMinor").asText()).isEqualTo("80000");
                 assertThat(position.path("amortizedCostMinor").asText()).isEqualTo("70000");
-                assertThat(position.path("deferredIntegralFeeMinor").asText()).isEqualTo("0");
+                assertThat(position.path("deferredAdminFeeMinor").asText()).isEqualTo("0");
             }
         }
     }
@@ -556,7 +556,7 @@ final class ReceivablesCommandDatabaseScenarios {
         assertThat(account(replacement).path("acquisitionId").asText()).isEqualTo(acquisitionId);
         JsonNode acquisition = harness.request("GET", ReceivablesDatabaseIntegrationTest.PREFIX + "/acquisitions/" + acquisitionId, null,
                 200);
-        for (String field : List.of("originalFaceMinor", "originalGrossPurchasePriceMinor", "originalIntegralFeeMinor",
+        for (String field : List.of("originalFaceMinor", "originalGrossPurchasePriceMinor", "originalAdminFeeMinor",
                 "originalPurchaseCashMinor", "originalAccountCount")) {
             assertThat(acquisition.path(field)).isEqualTo(originalAcquisition.path(field));
         }
@@ -580,7 +580,7 @@ final class ReceivablesCommandDatabaseScenarios {
         assertThat(after.path("stage").asText()).isEqualTo("STAGE_2");
         assertThat(balance(controls(id), "developerReceivable")).isZero();
         assertThat(balance(controls(replacement), "developerReceivable")).isEqualTo(transferredLotAmount);
-        for (String field : List.of("grossPurchaseBasisMinor", "amortizedCostMinor", "deferredIntegralFeeMinor")) {
+        for (String field : List.of("grossPurchaseBasisMinor", "amortizedCostMinor", "deferredAdminFeeMinor")) {
             assertThat(after.path(field)).isEqualTo(before.path(field));
         }
         assertThat(account(id).path("closureReason").asText()).isEqualTo("ASSIGNED_OUT");

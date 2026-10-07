@@ -106,7 +106,7 @@ public class ReceivablesMeasurement {
             JsonNode price = accepted.stream().filter(p -> text(p, "accountId").equals(accountId)).findFirst()
                     .orElseThrow(() -> new ReceivablesException("SOURCE_CHANGED"));
             require(minor(price, "grossPurchasePriceMinor").equals(purchase.grossPurchasePriceMinor())
-                    && minor(price, "integralFeeMinor").equals(purchase.integralFeeMinor())
+                    && minor(price, "adminFeeMinor").equals(purchase.adminFeeMinor())
                     && minor(price, "netPurchaseCashMinor").equals(purchase.netPurchaseCashMinor()), "SOURCE_CHANGED");
         }
         return purchase;
@@ -229,6 +229,7 @@ public class ReceivablesMeasurement {
         result.put("unreconciledPurchaseMinor",
                 account.get("unreconciled_purchase_minor") == null ? "0" : string(account, "unreconciled_purchase_minor"));
         MeasurementState state = state(account);
+        result.put("calculationVersion", state.segment().calculationVersion());
         result.put("grossYield", state.segment().grossYield().rate().toPlainString());
         result.put("netEir", state.segment().netEir().rate().toPlainString());
         BigInteger payable = BigInteger.ZERO;
@@ -269,7 +270,7 @@ public class ReceivablesMeasurement {
         result.put("pastDueMinor", p.pastDueMinor().toString());
         result.put("grossPurchaseBasisMinor", p.grossPurchaseBasisMinor().toString());
         result.put("deferredDiscountMinor", p.deferredDiscountMinor().toString());
-        result.put("deferredIntegralFeeMinor", p.deferredIntegralFeeMinor().toString());
+        result.put("deferredAdminFeeMinor", p.deferredAdminFeeMinor().toString());
         result.put("amortizedCostMinor", p.amortizedCostMinor().toString());
         result.put("lossAllowanceMinor", allowance.toString());
         result.put("netCarryingMinor", p.amortizedCostMinor().subtract(allowance).toString());

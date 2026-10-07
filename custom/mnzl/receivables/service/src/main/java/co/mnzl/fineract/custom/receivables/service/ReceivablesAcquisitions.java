@@ -126,7 +126,7 @@ public class ReceivablesAcquisitions {
 
     private static final int SUMMARY_BATCH_SIZE = 512;
     private static final Map<String, String> ORIGINAL_AMOUNTS = Map.of("originalFaceMinor", "purchase_face_minor",
-            "originalGrossPurchasePriceMinor", "purchase_gross_minor", "originalIntegralFeeMinor", "purchase_fee_minor",
+            "originalGrossPurchasePriceMinor", "purchase_gross_minor", "originalAdminFeeMinor", "purchase_fee_minor",
             "originalPurchaseCashMinor", "purchase_cash_minor");
 
     private Map<String, ObjectNode> totals(List<Map<String, Object>> acquisitions) {

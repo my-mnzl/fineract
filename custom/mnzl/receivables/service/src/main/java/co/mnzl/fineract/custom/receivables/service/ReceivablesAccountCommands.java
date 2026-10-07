@@ -85,6 +85,7 @@ public class ReceivablesAccountCommands {
         require((historical || text(e.command.get("riskForecast"), "stage").equals("STAGE_1"))
                 && basis.get("acceptedAccountPrices").size() > 0, "INVALID_DATA");
         Purchase purchase = measurement.purchase(basis, id);
+        configuration.requireCalculation(e, purchase.segment().calculationVersion());
         String acquisitionKey = acquisitions.register(e);
         if (!historical) {
             cash.consumeAllocations(e, e.command.get("acquisitionClearingAllocationIds"), purchase.netPurchaseCashMinor(),
@@ -111,7 +112,7 @@ public class ReceivablesAccountCommands {
         fields.put("original_account_id", id);
         fields.put("purchase_face_minor", purchase.contractualFaceMinor().toString());
         fields.put("purchase_gross_minor", position.grossPurchaseBasisMinor().toString());
-        fields.put("purchase_fee_minor", position.deferredIntegralFeeMinor().toString());
+        fields.put("purchase_fee_minor", purchase.adminFeeMinor().toString());
         fields.put("purchase_cash_minor", purchase.netPurchaseCashMinor().toString());
         fields.put("customer_ref", text(e.command, "customerReferenceId"));
         fields.put("native_loan_id", nativeBook.loanId());
@@ -143,8 +144,15 @@ public class ReceivablesAccountCommands {
         String deal = text(e.command, "dealId");
         line(e.lines, "contractualReceivable", "DEBIT", purchase.contractualFaceMinor(), id, deal, "FACE");
         line(e.lines, "deferredDiscount", "CREDIT", position.deferredDiscountMinor(), id, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "CREDIT", position.deferredIntegralFeeMinor(), id, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "CREDIT", position.deferredAdminFeeMinor(), id, deal, "ADMIN_FEE");
         line(e.lines, "acquisitionClearing", "CREDIT", purchase.netPurchaseCashMinor(), id, deal, "CASH");
+        // An upfront admin fee is earned on purchase: the gross price paid for the face exceeds the cash by exactly the
+        // fee.
+        line(e.lines, ReceivablesConfiguration.ADMIN_FEE_INCOME, "CREDIT",
+                ReceivablesMath.feeTreatment(purchase.segment().calculationVersion()) == ReceivablesMath.FeeTreatment.UPFRONT
+                        ? purchase.adminFeeMinor()
+                        : BigInteger.ZERO,
+                id, deal, "ADMIN_FEE");
         pair(e.lines, "impairmentExpense", "lossAllowance", allowance, id, deal, "IMPAIRMENT");
         e.accountKeys.add(key);
         reconcileNative(store.require("account", key), position, e.date);
@@ -220,7 +228,7 @@ public class ReceivablesAccountCommands {
         BigInteger grossIncome = p.grossPurchaseBasisMinor().subtract(amount(account, "gross_minor"));
         BigInteger netIncome = p.amortizedCostMinor().subtract(amount(account, "net_minor"));
         pair(e.lines, "deferredDiscount", "portfolioInterestIncome", grossIncome, id, deal, "DISCOUNT");
-        pair(e.lines, "deferredIntegralFee", "portfolioInterestIncome", netIncome.subtract(grossIncome), id, deal, "INTEGRAL_FEE");
+        pair(e.lines, "deferredAdminFee", "portfolioInterestIncome", netIncome.subtract(grossIncome), id, deal, "ADMIN_FEE");
         for (var leg : store.children("leg", "account_key", key)) {
             LocalDate due = LocalDate.parse(string(leg, "due_date"));
             if ((due.isAfter(previous) || (due.equals(previous) && "BEFORE_EVENTS".equals(string(account, "last_boundary_side"))))
@@ -475,7 +483,7 @@ public class ReceivablesAccountCommands {
         }
         line(e.lines, control, "DEBIT", payoff, id, deal, "SETTLEMENT");
         line(e.lines, "deferredDiscount", "DEBIT", result.deferredDiscountMinor(), id, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "DEBIT", result.deferredIntegralFeeMinor(), id, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "DEBIT", result.deferredAdminFeeMinor(), id, deal, "ADMIN_FEE");
         BigInteger share = recourse ? BigInteger.ZERO : result.developerShareMinor();
         line(e.lines, "developerPayable", "CREDIT", share, id, deal, "DEVELOPER_ADJUSTMENT");
         line(e.lines, "portfolioInterestIncome", "CREDIT",
@@ -614,7 +622,7 @@ public class ReceivablesAccountCommands {
         Position raw = ReceivablesMath.position(state.segment(), e.date, outstanding);
         Position restored = new Position(e.date, before.contractualOutstandingMinor().add(total), before.notYetDueMinor(),
                 before.pastDueMinor().add(total), before.grossPurchaseBasisMinor().add(total), before.amortizedCostMinor().add(total),
-                before.deferredDiscountMinor(), before.deferredIntegralFeeMinor(), raw.daysPastDue(), raw.analyticalGrossBasis(),
+                before.deferredDiscountMinor(), before.deferredAdminFeeMinor(), raw.daysPastDue(), raw.analyticalGrossBasis(),
                 raw.analyticalNetBasis(), raw.legs());
         measurement.saveState(e.scope, key, e.operationKey, new MeasurementState(state.segment(), restored, outstanding),
                 string(e.configuration, "calculator_build"));
@@ -710,7 +718,7 @@ public class ReceivablesAccountCommands {
                 .transactionId()));
         line(e.lines, "cashUnapplied", "DEBIT", payoff, id, deal, "SETTLEMENT");
         line(e.lines, "deferredDiscount", "DEBIT", result.deferredDiscountMinor(), id, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "DEBIT", result.deferredIntegralFeeMinor(), id, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "DEBIT", result.deferredAdminFeeMinor(), id, deal, "ADMIN_FEE");
         line(e.lines, "portfolioInterestIncome", "CREDIT", result.financierIncomeMinor(), id, deal, "SETTLEMENT");
         pair(e.lines, "lossAllowance", "impairmentExpense", amount(account, "allowance_minor"), id, deal, "IMPAIRMENT");
         closeAccountState(e, account, "ASSIGNED_OUT", "ASSIGNED_OUT");
@@ -792,7 +800,7 @@ public class ReceivablesAccountCommands {
         row.put("active_segment_key", ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + newKey));
         row.put("last_event_key", null);
         row.put("created_at", java.sql.Timestamp.from(java.time.Instant.now()));
-        ObjectNode terms = (ObjectNode) json.read(string(old, "terms_json"));
+        ObjectNode terms = (ObjectNode) ReceivablesLegacy.current(json.read(string(old, "terms_json")));
         terms.set("cashflows", e.command.get("replacementCashflows"));
         row.put("terms_json", json.write(terms));
         measurement.saveState(e.scope, newKey, e.operationKey, new MeasurementState(replacement.replacement(), after, newAmounts),
@@ -801,10 +809,10 @@ public class ReceivablesAccountCommands {
         saveLegs(e, newKey, e.command.get("replacementCashflows"), booking.sourcePeriodIds());
         saveForecast(e, newKey, e.command.get("replacementRiskForecast"), allowance);
         line(e.lines, "deferredDiscount", "DEBIT", before.deferredDiscountMinor(), oldId, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "DEBIT", before.deferredIntegralFeeMinor(), oldId, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "DEBIT", before.deferredAdminFeeMinor(), oldId, deal, "ADMIN_FEE");
         line(e.lines, "contractualReceivable", "DEBIT", after.contractualOutstandingMinor(), newId, deal, "FACE");
         line(e.lines, "deferredDiscount", "CREDIT", after.deferredDiscountMinor(), newId, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "CREDIT", after.deferredIntegralFeeMinor(), newId, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "CREDIT", after.deferredAdminFeeMinor(), newId, deal, "ADMIN_FEE");
         pair(e.lines, "lossAllowance", "impairmentExpense", amount(old, "allowance_minor"), oldId, deal, "IMPAIRMENT");
         pair(e.lines, "impairmentExpense", "lossAllowance", allowance, newId, deal, "IMPAIRMENT");
         closeAccountState(e, old, "ASSIGNED_OUT", "ASSIGNED_OUT");
@@ -859,7 +867,7 @@ public class ReceivablesAccountCommands {
             }
         }
         line(e.lines, "deferredDiscount", "DEBIT", before.deferredDiscountMinor(), id, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "DEBIT", before.deferredIntegralFeeMinor(), id, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "DEBIT", before.deferredAdminFeeMinor(), id, deal, "ADMIN_FEE");
         if (classification.equals("WRITE_OFF")) {
             e.nativeTransactions.add(Long.toString(nativeBridge
                     .adjustFace(number(account, "native_loan_id"), e.date, AdjustmentType.WRITE_OFF, oldAllocations, "R" + e.operationKey)
@@ -899,7 +907,7 @@ public class ReceivablesAccountCommands {
         BigInteger allowance = measurement.allowance(after, next, e.command.get("riskForecast"));
         line(e.lines, "contractualReceivable", "DEBIT", after.contractualOutstandingMinor(), id, deal, "FACE");
         line(e.lines, "deferredDiscount", "CREDIT", after.deferredDiscountMinor(), id, deal, "DISCOUNT");
-        line(e.lines, "deferredIntegralFee", "CREDIT", after.deferredIntegralFeeMinor(), id, deal, "INTEGRAL_FEE");
+        line(e.lines, "deferredAdminFee", "CREDIT", after.deferredAdminFeeMinor(), id, deal, "ADMIN_FEE");
         line(e.lines, "modificationGainLoss", "CREDIT", after.amortizedCostMinor().subtract(before.amortizedCostMinor()), id, deal,
                 "MODIFICATION");
         pair(e.lines, "impairmentExpense", "lossAllowance", allowance.subtract(amount(account, "allowance_minor")), id, deal, "IMPAIRMENT");
@@ -976,12 +984,12 @@ public class ReceivablesAccountCommands {
         row.put("basis_hash", text(outcome, "replacementSourceHash"));
         row.put("active_segment_key", ReceivablesStore.key(e.scope, "segment", e.operationKey + ":" + newKey));
         row.put("created_at", java.sql.Timestamp.from(java.time.Instant.now()));
-        var terms = (ObjectNode) json.read(string(account, "terms_json"));
+        var terms = (ObjectNode) ReceivablesLegacy.current(json.read(string(account, "terms_json")));
         terms.set("cashflows", e.command.get("modifiedCashflows"));
         terms.put("settlementDate", e.date.toString());
         terms.put("sourceHash", text(outcome, "replacementSourceHash"));
         terms.set("acceptedAccountPrices", json.value(List.of(Map.of("accountId", newId, "grossPurchasePriceMinor",
-                consideration.toString(), "integralFeeMinor", "0", "netPurchaseCashMinor", consideration.toString()))));
+                consideration.toString(), "adminFeeMinor", "0", "netPurchaseCashMinor", consideration.toString()))));
         row.put("terms_json", json.write(terms));
         measurement.saveState(e.scope, newKey, e.operationKey, new MeasurementState(segment, position, outstanding),
                 string(e.configuration, "calculator_build"));

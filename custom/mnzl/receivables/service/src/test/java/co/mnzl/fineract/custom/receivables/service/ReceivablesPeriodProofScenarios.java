@@ -83,7 +83,8 @@ final class ReceivablesPeriodProofScenarios {
         JsonNode empty = proof("1900-01", watermark, 200);
         assertThat(empty.path("eventManifest").path("count").asText()).isEqualTo("0");
         assertThat(empty.path("observedGl").path("count").asText()).isEqualTo("0");
-        assertThat(empty.path("observedGl").path("accounts").size()).isEqualTo(harness.accounts.size());
+        // Proofs are read under mapping-1, which is the legacy account set.
+        assertThat(empty.path("observedGl").path("accounts").size()).isEqualTo(ReceivablesConfiguration.LEGACY_ACCOUNTS.size());
         empty.path("observedGl").path("accounts").forEach(account -> {
             assertThat(account.path("debitMinor").asText()).isEqualTo("0");
             assertThat(account.path("creditMinor").asText()).isEqualTo("0");

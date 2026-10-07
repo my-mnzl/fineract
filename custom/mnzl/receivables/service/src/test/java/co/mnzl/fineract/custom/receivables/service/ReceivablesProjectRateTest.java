@@ -102,7 +102,7 @@ class ReceivablesProjectRateTest {
     void acceptedPurchaseIsRecalculatedFromItsPinnedRateAndRejectsChangedAmounts() {
         ObjectNode project = basis();
         ObjectNode accepted = calculate(project, false).path("accounts").get(0).deepCopy();
-        accepted.retain("accountId", "grossPurchasePriceMinor", "integralFeeMinor", "netPurchaseCashMinor");
+        accepted.retain("accountId", "grossPurchasePriceMinor", "adminFeeMinor", "netPurchaseCashMinor");
         project.set("acceptedAccountPrices", json.value(List.of(accepted)));
         assertThat(measurement.purchase(project, "account").netPurchaseCashMinor().toString())
                 .isEqualTo(accepted.path("netPurchaseCashMinor").asText());

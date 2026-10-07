@@ -104,10 +104,13 @@ public class ReceivablesCalculationService {
             LocalDate through = input.has("throughDate") ? date(input, "throughDate")
                     : purchase.segment().cashflows().stream().map(ReceivablesMath.Cashflow::dueDate).max(LocalDate::compareTo)
                             .orElseThrow();
-            var projection = project(group.getKey(), purchase.segment(), through);
+            var projection = project(group.getKey(), purchase.segment(), through,
+                    ReceivablesMath.feeTreatment(purchase.segment().calculationVersion()) == ReceivablesMath.FeeTreatment.UPFRONT
+                            ? purchase.adminFeeMinor()
+                            : BigInteger.ZERO);
             allPositions.addAll(projection.positions());
             allIncome.addAll(projection.income());
-            ObjectNode account = totals(purchase.contractualFaceMinor(), purchase.grossPurchasePriceMinor(), purchase.integralFeeMinor(),
+            ObjectNode account = totals(purchase.contractualFaceMinor(), purchase.grossPurchasePriceMinor(), purchase.adminFeeMinor(),
                     purchase.netPurchaseCashMinor());
             account.put("accountId", group.getKey());
             account.put("grossYield", purchase.segment().grossYield().rate().toPlainString());
@@ -128,8 +131,8 @@ public class ReceivablesCalculationService {
             pricing.set("basis", basis);
             pricing.set("basisHash", input.get("basisHash"));
             pricing.set("accounts", json.value(accounts));
-            pricing.set("totals", totals(portfolio.contractualFaceMinor(), portfolio.grossPurchasePriceMinor(),
-                    portfolio.integralFeeMinor(), portfolio.netPurchaseCashMinor()));
+            pricing.set("totals", totals(portfolio.contractualFaceMinor(), portfolio.grossPurchasePriceMinor(), portfolio.adminFeeMinor(),
+                    portfolio.netPurchaseCashMinor()));
             pricing.set("validationErrors", json.value(List.of()));
             result.set("pricing", pricing);
         }
@@ -147,13 +150,13 @@ public class ReceivablesCalculationService {
             require(System.nanoTime() < deadline && !Thread.currentThread().isInterrupted(), "PRICING_TIMEOUT");
             var amounts = ReceivablesMath.priceAmounts(date(basis, "settlementDate"), measurement.flows(json.value(group.getValue())),
                     ReceivablesMeasurement.acquisitionRate(basis), decimal(basis, "feeRate"));
-            ObjectNode account = totals(amounts.contractualFaceMinor(), amounts.grossPurchasePriceMinor(), amounts.integralFeeMinor(),
+            ObjectNode account = totals(amounts.contractualFaceMinor(), amounts.grossPurchasePriceMinor(), amounts.adminFeeMinor(),
                     amounts.netPurchaseCashMinor());
             account.put("accountId", group.getKey());
             accounts.add(account);
             face = face.add(amounts.contractualFaceMinor());
             gross = gross.add(amounts.grossPurchasePriceMinor());
-            fee = fee.add(amounts.integralFeeMinor());
+            fee = fee.add(amounts.adminFeeMinor());
             net = net.add(amounts.netPurchaseCashMinor());
         }
         ObjectNode pricing = json.object();
@@ -169,7 +172,8 @@ public class ReceivablesCalculationService {
     private record Projection(List<JsonNode> positions, List<JsonNode> income) {
     }
 
-    private Projection project(String accountId, ReceivablesMath.Segment segment, LocalDate through) {
+    /** An upfront admin fee is income of the purchase month, outside the interest the segment accretes. */
+    private Projection project(String accountId, ReceivablesMath.Segment segment, LocalDate through, BigInteger upfrontFee) {
         ReceivablesMath.days(segment.startDate(), through);
         TreeSet<LocalDate> boundaries = new TreeSet<>(List.of(segment.startDate(), through));
         segment.cashflows().stream().map(ReceivablesMath.Cashflow::dueDate).filter(d -> !d.isAfter(through)).forEach(boundaries::add);
@@ -180,6 +184,9 @@ public class ReceivablesCalculationService {
         Map<String, BigInteger> outstanding = new LinkedHashMap<>();
         List<JsonNode> positions = new ArrayList<>();
         Map<YearMonth, ReceivablesMath.Income> monthly = new LinkedHashMap<>();
+        if (upfrontFee.signum() > 0) {
+            monthly.put(YearMonth.from(segment.startDate()), new ReceivablesMath.Income(BigInteger.ZERO, upfrontFee, BigInteger.ZERO));
+        }
         ReceivablesMath.Position previous = ReceivablesMath.position(segment, segment.startDate(), outstanding);
         for (LocalDate boundary : boundaries) {
             var before = ReceivablesMath.position(segment, boundary, outstanding);
@@ -189,7 +196,7 @@ public class ReceivablesCalculationService {
                 var old = monthly.getOrDefault(period, new ReceivablesMath.Income(BigInteger.ZERO, BigInteger.ZERO, BigInteger.ZERO));
                 monthly.put(period,
                         new ReceivablesMath.Income(old.grossDiscountIncomeMinor().add(income.grossDiscountIncomeMinor()),
-                                old.integralFeeIncomeMinor().add(income.integralFeeIncomeMinor()),
+                                old.adminFeeIncomeMinor().add(income.adminFeeIncomeMinor()),
                                 old.interestIncomeMinor().add(income.interestIncomeMinor())));
             }
             positions.add(analytical(accountId, before, segment, "BEFORE_EVENTS"));
@@ -211,7 +218,7 @@ public class ReceivablesCalculationService {
             row.put("accountId", accountId);
             row.put("period", period.toString());
             row.put("grossDiscountIncomeMinor", amount.grossDiscountIncomeMinor().toString());
-            row.put("integralFeeIncomeMinor", amount.integralFeeIncomeMinor().toString());
+            row.put("adminFeeIncomeMinor", amount.adminFeeIncomeMinor().toString());
             row.put("interestIncomeMinor", amount.interestIncomeMinor().toString());
             income.add(row);
         });
@@ -222,7 +229,7 @@ public class ReceivablesCalculationService {
         ObjectNode result = json.object();
         result.put("contractualFaceMinor", face.toString());
         result.put("grossPurchasePriceMinor", gross.toString());
-        result.put("integralFeeMinor", fee.toString());
+        result.put("adminFeeMinor", fee.toString());
         result.put("netPurchaseCashMinor", net.toString());
         return result;
     }
@@ -317,9 +324,9 @@ public class ReceivablesCalculationService {
                 && n.subtract(allowance).equals(minor(wire, "netCarryingMinor")) && wire.path("daysPastDue").asInt() == dpd,
                 "SOURCE_CHANGED");
         require(future.add(due).subtract(g).equals(minor(wire, "deferredDiscountMinor"))
-                && g.subtract(n).equals(minor(wire, "deferredIntegralFeeMinor")), "SOURCE_CHANGED");
+                && g.subtract(n).equals(minor(wire, "deferredAdminFeeMinor")), "SOURCE_CHANGED");
         var position = new ReceivablesMath.Position(date, future.add(due), future, due, g, n, minor(wire, "deferredDiscountMinor"),
-                minor(wire, "deferredIntegralFeeMinor"), dpd, gross, net, legs);
+                minor(wire, "deferredAdminFeeMinor"), dpd, gross, net, legs);
         ReceivablesMath.allocateGross(position);
         ReceivablesMath.allocateNet(position);
         String version = ReceivablesMeasurement.calculationVersion(input);
@@ -336,7 +343,7 @@ public class ReceivablesCalculationService {
      * reproduce the supplied bases and the request is rejected as a changed measurement.
      */
     private static LocalDate segmentStart(JsonNode input, String version, LocalDate date) {
-        if (!version.equals(ReceivablesMath.SIMPLE_CALCULATION_VERSION)) {
+        if (ReceivablesMath.compounding(version).equals("DAILY")) {
             return date;
         }
         LocalDate start = null;
@@ -348,12 +355,13 @@ public class ReceivablesCalculationService {
         return start;
     }
 
-    private ObjectNode after(JsonNode before, ReceivablesMath.Position position, BigInteger allowance) {
+    private ObjectNode after(JsonNode before, ReceivablesMath.Segment segment, ReceivablesMath.Position position, BigInteger allowance) {
         require(allowance.signum() >= 0 && allowance.compareTo(position.amortizedCostMinor()) <= 0, "INVALID_DATA");
         ObjectNode result = before.deepCopy();
         result.setAll(measurement.measures(position, allowance));
         result.put("businessDate", position.businessDate().toString());
         result.put("boundarySide", "AFTER_EVENTS");
+        result.put("calculationVersion", segment.calculationVersion());
         if (position.contractualOutstandingMinor().signum() == 0) {
             result.put("nativeLoanStatus", "CLOSED");
         }
@@ -368,7 +376,7 @@ public class ReceivablesCalculationService {
         require(new HashSet<>(measurement.flows(input.get("remainingCashflows"))).equals(new HashSet<>(state.segment().cashflows())),
                 "SOURCE_CHANGED");
         BigInteger allowance = minor(input.get("position"), "lossAllowanceMinor");
-        ObjectNode beforeWire = after(input.get("position"), before, allowance);
+        ObjectNode beforeWire = after(input.get("position"), state.segment(), before, allowance);
         beforeWire.put("boundarySide", "BEFORE_EVENTS");
         result.set("positionBefore", beforeWire);
         ObjectNode after = beforeWire.deepCopy();
@@ -439,12 +447,12 @@ public class ReceivablesCalculationService {
         result.put("extinguishedFaceMinor", settlement.faceExtinguishedMinor().toString());
         result.put("grossPurchaseBasisMinor", settlement.grossBasisMinor().toString());
         result.put("deferredDiscountMinor", settlement.deferredDiscountMinor().toString());
-        result.put("deferredIntegralFeeMinor", settlement.deferredIntegralFeeMinor().toString());
+        result.put("deferredAdminFeeMinor", settlement.deferredAdminFeeMinor().toString());
         result.put("developerShareMinor", settlement.developerShareMinor().toString());
         result.put("financierIncomeMinor", settlement.financierIncomeMinor().toString());
         result.put("releasedAllowanceMinor", released.toString());
         result.put("commercialAdjustmentMinor", settlement.faceExtinguishedMinor().subtract(settlement.payoffMinor()).toString());
-        ObjectNode after = after(input.get("position"), partial.retainedPosition(), oldAllowance.subtract(released));
+        ObjectNode after = after(input.get("position"), state.segment(), partial.retainedPosition(), oldAllowance.subtract(released));
         after.put("developerPayableMinor", minor(after, "developerPayableMinor").add(settlement.developerShareMinor()).toString());
         result.set("positionAfter", after);
     }
@@ -466,7 +474,7 @@ public class ReceivablesCalculationService {
         result.put("scheduledIncomeMinor", "0");
         result.put("expectedRecoveryUnwindMinor", "0");
         result.put("stage3BridgeMinor", "0");
-        ObjectNode after = after(input.get("position"), state.boundaryPosition(), impairment.lossAllowanceMinor());
+        ObjectNode after = after(input.get("position"), state.segment(), state.boundaryPosition(), impairment.lossAllowanceMinor());
         after.set("stage", forecast.get("stage"));
         result.set("positionAfter", after);
     }

@@ -70,7 +70,7 @@ final class ReceivablesAcquisitionScenarios {
         }
         assertThat(group.path("originalPurchaseCashMinor").asText()).isEqualTo(cash.toString());
         assertThat(new BigInteger(group.path("originalGrossPurchasePriceMinor").asText())
-                .subtract(new BigInteger(group.path("originalIntegralFeeMinor").asText()))).isEqualTo(cash);
+                .subtract(new BigInteger(group.path("originalAdminFeeMinor").asText()))).isEqualTo(cash);
         JsonNode first = get("/acquisitions/closing-one/accounts?limit=1");
         JsonNode second = get("/acquisitions/closing-one/accounts?limit=1&cursor=" + first.path("nextCursor").asText());
         assertThat(first.path("items").size()).isEqualTo(1);
@@ -104,7 +104,10 @@ final class ReceivablesAcquisitionScenarios {
 
     private void verifyProjectRateBookings() throws Exception {
         assertThat(get("/capabilities").path("projectAcquisitionRateVersion").asText()).isEqualTo("1");
-        for (String version : ReceivablesConfiguration.CALCULATIONS) {
+        // mapping-1 is the legacy account set, so only deferred-fee versions can book here; DAILY_V2 books after
+        // migration.
+        for (String version : List.of(ReceivablesConfiguration.CALCULATION,
+                co.mnzl.fineract.receivables.math.ReceivablesMath.SIMPLE_CALCULATION_VERSION)) {
             String id = version.equals(ReceivablesConfiguration.CALCULATION) ? "project-daily" : "project-simple";
             ObjectNode command = harness.preparePurchase(id, "50000", "50000", id + "-acquisition", version);
             ObjectNode basis = (ObjectNode) command.get("basis");

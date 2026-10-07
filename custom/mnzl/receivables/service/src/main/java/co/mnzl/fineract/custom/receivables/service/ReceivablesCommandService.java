@@ -58,13 +58,16 @@ public class ReceivablesCommandService {
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public JsonNode execute(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
+        // The payload is hashed exactly as sent. A payload stored before the admin fee rename keeps its legacy names:
+        // they are aliased to validate its replay, and a new command must already use the current names.
         JsonNode input = json.read(request);
-        String type = text(input, "commandType");
-        JsonNode command = json.validate(type.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "helFundingCommand"
-                : type.equals("ALLOCATE_HEL_DEVELOPER_ADVANCE") ? "helAdvanceAllocationCommand" : "financialCommand", request);
+        JsonNode command = ReceivablesLegacy.current(input);
+        String type = text(command, "commandType");
+        json.validate(type.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "helFundingCommand"
+                : type.equals("ALLOCATE_HEL_DEVELOPER_ADVANCE") ? "helAdvanceAllocationCommand" : "financialCommand", command);
         var config = configuration.authorize(command.get("scope"), true);
         var execution = new ReceivablesExecution(command, configuration.scopeKey(command.get("scope")), config);
-        String payloadHash = json.hash(command);
+        String payloadHash = json.hash(input);
         String idempotencyHash = ReceivablesJson.hashText(text(command, "idempotencyKey"));
         var existingKeys = store.jdbc().queryForList("select record_key from m_mnzl_r_command where scope_key=? and idempotency_hash=?",
                 execution.scope, idempotencyHash);
@@ -76,6 +79,7 @@ public class ReceivablesCommandService {
             require(existing.get("result_json") != null, "RECOVERY_REQUIRED");
             return json.read(string(existing, "result_json"));
         }
+        require(!ReceivablesLegacy.legacy(input), "INVALID_DATA");
         // Lock before any core or custom financial effects. Exact durable replay above never needs this lock.
         ledger.lockOffice(number(config, "office_id"));
         configuration.validateExecution(command, config, payloadHash);
@@ -167,13 +171,13 @@ public class ReceivablesCommandService {
     }
 
     /**
-     * An event carries one calculation version, so a command whose accounts are pinned to different accretion rules (a
-     * developer settlement across daily and simple lots, for example) is refused rather than misreported; split it per
-     * version. A command that touches no account reports the daily default.
+     * Each position names its account's pinned version, and measurement is per account, so a command may touch accounts
+     * under different versions (a period close over daily V1 and V2 accounts, for example). The event names the version
+     * only when every position shares it, the daily default when no account is touched, and nothing (null) otherwise.
      */
     static String eventVersion(Set<String> pinnedVersions) {
-        require(pinnedVersions.size() <= 1, "INVALID_DATA");
-        return pinnedVersions.isEmpty() ? ReceivablesConfiguration.CALCULATION : pinnedVersions.iterator().next();
+        return pinnedVersions.isEmpty() ? ReceivablesConfiguration.CALCULATION
+                : pinnedVersions.size() == 1 ? pinnedVersions.iterator().next() : null;
     }
 
     private JsonNode finish(ReceivablesExecution e, String payloadHash, Instant now) {
@@ -192,7 +196,10 @@ public class ReceivablesCommandService {
         var journalLines = ledger.post(e.scope, e.eventKey, e.postingDate, number(e.configuration, "office_id"),
                 string(e.configuration, "mapping_revision"), e.lines);
         var event = json.object();
-        event.put("calculationVersion", eventVersion(versions));
+        String version = eventVersion(versions);
+        if (version != null) {
+            event.put("calculationVersion", version);
+        }
         event.put("productPolicyCode", ReceivablesConfiguration.POLICY);
         event.put("schemaVersion", "1");
         event.put("policyRevisionId", string(e.configuration, "policy_revision"));

@@ -2693,7 +2693,8 @@
             "type": "string",
             "enum": [
               "EG_RECEIVABLES_ACT360_DAILY_V1",
-              "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+              "EG_RECEIVABLES_ACT360_DAILY_V2"
             ]
           },
           "productPolicyCode": {
@@ -2847,7 +2848,7 @@
           "grossPurchasePriceMinor": {
             "$ref": "#/components/schemas/version"
           },
-          "integralFeeMinor": {
+          "adminFeeMinor": {
             "$ref": "#/components/schemas/version"
           },
           "netPurchaseCashMinor": {
@@ -2857,7 +2858,7 @@
         "required": [
           "accountId",
           "grossPurchasePriceMinor",
-          "integralFeeMinor",
+          "adminFeeMinor",
           "netPurchaseCashMinor"
         ],
         "additionalProperties": false
@@ -2887,7 +2888,7 @@
           "deferredDiscountMinor": {
             "$ref": "#/components/schemas/minorUnits"
           },
-          "deferredIntegralFeeMinor": {
+          "deferredAdminFeeMinor": {
             "$ref": "#/components/schemas/minorUnits"
           },
           "amortizedCostMinor": {
@@ -2916,7 +2917,7 @@
           "pastDueMinor",
           "grossPurchaseBasisMinor",
           "deferredDiscountMinor",
-          "deferredIntegralFeeMinor",
+          "deferredAdminFeeMinor",
           "amortizedCostMinor",
           "grossYield",
           "netEir",
@@ -3067,8 +3068,9 @@
           "grossDiscountIncomeMinor": {
             "$ref": "#/components/schemas/minorUnits"
           },
-          "integralFeeIncomeMinor": {
-            "$ref": "#/components/schemas/minorUnits"
+          "adminFeeIncomeMinor": {
+            "$ref": "#/components/schemas/minorUnits",
+            "description": "Deferred admin fee versions: the fee's EIR accretion, included in interestIncomeMinor. EG_RECEIVABLES_ACT360_DAILY_V2: the whole admin fee in the purchase month, outside interestIncomeMinor."
           },
           "interestIncomeMinor": {
             "$ref": "#/components/schemas/minorUnits"
@@ -3078,7 +3080,7 @@
           "accountId",
           "period",
           "grossDiscountIncomeMinor",
-          "integralFeeIncomeMinor",
+          "adminFeeIncomeMinor",
           "interestIncomeMinor"
         ],
         "additionalProperties": false
@@ -3108,6 +3110,15 @@
           "boundarySide": {
             "$ref": "#/components/schemas/boundarySide"
           },
+          "calculationVersion": {
+            "type": "string",
+            "enum": [
+              "EG_RECEIVABLES_ACT360_DAILY_V1",
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+              "EG_RECEIVABLES_ACT360_DAILY_V2"
+            ],
+            "description": "The account's pinned calculation version. Always present on positions this runtime emits, including every positionsAfter entry of newly written events; absent only on sealed events written before positions named their version, where the event-level calculationVersion applies."
+          },
           "nativeLoanId": {
             "$ref": "#/components/schemas/id"
           },
@@ -3135,7 +3146,7 @@
           "deferredDiscountMinor": {
             "$ref": "#/components/schemas/minorUnits"
           },
-          "deferredIntegralFeeMinor": {
+          "deferredAdminFeeMinor": {
             "$ref": "#/components/schemas/minorUnits"
           },
           "amortizedCostMinor": {
@@ -3218,7 +3229,7 @@
           "pastDueMinor",
           "grossPurchaseBasisMinor",
           "deferredDiscountMinor",
-          "deferredIntegralFeeMinor",
+          "deferredAdminFeeMinor",
           "amortizedCostMinor",
           "lossAllowanceMinor",
           "netCarryingMinor",
@@ -3243,7 +3254,7 @@
           "grossPurchasePriceMinor": {
             "$ref": "#/components/schemas/version"
           },
-          "integralFeeMinor": {
+          "adminFeeMinor": {
             "$ref": "#/components/schemas/version"
           },
           "netPurchaseCashMinor": {
@@ -3280,7 +3291,7 @@
         "required": [
           "contractualFaceMinor",
           "grossPurchasePriceMinor",
-          "integralFeeMinor",
+          "adminFeeMinor",
           "netPurchaseCashMinor",
           "accountId",
           "grossYield",
@@ -3336,7 +3347,7 @@
           "grossPurchasePriceMinor": {
             "$ref": "#/components/schemas/version"
           },
-          "integralFeeMinor": {
+          "adminFeeMinor": {
             "$ref": "#/components/schemas/version"
           },
           "netPurchaseCashMinor": {
@@ -3346,7 +3357,7 @@
         "required": [
           "contractualFaceMinor",
           "grossPurchasePriceMinor",
-          "integralFeeMinor",
+          "adminFeeMinor",
           "netPurchaseCashMinor"
         ],
         "additionalProperties": false
@@ -3594,7 +3605,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -3644,7 +3656,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -3695,7 +3708,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -3777,7 +3791,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -3871,7 +3886,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -3937,7 +3953,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -10009,7 +10026,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -10059,7 +10077,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -10285,7 +10304,8 @@
           "contractualReceivable",
           "installmentDues",
           "deferredDiscount",
-          "deferredIntegralFee",
+          "deferredAdminFee",
+          "adminFeeIncome",
           "lossAllowance",
           "developerReceivable",
           "developerReceivableAllowance",
@@ -10314,8 +10334,10 @@
             "type": "string",
             "enum": [
               "EG_RECEIVABLES_ACT360_DAILY_V1",
-              "EG_RECEIVABLES_ACT360_SIMPLE_V1"
-            ]
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+              "EG_RECEIVABLES_ACT360_DAILY_V2"
+            ],
+            "description": "Present when every position in positionsAfter shares one calculation version (that version), or the daily default when the event touches no account; omitted when positionsAfter spans versions. Each position names its own version."
           },
           "productPolicyCode": {
             "type": "string",
@@ -10485,7 +10507,6 @@
           }
         },
         "required": [
-          "calculationVersion",
           "productPolicyCode",
           "schemaVersion",
           "policyRevisionId",
@@ -10510,6 +10531,445 @@
           "contentHash"
         ],
         "additionalProperties": false
+      },
+      "legacyFinancialEvent": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "calculationVersion": {
+            "type": "string",
+            "enum": [
+              "EG_RECEIVABLES_ACT360_DAILY_V1",
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+              "EG_RECEIVABLES_ACT360_DAILY_V2"
+            ],
+            "description": "Present when every position in positionsAfter shares one calculation version (that version), or the daily default when the event touches no account; omitted when positionsAfter spans versions. Each position names its own version."
+          },
+          "productPolicyCode": {
+            "type": "string",
+            "const": "EG_RECEIVABLES_V1"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "const": "1"
+          },
+          "policyRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "calculatorBuild": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountMappingRevisionId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "bankMovements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cashMovementId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "bankSourceId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "bankAccountReference": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "verificationEvidenceId": {
+                  "$ref": "#/components/schemas/id"
+                },
+                "valueDate": {
+                  "$ref": "#/components/schemas/financialDate"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "INCOMING",
+                    "OUTGOING"
+                  ]
+                },
+                "amountMinor": {
+                  "$ref": "#/components/schemas/version"
+                },
+                "currency": {
+                  "$ref": "#/components/schemas/currency"
+                },
+                "allocationIds": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/id"
+                  }
+                }
+              },
+              "required": [
+                "cashMovementId",
+                "bankSourceId",
+                "bankAccountReference",
+                "verificationEvidenceId",
+                "valueDate",
+                "direction",
+                "amountMinor",
+                "currency",
+                "allocationIds"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "eventType": {
+            "type": "string",
+            "const": "flex.receivables.financial-event.v1"
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "RECEIVABLE",
+              "HEL",
+              "FUNDING",
+              "CASH",
+              "CLOSE"
+            ]
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/financialScope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountSequence": {
+            "$ref": "#/components/schemas/version"
+          },
+          "allocationIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "operationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "causationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "postingPeriod": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])$"
+          },
+          "sourceTransactionIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/id"
+            }
+          },
+          "reversalOfEventId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correctionOfEventId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "originalValueDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "journalLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/legacyJournalLine"
+            }
+          },
+          "positionsAfter": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/legacyPosition"
+            }
+          },
+          "contentHash": {
+            "$ref": "#/components/schemas/sha256"
+          }
+        },
+        "required": [
+          "productPolicyCode",
+          "schemaVersion",
+          "policyRevisionId",
+          "calculatorBuild",
+          "accountMappingRevisionId",
+          "bankMovements",
+          "eventType",
+          "sourceKind",
+          "eventId",
+          "scope",
+          "tenantId",
+          "allocationIds",
+          "operationId",
+          "causationId",
+          "businessDate",
+          "postingPeriod",
+          "sourceTransactionIds",
+          "reversalOfEventId",
+          "correctionOfEventId",
+          "journalLines",
+          "positionsAfter",
+          "contentHash"
+        ],
+        "additionalProperties": false,
+        "description": "A sealed financial event written before the admin fee rename, returned byte-for-byte by the events feed and verified against its stored contentHash. Its positions and journal lines carry the legacy fee names; read them as their admin fee equivalents. Never written: new events always validate as financialEvent."
+      },
+      "legacyJournalLine": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "journalId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "bankMovementId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "sourceLineId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountKey": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/accountKey"
+              },
+              {
+                "type": "string",
+                "const": "deferredIntegralFee",
+                "description": "Legacy name of deferredAdminFee."
+              }
+            ]
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "DEBIT",
+              "CREDIT"
+            ]
+          },
+          "amountMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/currency"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "component": {
+            "type": "string",
+            "enum": [
+              "FACE",
+              "DISCOUNT",
+              "INTEGRAL_FEE",
+              "SETTLEMENT",
+              "UNWIND",
+              "IMPAIRMENT",
+              "CASH",
+              "FUNDING",
+              "MODIFICATION",
+              "DEVELOPER_ADJUSTMENT"
+            ]
+          }
+        },
+        "required": [
+          "journalId",
+          "sourceLineId",
+          "accountKey",
+          "side",
+          "amountMinor",
+          "currency",
+          "component"
+        ],
+        "additionalProperties": false,
+        "description": "A journal line of a sealed event written before the admin fee rename: the deferred fee account key is deferredIntegralFee and its component INTEGRAL_FEE. Read-only; never written."
+      },
+      "legacyPosition": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/scope"
+          },
+          "tenantId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "dealId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "receivableId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "businessDate": {
+            "$ref": "#/components/schemas/financialDate"
+          },
+          "boundarySide": {
+            "$ref": "#/components/schemas/boundarySide"
+          },
+          "calculationVersion": {
+            "type": "string",
+            "enum": [
+              "EG_RECEIVABLES_ACT360_DAILY_V1",
+              "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+              "EG_RECEIVABLES_ACT360_DAILY_V2"
+            ],
+            "description": "The account's pinned calculation version. Always present on positions this runtime emits, including every positionsAfter entry of newly written events; absent only on sealed events written before positions named their version, where the event-level calculationVersion applies."
+          },
+          "nativeLoanId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "nativeLoanStatus": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "CLOSED",
+              "WRITTEN_OFF",
+              "ASSIGNED_OUT"
+            ]
+          },
+          "contractualOutstandingMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "notYetDueMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "pastDueMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossPurchaseBasisMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "deferredDiscountMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "deferredIntegralFeeMinor": {
+            "$ref": "#/components/schemas/minorUnits"
+          },
+          "amortizedCostMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "lossAllowanceMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "netCarryingMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "developerPayableMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "developerReceivableMinor": {
+            "$ref": "#/components/schemas/version"
+          },
+          "grossYield": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "netEir": {
+            "$ref": "#/components/schemas/decimal"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "STAGE_1",
+                  "STAGE_2",
+                  "STAGE_3"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daysPastDue": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "accountVersion": {
+            "$ref": "#/components/schemas/version"
+          },
+          "lastFinancialEventId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "riskAssessmentStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ASSESSED"
+            ]
+          },
+          "unreconciledPurchaseMinor": {
+            "$ref": "#/components/schemas/version"
+          }
+        },
+        "required": [
+          "scope",
+          "tenantId",
+          "dealId",
+          "accountId",
+          "receivableId",
+          "businessDate",
+          "boundarySide",
+          "nativeLoanId",
+          "nativeLoanStatus",
+          "contractualOutstandingMinor",
+          "notYetDueMinor",
+          "pastDueMinor",
+          "grossPurchaseBasisMinor",
+          "deferredDiscountMinor",
+          "deferredIntegralFeeMinor",
+          "amortizedCostMinor",
+          "lossAllowanceMinor",
+          "netCarryingMinor",
+          "developerPayableMinor",
+          "developerReceivableMinor",
+          "grossYield",
+          "netEir",
+          "stage",
+          "daysPastDue",
+          "accountVersion",
+          "lastFinancialEventId"
+        ],
+        "additionalProperties": false,
+        "description": "A position of a sealed event written before the admin fee rename: deferredIntegralFeeMinor is the legacy name of deferredAdminFeeMinor. Read-only; never written."
       },
       "journalLine": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -10551,7 +11011,7 @@
             "enum": [
               "FACE",
               "DISCOUNT",
-              "INTEGRAL_FEE",
+              "ADMIN_FEE",
               "SETTLEMENT",
               "UNWIND",
               "IMPAIRMENT",
@@ -10816,12 +11276,13 @@
               "type": "string",
               "enum": [
                 "EG_RECEIVABLES_ACT360_DAILY_V1",
-                "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                "EG_RECEIVABLES_ACT360_DAILY_V2"
               ]
             },
             "minItems": 1,
             "uniqueItems": true,
-            "description": "Every accretion rule this runtime can pin on an account at booking; calculationVersion stays the daily default."
+            "description": "Every calculation version this runtime can pin on an account at booking under the active account mapping revision; EG_RECEIVABLES_ACT360_DAILY_V2 (admin fee recognised at purchase) needs the admin fee account set. calculationVersion stays the daily default."
           },
           "productPolicyCode": {
             "type": "string",
@@ -11241,8 +11702,16 @@
             "maxItems": 200,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/financialEvent"
-            }
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/financialEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/legacyFinancialEvent"
+                }
+              ]
+            },
+            "description": "Stored events as sealed. Events written before the admin fee rename match legacyFinancialEvent; every other event matches financialEvent."
           },
           "nextCursor": {
             "anyOf": [
@@ -11730,7 +12199,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -11784,7 +12254,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -11848,7 +12319,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -11929,7 +12401,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -11971,7 +12444,7 @@
               "deferredDiscountMinor": {
                 "$ref": "#/components/schemas/minorUnits"
               },
-              "deferredIntegralFeeMinor": {
+              "deferredAdminFeeMinor": {
                 "$ref": "#/components/schemas/minorUnits"
               },
               "developerShareMinor": {
@@ -12003,7 +12476,7 @@
               "extinguishedFaceMinor",
               "grossPurchaseBasisMinor",
               "deferredDiscountMinor",
-              "deferredIntegralFeeMinor",
+              "deferredAdminFeeMinor",
               "developerShareMinor",
               "financierIncomeMinor",
               "releasedAllowanceMinor",
@@ -12019,7 +12492,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -12097,7 +12571,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -12179,7 +12654,8 @@
                 "type": "string",
                 "enum": [
                   "EG_RECEIVABLES_ACT360_DAILY_V1",
-                  "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+                  "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+                  "EG_RECEIVABLES_ACT360_DAILY_V2"
                 ]
               },
               "productPolicyCode": {
@@ -13466,13 +13942,22 @@
           },
           "accountMap": {
             "minItems": 22,
-            "maxItems": 22,
+            "maxItems": 23,
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
                 "accountKey": {
-                  "$ref": "#/components/schemas/accountKey"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/accountKey"
+                    },
+                    {
+                      "type": "string",
+                      "const": "deferredIntegralFee",
+                      "description": "Legacy name of deferredAdminFee; valid only in the complete legacy set."
+                    }
+                  ]
                 },
                 "nativeGlAccountId": {
                   "$ref": "#/components/schemas/id"
@@ -13483,7 +13968,8 @@
                 "nativeGlAccountId"
               ],
               "additionalProperties": false
-            }
+            },
+            "description": "Exactly one complete account set: the admin fee set (every accountKey), or the legacy set approved before the admin fee, which names the deferred fee deferredIntegralFee and has no adminFeeIncome. A used scope may only move from the legacy set to the admin fee set, keeping every route and adding adminFeeIncome."
           }
         },
         "required": [
@@ -14019,7 +14505,7 @@
           "grossPurchasePriceMinor": {
             "$ref": "#/components/schemas/version"
           },
-          "integralFeeMinor": {
+          "adminFeeMinor": {
             "$ref": "#/components/schemas/version"
           },
           "netPurchaseCashMinor": {
@@ -14032,7 +14518,7 @@
         "required": [
           "contractualFaceMinor",
           "grossPurchasePriceMinor",
-          "integralFeeMinor",
+          "adminFeeMinor",
           "netPurchaseCashMinor",
           "accountId"
         ],
@@ -14147,7 +14633,7 @@
           "originalGrossPurchasePriceMinor": {
             "$ref": "#/components/schemas/version"
           },
-          "originalIntegralFeeMinor": {
+          "originalAdminFeeMinor": {
             "$ref": "#/components/schemas/version"
           },
           "originalPurchaseCashMinor": {
@@ -14168,7 +14654,7 @@
           "activeAccountCount",
           "originalFaceMinor",
           "originalGrossPurchasePriceMinor",
-          "originalIntegralFeeMinor",
+          "originalAdminFeeMinor",
           "originalPurchaseCashMinor",
           "currentContractualOutstandingMinor"
         ],
@@ -14588,7 +15074,8 @@
         "type": "string",
         "enum": [
           "EG_RECEIVABLES_ACT360_DAILY_V1",
-          "EG_RECEIVABLES_ACT360_SIMPLE_V1"
+          "EG_RECEIVABLES_ACT360_SIMPLE_V1",
+          "EG_RECEIVABLES_ACT360_DAILY_V2"
         ]
       }
     }

@@ -19,24 +19,24 @@
 package co.mnzl.fineract.custom.receivables.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import co.mnzl.fineract.receivables.math.ReceivablesMath;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** A financial event names exactly one accretion rule. */
+/** An event names a version only when every position shares it; positions always name their own. */
 class ReceivablesCommandVersionTest {
 
     @Test
-    void eventVersionIsThePinnedRuleOrTheDefaultAndNeverAMixture() {
+    void eventVersionIsTheSharedPinnedVersionTheDefaultOrAbsent() {
         assertThat(ReceivablesCommandService.eventVersion(Set.of())).isEqualTo(ReceivablesConfiguration.CALCULATION);
         assertThat(ReceivablesCommandService.eventVersion(Set.of(ReceivablesMath.SIMPLE_CALCULATION_VERSION)))
                 .isEqualTo(ReceivablesMath.SIMPLE_CALCULATION_VERSION);
         assertThat(ReceivablesCommandService.eventVersion(Set.of(ReceivablesMath.CALCULATION_VERSION)))
                 .isEqualTo(ReceivablesMath.CALCULATION_VERSION);
-        assertThatThrownBy(() -> ReceivablesCommandService
-                .eventVersion(Set.of(ReceivablesMath.CALCULATION_VERSION, ReceivablesMath.SIMPLE_CALCULATION_VERSION)))
-                .isInstanceOf(ReceivablesException.class).hasMessage("INVALID_DATA");
+        assertThat(ReceivablesCommandService
+                .eventVersion(Set.of(ReceivablesMath.CALCULATION_VERSION, ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION))).isNull();
+        assertThat(ReceivablesCommandService
+                .eventVersion(Set.of(ReceivablesMath.CALCULATION_VERSION, ReceivablesMath.SIMPLE_CALCULATION_VERSION))).isNull();
     }
 }

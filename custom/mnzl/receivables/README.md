@@ -182,27 +182,68 @@ it cannot follow the measurement date), because simple legs between two cheques
 are shares of the balance walked from that start; daily legs still rebuild from
 the measurement date as before.
 
-A financial event names one version, so a command whose accounts are pinned to
-different rules (a developer settlement that mixes daily and simple lots, for
-example) is refused with `INVALID_DATA` before anything is posted; settle such
-lots in one command per version.
+Every position names its account's pinned `calculationVersion`, and measurement,
+accrual, lots and settlement are per account, so one command may touch accounts
+under different versions (a period close over DAILY_V1 and DAILY_V2 accounts, or
+a developer settlement across daily and simple lots). The event-level
+`calculationVersion` is present only when every position shares one version (the
+daily default when the event touches no account) and omitted otherwise. Sealed
+events written before positions named their version are never rewritten; reads
+take their positions' version from the event level.
 
 `GET /capabilities` keeps `calculationVersion` as the daily default and adds
-`calculationVersions`, the list a caller may pin at booking. Financial events
-report the version of the accounts they touched (the default when an operation
-touches no account). `GET /configuration/runtime` is unchanged.
+`calculationVersions`, the list a caller may pin at booking under the active
+account mapping revision (DAILY_V2 only once it routes the admin fee set). Financial events
+report the shared version of the accounts they touched, if any (the default when
+an operation touches no account). `GET /configuration/runtime` is unchanged.
 
 The Docker-backed database integration test books a simple account beside a
 daily one, reloads the segment for a later impairment and reset, and checks the
 pinned version on the segment row, the event and the adjustment lot, the
 simple-rule journal amounts, and the refusal of a mixed-version settlement.
 
+## Admin fee
+
+The purchase fee (`adminFeeMinor`, `A = round(G × feeRate)`) is either deferred
+(DAILY_V1, SIMPLE_V1: credited to `deferredAdminFee` and amortised through the net
+EIR) or recognised in full at purchase under `EG_RECEIVABLES_ACT360_DAILY_V2`. A
+DAILY_V2 purchase, historical or not, posts DR `contractualReceivable` face, CR
+`deferredDiscount` `F − G`, CR `acquisitionClearing` net cash and CR
+`adminFeeIncome` `A` (component `ADMIN_FEE`), with no deferred fee line; amortised
+cost after purchase is `G` and `deferredAdminFeeMinor` stays zero. Pricing
+projections report the upfront fee as the purchase month's `adminFeeIncomeMinor`,
+outside `interestIncomeMinor`; for deferred versions that field is the fee's EIR
+accretion inside interest income. `m_mnzl_r_account.purchase_fee_minor` stores the
+purchase admin fee under every version.
+
+Configuration revisions hold exactly one account set. The legacy set, approved
+before the admin fee, names the deferred fee `deferredIntegralFee` and has no
+`adminFeeIncome`; the admin fee set renames it `deferredAdminFee` and adds
+`adminFeeIncome`. Reads, ledger posting, controls and period proofs use current
+keys under either set, so legacy revisions and their historical proofs keep
+validating and deferred-fee versions post under either. DAILY_V2 bookings require
+an active admin fee set and otherwise fail with `FINERACT_CAPABILITY_MISSING`.
+The only account map change a used scope accepts is legacy to admin fee set with
+`deferredAdminFee` on the same GL account as `deferredIntegralFee`; activation
+inserts the new account map rows and drops the renamed one. Activating that
+revision is an operational step.
+
+Hash-sealed records keep their stored bytes and hashes: commands, events and their
+journal lines, account terms, configuration revisions and period snapshots.
+`ReceivablesLegacy` aliases their integral fee field names, account key and journal
+component to the admin fee names when parsed (event positions, journal readback,
+controls, proofs, copied terms); hashes are always computed over the stored JSON.
+A stored command payload carrying legacy names replays idempotently against its
+stored payload hash, while a new command must use current names. Unhashed segment
+snapshots are migrated in place by changeset `0008`. The events feed and
+configuration reads return sealed records unchanged.
+
 ## Lightweight pricing estimates
 
 `POST /pricing-calculations` accepts `includeProjections: false` on a `PRICE`
 request and returns `calculationType: PRICE_ESTIMATE`. The response contains the
 validated calculation basis, exact per-account face, gross purchase price,
-integral fee and net cash, plus portfolio totals. It does not include analytical
+admin fee and net cash, plus portfolio totals. It does not include analytical
 yields, balance projections or monthly accounting income. Authentication, native
 scope authorization, build/version validation and the complete basis hash are
 unchanged. Estimates reject accepted-account-price overrides and perform no
@@ -288,7 +329,7 @@ command scope. Reusing the ID requires the same deal and all metadata.
 The first member creates the scoped acquisition record inside the existing
 financial transaction and scope lock. Later members reuse it; failed native
 booking rolls back both new membership and a newly created acquisition. Account
-rows retain original purchase face, gross cost, integral fee and net cash.
+rows retain original purchase face, gross cost, admin fee and net cash.
 Substitutions and workout exchanges inherit the acquisition, retain the original
 account ID and link their immediate predecessor. They do not add to original
 purchase totals; settled, replaced and written-off members remain discoverable.

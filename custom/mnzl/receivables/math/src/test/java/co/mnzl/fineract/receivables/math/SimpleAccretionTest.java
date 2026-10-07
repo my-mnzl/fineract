@@ -86,7 +86,8 @@ class SimpleAccretionTest {
 
     @Test
     void versionsAreExplicitAndTheDailyDefaultIsUnchanged() {
-        assertEquals(List.of(CALCULATION_VERSION, SIMPLE_CALCULATION_VERSION), SUPPORTED_VERSIONS);
+        assertEquals(List.of(CALCULATION_VERSION, SIMPLE_CALCULATION_VERSION, ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION),
+                SUPPORTED_VERSIONS);
         assertEquals(CALCULATION_VERSION, version(null));
         assertEquals(CALCULATION_VERSION, version(" "));
         assertEquals(SIMPLE_CALCULATION_VERSION, version(SIMPLE_CALCULATION_VERSION));
@@ -133,7 +134,7 @@ class SimpleAccretionTest {
         Purchase simple = simple();
         assertEquals(daily.unroundedGrossPrice(), simple.unroundedGrossPrice());
         assertEquals(daily.grossPurchasePriceMinor(), simple.grossPurchasePriceMinor());
-        assertEquals(daily.integralFeeMinor(), simple.integralFeeMinor());
+        assertEquals(daily.adminFeeMinor(), simple.adminFeeMinor());
         assertEquals(daily.netPurchaseCashMinor(), simple.netPurchaseCashMinor());
         assertNotEquals(daily.segment().grossYield().rate(), simple.segment().grossYield().rate());
         assertTrue(simple.segment().grossYield().rate().compareTo(daily.segment().grossYield().rate()) > 0,
@@ -148,7 +149,7 @@ class SimpleAccretionTest {
         assertEquals(BigInteger.valueOf(6_000_000), beforeLast.grossPurchaseBasisMinor());
         assertEquals(BigInteger.valueOf(6_000_000), beforeLast.amortizedCostMinor());
         assertEquals(BigInteger.ZERO, beforeLast.deferredDiscountMinor());
-        assertEquals(BigInteger.ZERO, beforeLast.deferredIntegralFeeMinor());
+        assertEquals(BigInteger.ZERO, beforeLast.deferredAdminFeeMinor());
         var explanation = explain(s, beforeLast);
         assertEquals(SIMPLE_CALCULATION_VERSION, explanation.calculationVersion());
         assertEquals("SIMPLE_AT_CHEQUES", explanation.compounding());
@@ -167,8 +168,8 @@ class SimpleAccretionTest {
             Position before = position(s, month, outstanding);
             var inc = income(previous, before, BigInteger.ZERO);
             gross = gross.add(inc.grossDiscountIncomeMinor());
-            fee = fee.add(inc.integralFeeIncomeMinor());
-            assertTrue(inc.grossDiscountIncomeMinor().signum() >= 0 && inc.integralFeeIncomeMinor().signum() >= 0, month.toString());
+            fee = fee.add(inc.adminFeeIncomeMinor());
+            assertTrue(inc.grossDiscountIncomeMinor().signum() >= 0 && inc.adminFeeIncomeMinor().signum() >= 0, month.toString());
             for (Cashflow cf : flows()) {
                 if (!cf.dueDate().isAfter(month)) {
                     outstanding.put(cf.cashflowId(), BigInteger.ZERO);

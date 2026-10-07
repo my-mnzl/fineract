@@ -109,7 +109,9 @@ public class ReceivablesLedger {
         int sequence = 0;
         for (Line line : lines) {
             require(ReceivablesConfiguration.ACCOUNTS.contains(line.accountKey()) && line.amountMinor().signum() > 0, "JOURNAL_MISMATCH");
-            long glId = mappings.get(line.accountKey());
+            // A legacy revision routes the deferred fee under its current key but has no admin fee income.
+            Long glId = mappings.get(line.accountKey());
+            require(glId != null, "FINERACT_CAPABILITY_MISSING");
             var account = accounts.findById(glId).orElseThrow();
             require(!account.isDisabled() && account.isDetailAccount(), "FINERACT_CAPABILITY_MISSING");
             String sourceId = eventKey + ":" + sequence++;

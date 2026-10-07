@@ -144,14 +144,14 @@ class FinancialIdentitiesTest {
             cumulativeGross = cumulativeGross.add(daily.grossDiscountIncomeMinor());
             cumulativeNet = cumulativeNet.add(daily.interestIncomeMinor());
             assertEquals(current.amortizedCostMinor(), current.contractualOutstandingMinor().subtract(current.deferredDiscountMinor())
-                    .subtract(current.deferredIntegralFeeMinor()));
-            assertEquals(daily.interestIncomeMinor(), daily.grossDiscountIncomeMinor().add(daily.integralFeeIncomeMinor()));
+                    .subtract(current.deferredAdminFeeMinor()));
+            assertEquals(daily.interestIncomeMinor(), daily.grossDiscountIncomeMinor().add(daily.adminFeeIncomeMinor()));
             previous = current;
         }
         assertEquals(p.contractualFaceMinor().subtract(p.grossPurchasePriceMinor()), cumulativeGross);
         assertEquals(p.contractualFaceMinor().subtract(p.netPurchaseCashMinor()), cumulativeNet);
         assertEquals(BigInteger.ZERO, previous.deferredDiscountMinor());
-        assertEquals(BigInteger.ZERO, previous.deferredIntegralFeeMinor());
+        assertEquals(BigInteger.ZERO, previous.deferredAdminFeeMinor());
     }
 
     @Test
@@ -269,7 +269,7 @@ class FinancialIdentitiesTest {
         assertEquals(BigInteger.ZERO, income(retained, position(state, date), BigInteger.ZERO).interestIncomeMinor());
         Reset immediateReset = reset(state, date, new BigDecimal("0.20"));
         assertEquals(retained.amortizedCostMinor(), immediateReset.oldNetMinor());
-        assertEquals(retained.deferredIntegralFeeMinor(),
+        assertEquals(retained.deferredAdminFeeMinor(),
                 immediateReset.futureSegment().grossBasisMinor().subtract(immediateReset.futureSegment().netBasisMinor()));
         PartialSettlement second = settlePortions(retained, Map.of("c", BigInteger.valueOf(100028)), BigInteger.valueOf(100028),
                 BigInteger.ZERO);
@@ -280,7 +280,7 @@ class FinancialIdentitiesTest {
         assertEquals(p.segment().netEir(), afterSecond.segment().netEir());
         Position maturity = position(afterSecond, START.plusDays(365));
         assertEquals(BigInteger.ZERO, maturity.deferredDiscountMinor());
-        assertEquals(BigInteger.ZERO, maturity.deferredIntegralFeeMinor());
+        assertEquals(BigInteger.ZERO, maturity.deferredAdminFeeMinor());
         PartialSettlement terminal = settlePortions(maturity, second.remainingFaceMinor(), maturity.contractualOutstandingMinor(),
                 BigInteger.ZERO);
         assertEquals(BigInteger.ZERO, terminal.retainedPosition().contractualOutstandingMinor());
@@ -325,7 +325,7 @@ class FinancialIdentitiesTest {
         assertEquals(BigInteger.ZERO, buyback.developerShareMinor());
         assertEquals(BigInteger.valueOf(11000), buyback.financierIncomeMinor());
         assertEquals(BigInteger.valueOf(20000), buyback.deferredDiscountMinor());
-        assertEquals(BigInteger.valueOf(1000), buyback.deferredIntegralFeeMinor());
+        assertEquals(BigInteger.valueOf(1000), buyback.deferredAdminFeeMinor());
         assertEquals(allowance, buyback.allowanceReleasedMinor());
         Settlement voluntary = settle(face, gross, net, BigInteger.valueOf(90000), allowance);
         assertEquals(BigInteger.valueOf(5000), voluntary.developerShareMinor());

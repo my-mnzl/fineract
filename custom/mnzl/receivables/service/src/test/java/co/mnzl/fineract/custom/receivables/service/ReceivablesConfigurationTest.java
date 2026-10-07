@@ -112,4 +112,94 @@ class ReceivablesConfigurationTest {
                 .hasMessage("APPROVAL_SCOPE_CHANGED");
     }
 
+    private com.fasterxml.jackson.databind.node.ObjectNode configurationOf(java.util.Set<String> keys, long deferredFeeGl) {
+        var config = json.object().put("accountMappingRevisionId", "map");
+        var map = config.putArray("accountMap");
+        long gl = 100;
+        for (String key : keys.stream().sorted().toList()) {
+            map.addObject().put("accountKey", key).put("nativeGlAccountId",
+                    Long.toString(key.equals("deferredAdminFee") || key.equals("deferredIntegralFee") ? deferredFeeGl : gl++));
+        }
+        return config;
+    }
+
+    @Test
+    void revisionsAreValidUnderExactlyOneAccountSetAndReadUnderCurrentKeys() {
+        var legacy = ReceivablesConfiguration.accountMap(configurationOf(ReceivablesConfiguration.LEGACY_ACCOUNTS, 7));
+        var current = ReceivablesConfiguration.current(legacy);
+        assertThat(current).containsEntry("deferredAdminFee", 7L).doesNotContainKey("deferredIntegralFee")
+                .doesNotContainKey(ReceivablesConfiguration.ADMIN_FEE_INCOME).hasSize(22);
+        assertThat(ReceivablesConfiguration.calculations(current)).containsExactly(
+                co.mnzl.fineract.receivables.math.ReceivablesMath.CALCULATION_VERSION,
+                co.mnzl.fineract.receivables.math.ReceivablesMath.SIMPLE_CALCULATION_VERSION);
+        var adminFee = ReceivablesConfiguration.accountMap(configurationOf(ReceivablesConfiguration.ACCOUNTS, 7));
+        assertThat(ReceivablesConfiguration.current(adminFee)).isEqualTo(adminFee).hasSize(23);
+        assertThat(ReceivablesConfiguration.calculations(adminFee)).isEqualTo(ReceivablesConfiguration.CALCULATIONS);
+        var mixed = new java.util.HashSet<>(ReceivablesConfiguration.LEGACY_ACCOUNTS);
+        mixed.add(ReceivablesConfiguration.ADMIN_FEE_INCOME);
+        var partial = new java.util.HashSet<>(ReceivablesConfiguration.ACCOUNTS);
+        partial.remove(ReceivablesConfiguration.ADMIN_FEE_INCOME);
+        for (var keys : List.of(mixed, partial)) {
+            assertThatThrownBy(() -> ReceivablesConfiguration.accountMap(configurationOf(keys, 7))).isInstanceOf(ReceivablesException.class)
+                    .hasMessage("FINERACT_CAPABILITY_MISSING");
+        }
+    }
+
+    @Test
+    void aUsedScopeMayOnlyAdoptTheAdminFeeSetOnTheSameDeferredFeeAccount() {
+        var legacy = configurationOf(ReceivablesConfiguration.LEGACY_ACCOUNTS, 7);
+        var adminFee = configurationOf(ReceivablesConfiguration.ACCOUNTS, 7);
+        // Sorted assignment shifts by one key; align every other route with the legacy one before comparing.
+        var routes = ReceivablesConfiguration.current(ReceivablesConfiguration.accountMap(legacy));
+        for (var entry : adminFee.path("accountMap")) {
+            String key = entry.path("accountKey").asText();
+            ((com.fasterxml.jackson.databind.node.ObjectNode) entry).put("nativeGlAccountId",
+                    Long.toString(routes.getOrDefault(key, 999L)));
+        }
+        assertThat(ReceivablesConfiguration.adoptsAdminFee(legacy, adminFee)).isTrue();
+        assertThat(ReceivablesConfiguration.adoptsAdminFee(adminFee, legacy)).isFalse();
+        assertThat(ReceivablesConfiguration.adoptsAdminFee(adminFee, adminFee)).isFalse();
+        var moved = adminFee.deepCopy();
+        for (var entry : moved.path("accountMap")) {
+            if (entry.path("accountKey").asText().equals("deferredAdminFee")) {
+                ((com.fasterxml.jackson.databind.node.ObjectNode) entry).put("nativeGlAccountId", "8");
+            }
+        }
+        assertThat(ReceivablesConfiguration.adoptsAdminFee(legacy, moved)).isFalse();
+        var rerouted = adminFee.deepCopy();
+        for (var entry : rerouted.path("accountMap")) {
+            if (entry.path("accountKey").asText().equals("bank")) {
+                ((com.fasterxml.jackson.databind.node.ObjectNode) entry).put("nativeGlAccountId", "9");
+            }
+        }
+        assertThat(ReceivablesConfiguration.adoptsAdminFee(legacy, rerouted)).isFalse();
+    }
+
+    @Test
+    void upfrontAdminFeeBookingRequiresTheAdminFeeSet() {
+        var e = new ReceivablesExecution(json.object().put("operationId", "book").put("businessDate", "2030-01-01"), "scope",
+                Map.of("mapping_revision", "map"));
+        String upfront = co.mnzl.fineract.receivables.math.ReceivablesMath.UPFRONT_FEE_CALCULATION_VERSION;
+        when(jdbc.queryForList(anyString(), eq("scope"), eq("map")))
+                .thenReturn(List.of(Map.of("config_json", json.write(configurationOf(ReceivablesConfiguration.LEGACY_ACCOUNTS, 7)))));
+        configuration.requireCalculation(e, ReceivablesConfiguration.CALCULATION);
+        assertThatThrownBy(() -> configuration.requireCalculation(e, upfront)).isInstanceOf(ReceivablesException.class)
+                .hasMessage("FINERACT_CAPABILITY_MISSING");
+        when(jdbc.queryForList(anyString(), eq("scope"), eq("map")))
+                .thenReturn(List.of(Map.of("config_json", json.write(configurationOf(ReceivablesConfiguration.ACCOUNTS, 7)))));
+        configuration.requireCalculation(e, upfront);
+        configuration.requireCalculation(e, ReceivablesConfiguration.CALCULATION);
+    }
+
+    @Test
+    void legacyAndAdminFeeConfigurationsBothMatchTheInputSchema() {
+        for (var keys : List.of(ReceivablesConfiguration.LEGACY_ACCOUNTS, ReceivablesConfiguration.ACCOUNTS)) {
+            var input = configurationOf(keys, 7).put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V1")
+                    .put("productPolicyCode", "EG_RECEIVABLES_V1").put("schemaVersion", "1").put("policyRevisionId", "policy")
+                    .put("calculatorBuild", "build").put("productId", "1").put("officeId", "1").put("integrationUserId", "1")
+                    .put("bankAccountReference", "bank").putNull("helPaymentTypeId").putNull("helProductId");
+            input.putObject("scope").put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
+            json.validate("nativeConfiguration", input);
+        }
+    }
 }

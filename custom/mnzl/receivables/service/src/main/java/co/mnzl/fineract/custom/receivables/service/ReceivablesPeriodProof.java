@@ -168,7 +168,9 @@ public class ReceivablesPeriodProof {
                     && text(match.line(), "side").equals(string(row, "side")), "JOURNAL_MISMATCH", "REGISTRY_LINE_MISMATCH");
             String eventRevision = text(match.event(), "accountMappingRevisionId");
             var approvedGl = revisionMappings.computeIfAbsent(eventRevision, id -> configuration.mappings(scopeKey, id));
-            diagnostic.check(Long.valueOf(number(row, "native_gl_id")).equals(approvedGl.get(string(row, "semantic_account"))),
+            diagnostic.check(
+                    Long.valueOf(number(row, "native_gl_id"))
+                            .equals(approvedGl.get(ReceivablesLegacy.accountKey(string(row, "semantic_account")))),
                     "JOURNAL_MISMATCH", "REGISTRY_ACCOUNT_MISMATCH");
             match.registry = row;
             diagnostic.check(byJournal.put(number(row, "native_journal_id"), match) == null, "JOURNAL_MISMATCH", "DUPLICATE_JOURNAL");
@@ -218,7 +220,7 @@ public class ReceivablesPeriodProof {
                     "EGP".equals(string(row, "currency_code")) && text(match.line(), "sourceLineId").equals(string(row, "ref_num")),
                     "JOURNAL_MISMATCH", "ACTUAL_CURRENCY_OR_REFERENCE");
             String revision = text(match.event(), "accountMappingRevisionId");
-            String semantic = text(match.line(), "accountKey");
+            String semantic = ReceivablesLegacy.accountKey(text(match.line(), "accountKey"));
             ObjectNode observed = json.object();
             observed.put("journalId", Long.toString(id));
             observed.put("eventId", eventId);

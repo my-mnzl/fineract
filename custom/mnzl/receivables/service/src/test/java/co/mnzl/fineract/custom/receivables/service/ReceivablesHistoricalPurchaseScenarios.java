@@ -163,7 +163,7 @@ final class ReceivablesHistoricalPurchaseScenarios {
         price.set("basis", basis);
         JsonNode result = harness.request("POST", BASE + "/calculate", price, 200).path("pricing").path("accounts").get(0);
         ObjectNode accepted = harness.json.object();
-        for (String field : List.of("accountId", "grossPurchasePriceMinor", "integralFeeMinor", "netPurchaseCashMinor")) {
+        for (String field : List.of("accountId", "grossPurchasePriceMinor", "adminFeeMinor", "netPurchaseCashMinor")) {
             accepted.set(field, result.get(field));
         }
         basis.set("acceptedAccountPrices", harness.json.value(List.of(accepted)));
