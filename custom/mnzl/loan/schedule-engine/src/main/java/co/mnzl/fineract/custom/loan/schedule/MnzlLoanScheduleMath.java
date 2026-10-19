@@ -74,6 +74,32 @@ public final class MnzlLoanScheduleMath {
                 + (adjustedEndDay - adjustedStartDay);
     }
 
+    /**
+     * Days of a period's interest earned by the end of {@code targetDate}, counted on 30-day months, for accruals.
+     * <p>
+     * The instalment interest is priced with {@link #getDifferenceInDaysFor30DayMonth}, so its accrual has to be spread
+     * on the same months or a month-end splits it differently from the schedule (on actual days a 15th-to-15th period
+     * has 16 of 31 days behind it on 31 Aug, where the schedule priced 15 of 30). Two month-end rules make every
+     * month-end land on a whole number of 30-day months:
+     * <ul>
+     * <li>the last day of a month is its day 30, so 28 Feb and 31 Aug both close their month;</li>
+     * <li>a period opening on the 1st opens at that month's day 0: an instalment due on the 1st carries the previous
+     * month's interest, which is fully earned by that month's last day.</li>
+     * </ul>
+     */
+    public static int getAccruedDaysFor30DayMonth(final LocalDate periodStart, final LocalDate targetDate) {
+        if (periodStart == null || targetDate == null) {
+            throw new IllegalArgumentException("Dates must not be null to get accrued days");
+        }
+        if (!targetDate.isAfter(periodStart)) {
+            return 0;
+        }
+        final int startDay = periodStart.getDayOfMonth() == 1 ? 0 : Math.min(30, periodStart.getDayOfMonth());
+        final int endDay = targetDate.getDayOfMonth() == targetDate.lengthOfMonth() ? 30 : Math.min(30, targetDate.getDayOfMonth());
+        return ((targetDate.getYear() - periodStart.getYear()) * 360) + ((targetDate.getMonthValue() - periodStart.getMonthValue()) * 30)
+                + (endDay - startDay);
+    }
+
     private static int resolveActualDaysInYear(final LocalDate referenceDate, final LoanApplicationTerms loanApplicationTerms) {
         LocalDate effectiveReferenceDate = referenceDate;
         if (effectiveReferenceDate == null) {

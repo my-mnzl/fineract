@@ -26,9 +26,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.mapper.CurrencyMapper;
 import org.apache.fineract.portfolio.loanaccount.data.LoanTermVariationsData;
+import org.apache.fineract.portfolio.loanaccount.domain.Loan;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleProcessingWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRepository;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.AbstractCumulativeLoanScheduleGenerator;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanApplicationTerms;
@@ -371,5 +376,50 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
         BigDecimal totalInterest = loanApplicationTerms.getPrincipal().getAmount().multiply(dailyInterestRate, mc)
                 .multiply(BigDecimal.valueOf(daysInSegment), mc);
         return Money.of(loanApplicationTerms.getCurrency(), totalInterest, mc);
+    }
+
+    /**
+     * Interest of {@code installment} earned by {@code targetDate}, which the periodic accrual job posts.
+     * <p>
+     * Upstream spreads the instalment's interest over the period's actual calendar days. On a 30-day-month product the
+     * schedule prices that interest on 30-day months, so the accrual is spread on the same months instead (see
+     * {@link MnzlLoanScheduleMath#getAccruedDaysFor30DayMonth}); each instalment still accrues exactly its interest by
+     * its due date. Other products keep the upstream calculation.
+     */
+    @Override
+    public Money getPeriodInterestTillDate(final LoanRepaymentScheduleInstallment installment, final LocalDate targetDate) {
+        final Loan loan = installment.getLoan();
+        if (!loan.getLoanProductRelatedDetail().fetchDaysInMonthType().isDaysInMonth_30()) {
+            return super.getPeriodInterestTillDate(installment, targetDate);
+        }
+        if (installment.isAdditional() || installment.isDownPayment() || installment.isReAged()
+                || LoanRepaymentScheduleProcessingWrapper.isBeforePeriod(targetDate, installment, false)) {
+            return null;
+        }
+        final MonetaryCurrency currency = loan.getLoanProductRelatedDetail().getCurrency();
+        final BigDecimal interest = installment.getInterestCharged();
+        if (MathUtil.isEmpty(interest)) {
+            return Money.zero(currency);
+        }
+        if (LoanRepaymentScheduleProcessingWrapper.isAfterPeriod(targetDate, installment)
+                || DateUtils.isEqual(targetDate, installment.getDueDate())) {
+            return installment.getInterestCharged(currency);
+        }
+        LocalDate startDate = installment.getFromDate();
+        final LocalDate dueDate = installment.getDueDate();
+        if (DateUtils.isBefore(startDate, loan.getInterestChargedFromDate())) {
+            startDate = loan.getInterestChargedFromDate();
+        }
+        if (!DateUtils.isBefore(startDate, dueDate) || !DateUtils.isBefore(startDate, targetDate)) {
+            return Money.zero(currency);
+        }
+        final int periodDays = MnzlLoanScheduleMath.getDifferenceInDaysFor30DayMonth(startDate, dueDate);
+        if (periodDays <= 0) {
+            return super.getPeriodInterestTillDate(installment, targetDate);
+        }
+        final int accruedDays = Math.min(periodDays, MnzlLoanScheduleMath.getAccruedDaysFor30DayMonth(startDate, targetDate));
+        final BigDecimal earned = interest.multiply(BigDecimal.valueOf(accruedDays)).divide(BigDecimal.valueOf(periodDays),
+                MathContext.DECIMAL64);
+        return Money.of(currency, earned);
     }
 }
