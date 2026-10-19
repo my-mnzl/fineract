@@ -22,6 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -32,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.BusinessDateUpdateRequest;
 import org.apache.fineract.client.models.GetLoansLoanIdRepaymentPeriod;
 import org.apache.fineract.client.models.GetLoansLoanIdResponse;
+import org.apache.fineract.client.models.GetLoansLoanIdTransactions;
 import org.apache.fineract.client.models.LoanProductChargeData;
 import org.apache.fineract.client.models.PostLoanProductsRequest;
 import org.apache.fineract.client.models.PostLoanProductsResponse;
@@ -43,6 +48,7 @@ import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationC
 import org.apache.fineract.integrationtests.BaseLoanIntegrationTest;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.common.accounting.PeriodicAccrualAccountingHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.LoanScheduleType;
 import org.junit.jupiter.api.AfterEach;
@@ -476,6 +482,106 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
                 .chargeOffExpenseAccountId(chargeOffExpenseAccount.getAccountID().longValue())
                 .chargeOffFraudExpenseAccountId(chargeOffFraudExpenseAccount.getAccountID().longValue()).dateFormat(DATETIME_PATTERN)
                 .locale("en");
+    }
+
+    /**
+     * Rolling out 30-day-month accruals on a loan already accrued on actual days.
+     *
+     * A 15 Aug -> 15 Sep instalment accrued on actual days has 16 of 31 days behind it on 31 Aug, above the 15 of 30
+     * that 30-day months give. Switching the product to the MNZL strategy (what deploying the change does) must post
+     * nothing while the loan is ahead — never a negative or adjustment entry — post nothing again on a rerun, catch up
+     * once the target passes what is booked, and have accrued exactly the instalment's interest by its due date, in
+     * transactions and in the interest income ledger alike.
+     */
+    @Test
+    public void testAccrualSwitchedTo30DayMonthsPausesThenCatchesUp() {
+        runAt("15 August 2026", () -> {
+            Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
+            Long productId = createMnzlDecliningBalanceProduct().getResourceId();
+            setMnzlProductStrategy(productId);
+            Long loanId = applyApproveDisburseLoan(clientId, productId, 120000.0, 12.0, 12, "15 August 2026");
+            GetLoansLoanIdRepaymentPeriod first = getRepaymentPeriods(loanTransactionHelper.getLoanDetails(loanId)).get(0);
+            assertEquals(LocalDate.of(2026, 9, 15), first.getDueDate());
+            double instalmentInterest = Utils.getDoubleValue(first.getInterestDue());
+            assertEquals(1200.0, instalmentInterest, 0.01, "120,000 at 12% for one 30-day month");
+
+            PeriodicAccrualAccountingHelper accruals = new PeriodicAccrualAccountingHelper(requestSpec, responseSpec);
+
+            // Before the change: the product on the core generator accrues on actual days, 16 of 31 by 31 Aug.
+            setScheduleStrategy(productId, "CORE_DEFAULT");
+            updateBusinessDate("01 September 2026");
+            accruals.runPeriodicAccrualAccounting("31 August 2026");
+            double actualDayAccrual = instalmentInterest * 16 / 31;
+            assertEquals(actualDayAccrual, accruedInterest(loanId), 0.05, "actual days: 16 of 31");
+
+            // Deploy: the loan is now ahead of its 30-day-month target (15 of 30 = 600.00).
+            setScheduleStrategy(productId, "MNZL_DECLINING_BALANCE");
+            int transactionsBefore = accrualTransactionCount(loanId);
+            accruals.runPeriodicAccrualAccounting("31 August 2026");
+            accruals.runPeriodicAccrualAccounting("31 August 2026");
+            assertEquals(transactionsBefore, accrualTransactionCount(loanId), "a loan ahead of its target posts nothing, on reruns too");
+            assertEquals(actualDayAccrual, accruedInterest(loanId), 0.05);
+
+            // The target passes what is booked on 1 Sep (16 of 30 = 640.00) and the accrual catches up to it.
+            updateBusinessDate("02 September 2026");
+            accruals.runPeriodicAccrualAccounting("01 September 2026");
+            assertEquals(640.0, accruedInterest(loanId), 0.01, "30-day months: 16 of 30");
+
+            // By the due date exactly the instalment's interest, once, however often the job runs.
+            updateBusinessDate("16 September 2026");
+            accruals.runPeriodicAccrualAccounting("15 September 2026");
+            accruals.runPeriodicAccrualAccounting("15 September 2026");
+            assertEquals(instalmentInterest, accruedInterest(loanId), 0.001, "full instalment interest by its due date");
+            assertEquals(instalmentInterest, interestIncomeCredited(loanId), 0.001, "interest income ledger matches the accruals");
+
+            GetLoansLoanIdResponse loan = loanTransactionHelper.getLoanDetails(loanId);
+            assertTrue(
+                    loan.getTransactions().stream().filter(tx -> tx.getType() != null)
+                            .noneMatch(tx -> tx.getType().getCode() != null && tx.getType().getCode().contains("accrualAdjustment")),
+                    "no accrual adjustment entries");
+            assertTrue(loan.getTransactions().stream().filter(this::isAccrual).allMatch(tx -> Utils.getDoubleValue(tx.getAmount()) > 0),
+                    "no negative accrual entries");
+        });
+    }
+
+    private void setScheduleStrategy(Long productId, String scheduleStrategyCode) {
+        Map<String, String> strategyBody = new HashMap<>();
+        strategyBody.put("instrumentCode", "MNZL_STANDARD_LOAN");
+        strategyBody.put("scheduleStrategyCode", scheduleStrategyCode);
+        strategyBody.put("chargeStrategyCode", "MNZL_INTEREST_AND_PENALTIES");
+        strategyBody.put("cobStrategyCode", "MNZL_DUE_INSTALLMENTS");
+        Utils.performServerPut(requestSpec, responseSpec, String.format(MNZL_STRATEGY_URL, productId), new Gson().toJson(strategyBody));
+    }
+
+    private boolean isAccrual(GetLoansLoanIdTransactions tx) {
+        return tx.getType() != null && Boolean.TRUE.equals(tx.getType().getAccrual()) && !Boolean.TRUE.equals(tx.getManuallyReversed());
+    }
+
+    private double accruedInterest(Long loanId) {
+        return loanTransactionHelper.getLoanDetails(loanId).getTransactions().stream().filter(this::isAccrual)
+                .mapToDouble(tx -> Utils.getDoubleValue(tx.getInterestPortion())).sum();
+    }
+
+    private int accrualTransactionCount(Long loanId) {
+        return (int) loanTransactionHelper.getLoanDetails(loanId).getTransactions().stream().filter(this::isAccrual).count();
+    }
+
+    /** Net credit to the interest income account from this loan's journal entries. */
+    private double interestIncomeCredited(Long loanId) {
+        String json = Utils.performServerGet(requestSpec, responseSpec,
+                "/fineract-provider/api/v1/journalentries?loanId=" + loanId + "&limit=-1&" + Utils.TENANT_IDENTIFIER, null);
+        JsonArray items = JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("pageItems");
+        long incomeAccountId = interestIncomeAccount.getAccountID().longValue();
+        double net = 0;
+        for (JsonElement item : items) {
+            JsonObject entry = item.getAsJsonObject();
+            if (entry.get("glAccountId").getAsLong() != incomeAccountId) {
+                continue;
+            }
+            double amount = entry.get("amount").getAsDouble();
+            net += "CREDIT".equals(entry.getAsJsonObject("entryType").get("value").getAsString()) ? amount : -amount;
+        }
+        return net;
     }
 
     private void setMnzlProductStrategy(Long productId) {
