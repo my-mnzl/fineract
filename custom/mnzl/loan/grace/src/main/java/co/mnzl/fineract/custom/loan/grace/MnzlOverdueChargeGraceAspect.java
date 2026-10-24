@@ -28,10 +28,15 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
+import org.apache.fineract.portfolio.charge.domain.Charge;
+import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
+import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.data.OverdueLoanScheduleData;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
+import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -53,6 +58,11 @@ import org.aspectj.lang.annotation.Aspect;
  * loan's office) has not yet elapsed as of the current business/COB date, then proceeds with the survivors.
  *
  * <p>
+ * Recurring penalties (charges with a fee frequency) are charged again every fee interval on upstream's calendar
+ * schedule. When the repeat upstream would charge today fell on a weekend or holiday, the installment is also withheld
+ * until the next working day, so repeats land on working days too.
+ *
+ * <p>
  * Note: this advice can only narrow the collection it is given. With {@code backdate-penalties-enabled = false} the
  * scheduled job's query surfaces an installment only on its exact calendar-grace day, which is earlier than the
  * working-day grace day, so for that specific configuration the standalone job still cannot reach the later working-day
@@ -63,9 +73,15 @@ import org.aspectj.lang.annotation.Aspect;
 @RequiredArgsConstructor
 public class MnzlOverdueChargeGraceAspect {
 
+    // Guards the repeat walk against a charge whose fee interval never advances the date.
+    private static final int MAX_PENALTY_REPEATS = 1000;
+
     private final MnzlWorkingDayCalculator workingDayCalculator;
     private final ConfigurationDomainService configurationDomainService;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
+    private final ChargeRepositoryWrapper chargeRepository;
+    private final LoanChargeReadPlatformService loanChargeReadPlatformService;
+    private final ScheduledDateGenerator scheduledDateGenerator;
 
     @Around("execution(* org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService.applyOverdueChargesForLoan(..))")
     public Object enforceWorkingDayGrace(ProceedingJoinPoint joinPoint) {
@@ -97,6 +113,7 @@ public class MnzlOverdueChargeGraceAspect {
                 earliestDueDate != null ? earliestDueDate : currentDate);
 
         List<OverdueLoanScheduleData> stillInGrace = new ArrayList<>();
+        List<OverdueLoanScheduleData> repeatOnNonWorkingDay = new ArrayList<>();
         List<OverdueLoanScheduleData> due = new ArrayList<>();
         for (OverdueLoanScheduleData data : overdueData) {
             LocalDate installmentDueDate = installmentDueDate(loan, data.getPeriodNumber());
@@ -108,6 +125,8 @@ public class MnzlOverdueChargeGraceAspect {
             LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, penaltyWaitPeriod, workingDays, holidays);
             if (currentDate.isBefore(firstPenaltyDate)) {
                 stillInGrace.add(data);
+            } else if (repeatAwaitsWorkingDay(loan, data, installmentDueDate, penaltyWaitPeriod, currentDate, workingDays, holidays)) {
+                repeatOnNonWorkingDay.add(data);
             } else {
                 due.add(data);
             }
@@ -119,11 +138,50 @@ public class MnzlOverdueChargeGraceAspect {
                             + "(penaltyWaitPeriod={} working days); {} installment(s) proceed",
                     loanId, stillInGrace.size(), currentDate, penaltyWaitPeriod, due.size());
         }
+        if (!repeatOnNonWorkingDay.isEmpty()) {
+            log.info("Working-day grace moved a repeat overdue penalty on loan id [{}] for {} installment(s) off non-working day [{}]",
+                    loanId, repeatOnNonWorkingDay.size(), currentDate);
+        }
         if (due.isEmpty()) {
             return null; // applyOverdueChargesForLoan is void; nothing is due yet
         }
         args[1] = due;
         return proceed(joinPoint, args);
+    }
+
+    /**
+     * Upstream ({@code LoanChargeWritePlatformServiceImpl#applyChargeToOverdueLoanInstallment}) charges a recurring
+     * penalty once per fee interval, starting {@code penaltyWaitPeriod + 1} calendar days after the due date, and
+     * charges every occurrence dated on or before the business date that it has not charged yet. True when the newest
+     * such occurrence is a repeat (the first one is governed by the working-day grace above) that fell on a non-working
+     * day whose next working day has not arrived.
+     */
+    private boolean repeatAwaitsWorkingDay(Loan loan, OverdueLoanScheduleData data, LocalDate installmentDueDate, int penaltyWaitPeriod,
+            LocalDate currentDate, WorkingDays workingDays, List<Holiday> holidays) {
+        if (data.getChargeId() == null || data.getPeriodNumber() == null) {
+            return false;
+        }
+        final Charge charge = chargeRepository.findOneWithNotFoundDetection(data.getChargeId());
+        final Integer feeFrequency = charge.feeFrequency();
+        if (feeFrequency == null) {
+            return false;
+        }
+        final Collection<Integer> charged = loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, charge,
+                data.getPeriodNumber());
+
+        LocalDate occurrenceDate = installmentDueDate.plusDays(penaltyWaitPeriod + 1L);
+        LocalDate newestPendingDate = null;
+        int newestPendingNumber = 0;
+        for (int number = 1; number <= MAX_PENALTY_REPEATS && !occurrenceDate.isAfter(currentDate); number++) {
+            if (!charged.contains(number)) {
+                newestPendingDate = occurrenceDate;
+                newestPendingNumber = number;
+            }
+            occurrenceDate = scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.fromInt(feeFrequency), charge.feeInterval(),
+                    occurrenceDate);
+        }
+        return newestPendingNumber > 1
+                && workingDayCalculator.nextWorkingDayOnOrAfter(newestPendingDate, workingDays, holidays).isAfter(currentDate);
     }
 
     // Wraps joinPoint.proceed(...) so the advice need not declare `throws Throwable` (checkstyle IllegalThrows).

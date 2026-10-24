@@ -292,6 +292,70 @@ class MnzlWorkingDayCalculatorTest {
         assertThat(calculator.isWorkingDay(wednesday, OFFICE_ID)).isFalse();
     }
 
+    private static WorkingDays egyptConfig() {
+        return new WorkingDays(EGYPT_RRULE, RepaymentRescheduleType.SAME_DAY.getValue(), false, false);
+    }
+
+    @Test
+    void isPastWorkingDayGrace_thursdayDueDateWaitsOutTheFridaySaturdayWeekend() {
+        // Staging loan 120944: due Thu 12 Nov 2026, grace 3 -> Sun 15, Mon 16, Tue 17. In arrears from Wed 18 Nov;
+        // the calendar rule (due < businessDate - 3) would already say so on Mon 16 Nov.
+        LocalDate due = LocalDate.of(2026, 11, 12);
+
+        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 11, 16), egyptConfig(), List.of())).isFalse();
+        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 11, 17), egyptConfig(), List.of())).isFalse();
+        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 11, 18), egyptConfig(), List.of())).isTrue();
+    }
+
+    @Test
+    void isPastWorkingDayGrace_holidayPushesTheCutOff() {
+        // Due Sat 12 Dec 2026, grace 3, holiday Mon 14-Tue 15: Sun 13, Wed 16, Thu 17 -> in arrears from Fri 18 Dec.
+        LocalDate due = LocalDate.of(2026, 12, 12);
+        List<Holiday> holidays = List.of(activeHoliday(LocalDate.of(2026, 12, 14), LocalDate.of(2026, 12, 15)));
+
+        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 12, 17), egyptConfig(), holidays)).isFalse();
+        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 12, 18), egyptConfig(), holidays)).isTrue();
+    }
+
+    @Test
+    void isPastWorkingDayGrace_zeroGraceMeansPastTheDueDate() {
+        LocalDate due = LocalDate.of(2026, 11, 12);
+
+        assertThat(calculator.isPastWorkingDayGrace(due, 0, due, egyptConfig(), List.of())).isFalse();
+        assertThat(calculator.isPastWorkingDayGrace(due, 0, due.plusDays(1), egyptConfig(), List.of())).isTrue();
+    }
+
+    @Test
+    void nextWorkingDayOnOrAfter_keepsAWorkingDay() {
+        LocalDate wednesday = LocalDate.of(2026, 12, 16);
+
+        assertThat(calculator.nextWorkingDayOnOrAfter(wednesday, egyptConfig(), List.of())).isEqualTo(wednesday);
+    }
+
+    @Test
+    void nextWorkingDayOnOrAfter_rollsFridayToSunday() {
+        // Staging: installment #1's second monthly penalty fell on Fri 18 Dec 2026.
+        assertThat(calculator.nextWorkingDayOnOrAfter(LocalDate.of(2026, 12, 18), egyptConfig(), List.of()))
+                .isEqualTo(LocalDate.of(2026, 12, 20));
+    }
+
+    @Test
+    void nextWorkingDayOnOrAfter_rollsPastWeekendAndHoliday() {
+        List<Holiday> holidays = List.of(activeHoliday(LocalDate.of(2026, 12, 20), LocalDate.of(2026, 12, 21)));
+
+        assertThat(calculator.nextWorkingDayOnOrAfter(LocalDate.of(2026, 12, 18), egyptConfig(), holidays))
+                .isEqualTo(LocalDate.of(2026, 12, 22));
+    }
+
+    @Test
+    void nextWorkingDayOnOrAfter_safetyCap_throws() {
+        LocalDate start = LocalDate.of(2026, 1, 1);
+        Holiday blanket = activeHoliday(start, start.plusDays(60));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> calculator.nextWorkingDayOnOrAfter(start, egyptConfig(), List.of(blanket)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("RRULE");
+    }
+
     @Test
     void getActiveHolidaysForOffice_nullOfficeId_emptyList() {
         // Guards against the holiday repository being hit with a null office id from upstream callers.

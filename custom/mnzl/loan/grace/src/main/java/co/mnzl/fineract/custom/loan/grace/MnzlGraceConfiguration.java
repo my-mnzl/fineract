@@ -18,21 +18,31 @@
  */
 package co.mnzl.fineract.custom.loan.grace;
 
+import java.util.Map;
 import org.apache.fineract.cob.loan.LoanCOBBusinessStep;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
+import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.delinquency.helper.DelinquencyEffectivePauseHelper;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainService;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainServiceImpl;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
+import org.apache.fineract.portfolio.loanaccount.jobs.updateloanarrearsageing.LoanArrearsAgeingUpdateHandler;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
+import org.apache.fineract.portfolio.loanaccount.service.LoanArrearsAgingService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionReadService;
+import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration
 @ConditionalOnProperty(name = "mnzl.loan.grace.workingDays.enabled", havingValue = "true", matchIfMissing = true)
@@ -80,7 +90,47 @@ public class MnzlGraceConfiguration {
      */
     @Bean
     public MnzlOverdueChargeGraceAspect mnzlOverdueChargeGraceAspect(MnzlWorkingDayCalculator workingDayCalculator,
-            ConfigurationDomainService configurationDomainService, LoanRepositoryWrapper loanRepositoryWrapper) {
-        return new MnzlOverdueChargeGraceAspect(workingDayCalculator, configurationDomainService, loanRepositoryWrapper);
+            ConfigurationDomainService configurationDomainService, LoanRepositoryWrapper loanRepositoryWrapper,
+            ChargeRepositoryWrapper chargeRepository, LoanChargeReadPlatformService loanChargeReadPlatformService,
+            ScheduledDateGenerator scheduledDateGenerator) {
+        return new MnzlOverdueChargeGraceAspect(workingDayCalculator, configurationDomainService, loanRepositoryWrapper, chargeRepository,
+                loanChargeReadPlatformService, scheduledDateGenerator);
+    }
+
+    /**
+     * Named like upstream's bean so it replaces it (Fineract runs with bean definition overriding on, and this
+     * auto-configured module registers after upstream's {@code LoanAccountConfiguration}). The instance registers the
+     * arrears event listeners, so it must be the only one: see {@link #mnzlSingleLoanArrearsAgingServiceCheck}.
+     */
+    @Bean(name = "loanArrearsAgingService")
+    @Primary
+    public LoanArrearsAgingService mnzlLoanArrearsAgingService(JdbcTemplate jdbcTemplate,
+            BusinessEventNotifierService businessEventNotifierService, DatabaseSpecificSQLGenerator sqlGenerator,
+            MnzlWorkingDayCalculator workingDayCalculator) {
+        return new MnzlLoanArrearsAgingService(jdbcTemplate, businessEventNotifierService, sqlGenerator, workingDayCalculator);
+    }
+
+    /** Named like upstream's {@code @Component} so it replaces it for the arrears job and COB step. */
+    @Bean(name = "loanArrearsAgeingUpdateHandler")
+    @Primary
+    public LoanArrearsAgeingUpdateHandler mnzlLoanArrearsAgeingUpdateHandler(JdbcTemplate jdbcTemplate,
+            DatabaseSpecificSQLGenerator sqlGenerator, LoanArrearsAgingService loanArrearsAgingService,
+            MnzlWorkingDayCalculator workingDayCalculator) {
+        return new MnzlLoanArrearsAgeingUpdateHandler(jdbcTemplate, sqlGenerator, loanArrearsAgingService, workingDayCalculator);
+    }
+
+    /**
+     * Fails startup if upstream's arrears service survived next to ours: both would register the arrears event
+     * listeners and overwrite each other's {@code m_loan_arrears_aging} rows on every repayment.
+     */
+    @Bean
+    public SmartInitializingSingleton mnzlSingleLoanArrearsAgingServiceCheck(ListableBeanFactory beanFactory) {
+        return () -> {
+            Map<String, LoanArrearsAgingService> services = beanFactory.getBeansOfType(LoanArrearsAgingService.class);
+            if (services.size() != 1 || !(services.values().iterator().next() instanceof MnzlLoanArrearsAgingService)) {
+                throw new IllegalStateException("Expected MnzlLoanArrearsAgingService to be the only LoanArrearsAgingService, found "
+                        + services.keySet() + " — check the bean name still matches upstream's LoanAccountConfiguration");
+            }
+        };
     }
 }

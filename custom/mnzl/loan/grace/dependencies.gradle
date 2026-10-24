@@ -29,4 +29,8 @@ dependencies {
         exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
     }
     testImplementation('org.springframework.boot:spring-boot-starter-test')
+    // MnzlLoanArrearsAgeingUpdateHandlerDatabaseTest runs against GRACE_TEST_JDBC_URL when set.
+    testImplementation('com.zaxxer:HikariCP')
+    testRuntimeOnly('com.mysql:mysql-connector-j')
+    testRuntimeOnly('org.postgresql:postgresql')
 }
