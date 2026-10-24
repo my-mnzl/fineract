@@ -95,6 +95,33 @@ public class MnzlWorkingDayCalculator {
         return (int) ChronoUnit.DAYS.between(start, end);
     }
 
+    /**
+     * Whether an installment due on {@code dueDate} is in arrears on {@code businessDate} after {@code graceDays}
+     * working days of grace: the working-day reading of upstream's
+     * {@code dueDate < businessDate - graceOnArrearsAgeing}.
+     */
+    public boolean isPastWorkingDayGrace(LocalDate dueDate, int graceDays, LocalDate businessDate, WorkingDays config,
+            List<Holiday> holidays) {
+        return addWorkingDays(dueDate, graceDays, config, holidays).isBefore(businessDate);
+    }
+
+    /**
+     * {@code date} itself when it is a working day, otherwise the first working day after it. Capped like
+     * {@link #addWorkingDays} so a misconfigured RRULE cannot hang the caller.
+     */
+    public LocalDate nextWorkingDayOnOrAfter(LocalDate date, WorkingDays config, List<Holiday> holidays) {
+        final int maxIterations = 7 + 14;
+        LocalDate cursor = date;
+        for (int i = 0; i < maxIterations; i++) {
+            if (isWorkingDay(cursor, config, holidays)) {
+                return cursor;
+            }
+            cursor = cursor.plusDays(1);
+        }
+        throw new IllegalStateException("No working day found within " + maxIterations + " days of " + date
+                + " — check m_working_days RRULE and m_holiday entries (RRULE was: " + config.getRecurrence() + ")");
+    }
+
     public boolean isWorkingDay(LocalDate date, Long officeId) {
         return isWorkingDay(date, getWorkingDays(), getActiveHolidaysForOffice(officeId, date));
     }

@@ -356,6 +356,86 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     }
 
     /**
+     * Test 2d: Working-day grace on arrears ageing via the standalone "Update Loan Arrears Ageing" job (the path
+     * production uses). Reproduces staging loan 120944: Sun–Thu week, {@code graceOnArrearsAgeing = 3}, installment 1
+     * due Thursday 12 November 2026. Upstream counts the grace in calendar days and reports the loan overdue from 15
+     * November; counting Sun 15, Mon 16, Tue 17 as the three working days, it must stay out of arrears until 18
+     * November.
+     */
+    @Test
+    public void testArrearsAgeingJobCountsGraceInWorkingDays() {
+        runAt("12 October 2026", () -> {
+            setWorkingDays("FREQ=WEEKLY;INTERVAL=1;BYDAY=SU,MO,TU,WE,TH", 2);
+
+            Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
+            PostLoanProductsResponse product = loanProductHelper
+                    .createLoanProduct(buildDecliningBalanceProduct(30, 360).graceOnArrearsAgeing(3));
+            setMnzlProductStrategy(product.getResourceId());
+            Long loanId = applyApproveDisburseLoan(clientId, product.getResourceId(), 120000.0, 12.0, 12, "12 October 2026");
+            assertEquals(LocalDate.of(2026, 11, 12), firstInstallmentDueDate(loanTransactionHelper.getLoanDetails(loanId)),
+                    "First installment should be due Thursday 12 November 2026");
+
+            // (1) 17 November: calendar grace ended 15 November, working-day grace runs through Tuesday 17 November.
+            updateBusinessDate("17 November 2026");
+            schedulerJobHelper.executeAndAwaitJob("Update Loan Arrears Ageing");
+            GetLoansLoanIdResponse loan = loanTransactionHelper.getLoanDetails(loanId);
+            assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getTotalOverdue()), 0.0001,
+                    "Not in arrears on 17 November: the Fri/Sat weekend extends the 3-day grace to Tuesday 17 November");
+
+            // (2) 18 November: grace has elapsed.
+            updateBusinessDate("18 November 2026");
+            schedulerJobHelper.executeAndAwaitJob("Update Loan Arrears Ageing");
+            loan = loanTransactionHelper.getLoanDetails(loanId);
+            assertTrue(Utils.getDoubleValue(loan.getSummary().getTotalOverdue()) > 0, "In arrears from 18 November");
+            assertEquals(LocalDate.of(2026, 11, 12), loan.getSummary().getOverdueSinceDate(), "Overdue since the 12 November due date");
+        });
+    }
+
+    /**
+     * Test 2e: A recurring ("monthly") overdue penalty that upstream would repeat on a non-working day is charged on
+     * the next working day instead. Installment 1 is due Thursday 12 November 2026 with
+     * {@code penalty-wait-period = 5}: upstream's occurrences start 18 November and repeat monthly, so the second lands
+     * on Friday 18 December. With a Sun–Thu week it must wait for Sunday 20 December. Upstream dates that repeat charge
+     * 12 December (due date + one interval), which is how it is told apart from installment 2's own penalty.
+     */
+    @Test
+    public void testRecurringOverduePenaltyRollsOffNonWorkingDay() {
+        runAt("12 October 2026", () -> {
+            setWorkingDays("FREQ=WEEKLY;INTERVAL=1;BYDAY=SU,MO,TU,WE,TH", 2);
+            globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
+                    new PutGlobalConfigurationsRequest().value(5L));
+            globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.BACKDATE_PENALTIES_ENABLED,
+                    new PutGlobalConfigurationsRequest().enabled(true));
+
+            Long clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId();
+            Integer penaltyChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper
+                    .getLoanOverdueFeeJSONWithCalculationTypePercentageWithFeeInterval("2", ChargesHelper.CHARGE_FEE_FREQUENCY_MONTHS, 1));
+            PostLoanProductsResponse product = loanProductHelper.createLoanProduct(
+                    buildDecliningBalanceProduct(30, 360).charges(List.of(new LoanProductChargeData().id(penaltyChargeId.longValue()))));
+            setMnzlProductStrategy(product.getResourceId());
+            Long loanId = applyApproveDisburseLoan(clientId, product.getResourceId(), 120000.0, 12.0, 12, "12 October 2026");
+
+            // (1) Close through Thursday 19 November (5th working day after 12 November): the first penalty.
+            updateBusinessDate("20 November 2026");
+            inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
+            assertTrue(penaltyDueDates(loanId, penaltyChargeId).contains(LocalDate.of(2026, 11, 12)),
+                    "First penalty should be charged by 19 November");
+
+            // (2) Close through Friday 18 December, where upstream would charge the repeat: it must be withheld.
+            updateBusinessDate("19 December 2026");
+            inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
+            assertTrue(!penaltyDueDates(loanId, penaltyChargeId).contains(LocalDate.of(2026, 12, 12)),
+                    "Repeat penalty must not be charged on Friday 18 December or Saturday 19 December");
+
+            // (3) Close through Sunday 20 December: the next working day, so the repeat is charged.
+            updateBusinessDate("21 December 2026");
+            inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
+            assertTrue(penaltyDueDates(loanId, penaltyChargeId).contains(LocalDate.of(2026, 12, 12)),
+                    "Repeat penalty should be charged on Sunday 20 December");
+        });
+    }
+
+    /**
      * Test 3: Verify MNZL 30/360 interest formula across all repayment periods.
      *
      * Each period's interest must equal outstanding_principal * 12% * 30/360 (i.e., 1% monthly rate). This validates
@@ -399,6 +479,15 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
     private List<GetLoansLoanIdRepaymentPeriod> getRepaymentPeriods(GetLoansLoanIdResponse loanDetails) {
         return loanDetails.getRepaymentSchedule().getPeriods().stream().filter(p -> p.getPeriod() != null && p.getPeriod() > 0).toList();
+    }
+
+    private List<LocalDate> penaltyDueDates(Long loanId, Integer penaltyChargeId) {
+        var charges = loanTransactionHelper.getLoanDetails(loanId).getCharges();
+        if (charges == null) {
+            return List.of();
+        }
+        return charges.stream().filter(charge -> penaltyChargeId.longValue() == charge.getChargeId()).map(charge -> charge.getDueDate())
+                .toList();
     }
 
     private LocalDate firstInstallmentDueDate(GetLoansLoanIdResponse loanDetails) {

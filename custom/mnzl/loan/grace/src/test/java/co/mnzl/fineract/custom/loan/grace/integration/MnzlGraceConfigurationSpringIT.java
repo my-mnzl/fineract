@@ -22,22 +22,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import co.mnzl.fineract.custom.loan.grace.MnzlGraceConfiguration;
+import co.mnzl.fineract.custom.loan.grace.MnzlLoanArrearsAgeingUpdateHandler;
+import co.mnzl.fineract.custom.loan.grace.MnzlLoanArrearsAgingService;
 import co.mnzl.fineract.custom.loan.grace.MnzlOverdueChargeGraceAspect;
 import co.mnzl.fineract.custom.loan.grace.MnzlWorkingDayCalculator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import org.apache.fineract.cob.loan.LoanCOBBusinessStep;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDaysRepositoryWrapper;
+import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.apache.fineract.portfolio.delinquency.helper.DelinquencyEffectivePauseHelper;
 import org.apache.fineract.portfolio.delinquency.service.LoanDelinquencyDomainService;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
+import org.apache.fineract.portfolio.loanaccount.jobs.updateloanarrearsageing.LoanArrearsAgeingUpdateHandler;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
+import org.apache.fineract.portfolio.loanaccount.service.LoanArrearsAgingService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanArrearsAgingServiceImpl;
+import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanChargeWritePlatformService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionReadService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * L2 Spring slice: verifies that {@code mnzl.loan.grace.workingDays.enabled} controls the grace beans.
@@ -64,6 +76,11 @@ class MnzlGraceConfigurationSpringIT {
             .withBean(BusinessEventNotifierService.class, () -> mock(BusinessEventNotifierService.class))
             .withBean(LoanChargeWritePlatformService.class, () -> mock(LoanChargeWritePlatformService.class))
             .withBean(LoanRepositoryWrapper.class, () -> mock(LoanRepositoryWrapper.class))
+            .withBean(ChargeRepositoryWrapper.class, () -> mock(ChargeRepositoryWrapper.class))
+            .withBean(LoanChargeReadPlatformService.class, () -> mock(LoanChargeReadPlatformService.class))
+            .withBean(ScheduledDateGenerator.class, () -> mock(ScheduledDateGenerator.class))
+            .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
+            .withBean(DatabaseSpecificSQLGenerator.class, () -> mock(DatabaseSpecificSQLGenerator.class))
             // The mock subclass of LoanTransactionReadService inherits its @PersistenceContext field, so
             // Spring's PersistenceAnnotationBeanPostProcessor still tries to find an EntityManagerFactory on
             // the slice. Provide a mock so post-processing succeeds.
@@ -82,7 +99,59 @@ class MnzlGraceConfigurationSpringIT {
             assertThat(ctx).hasSingleBean(MnzlOverdueChargeGraceAspect.class);
             // Two LoanCOBBusinessStep @Primary beans are exposed by the config.
             assertThat(ctx).getBeans(LoanCOBBusinessStep.class).hasSize(2);
+            assertThat(ctx.getBean(LoanArrearsAgingService.class)).isInstanceOf(MnzlLoanArrearsAgingService.class);
+            assertThat(ctx.getBean(LoanArrearsAgeingUpdateHandler.class)).isInstanceOf(MnzlLoanArrearsAgeingUpdateHandler.class);
         });
+    }
+
+    @Test
+    void arrearsBeansReplaceUpstreamsByName() {
+        // Mirrors production: upstream's LoanAccountConfiguration registers loanArrearsAgingService and component-scans
+        // loanArrearsAgeingUpdateHandler before this auto-configured module, with bean definition overriding on.
+        new ApplicationContextRunner().withAllowBeanDefinitionOverriding(true).withUserConfiguration(UpstreamArrearsBeans.class)
+                .withUserConfiguration(MnzlGraceConfiguration.class)
+                .withBean(WorkingDaysRepositoryWrapper.class, () -> mock(WorkingDaysRepositoryWrapper.class))
+                .withBean(HolidayRepositoryWrapper.class, () -> mock(HolidayRepositoryWrapper.class))
+                .withBean(DelinquencyEffectivePauseHelper.class, () -> mock(DelinquencyEffectivePauseHelper.class))
+                .withBean(LoanTransactionReadService.class, () -> mock(LoanTransactionReadService.class))
+                .withBean(ConfigurationDomainService.class, () -> mock(ConfigurationDomainService.class))
+                .withBean(BusinessEventNotifierService.class, () -> mock(BusinessEventNotifierService.class))
+                .withBean(LoanChargeWritePlatformService.class, () -> mock(LoanChargeWritePlatformService.class))
+                .withBean(LoanRepositoryWrapper.class, () -> mock(LoanRepositoryWrapper.class))
+                .withBean(ChargeRepositoryWrapper.class, () -> mock(ChargeRepositoryWrapper.class))
+                .withBean(LoanChargeReadPlatformService.class, () -> mock(LoanChargeReadPlatformService.class))
+                .withBean(ScheduledDateGenerator.class, () -> mock(ScheduledDateGenerator.class))
+                .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
+                .withBean(DatabaseSpecificSQLGenerator.class, () -> mock(DatabaseSpecificSQLGenerator.class))
+                .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class)).run(ctx -> {
+                    assertThat(ctx).hasNotFailed();
+                    assertThat(ctx).getBeans(LoanArrearsAgingService.class).hasSize(1);
+                    assertThat(ctx.getBean(LoanArrearsAgingService.class)).isInstanceOf(MnzlLoanArrearsAgingService.class);
+                    assertThat(ctx).getBeans(LoanArrearsAgeingUpdateHandler.class).hasSize(1);
+                    assertThat(ctx.getBean(LoanArrearsAgeingUpdateHandler.class)).isInstanceOf(MnzlLoanArrearsAgeingUpdateHandler.class);
+                });
+    }
+
+    @Test
+    void startupFailsWhenASecondArrearsServiceSurvives() {
+        contextRunner.withBean("someOtherArrearsService", LoanArrearsAgingService.class, () -> mock(LoanArrearsAgingService.class))
+                .run(ctx -> assertThat(ctx).hasFailed().getFailure().hasStackTraceContaining("only LoanArrearsAgingService"));
+    }
+
+    @Configuration
+    static class UpstreamArrearsBeans {
+
+        @Bean
+        LoanArrearsAgingService loanArrearsAgingService() {
+            return new LoanArrearsAgingServiceImpl(mock(JdbcTemplate.class), mock(BusinessEventNotifierService.class),
+                    mock(DatabaseSpecificSQLGenerator.class));
+        }
+
+        @Bean
+        LoanArrearsAgeingUpdateHandler loanArrearsAgeingUpdateHandler() {
+            return new LoanArrearsAgeingUpdateHandler(mock(JdbcTemplate.class), mock(DatabaseSpecificSQLGenerator.class),
+                    mock(LoanArrearsAgingService.class));
+        }
     }
 
     @Test
@@ -102,6 +171,8 @@ class MnzlGraceConfigurationSpringIT {
             assertThat(ctx).doesNotHaveBean(LoanDelinquencyDomainService.class);
             assertThat(ctx).doesNotHaveBean(LoanCOBBusinessStep.class);
             assertThat(ctx).doesNotHaveBean(MnzlOverdueChargeGraceAspect.class);
+            assertThat(ctx).doesNotHaveBean(MnzlLoanArrearsAgingService.class);
+            assertThat(ctx).doesNotHaveBean(MnzlLoanArrearsAgeingUpdateHandler.class);
         });
     }
 

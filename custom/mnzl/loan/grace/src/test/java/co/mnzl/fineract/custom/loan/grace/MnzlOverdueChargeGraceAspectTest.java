@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
@@ -39,10 +40,15 @@ import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.workingdays.domain.RepaymentRescheduleType;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
+import org.apache.fineract.portfolio.charge.domain.Charge;
+import org.apache.fineract.portfolio.charge.domain.ChargeRepositoryWrapper;
+import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepositoryWrapper;
 import org.apache.fineract.portfolio.loanaccount.loanschedule.data.OverdueLoanScheduleData;
+import org.apache.fineract.portfolio.loanaccount.loanschedule.domain.ScheduledDateGenerator;
+import org.apache.fineract.portfolio.loanaccount.service.LoanChargeReadPlatformService;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +85,14 @@ class MnzlOverdueChargeGraceAspectTest {
     private LoanRepaymentScheduleInstallment installment2;
     @Mock
     private ProceedingJoinPoint joinPoint;
+    @Mock
+    private ChargeRepositoryWrapper chargeRepository;
+    @Mock
+    private LoanChargeReadPlatformService loanChargeReadPlatformService;
+    @Mock
+    private ScheduledDateGenerator scheduledDateGenerator;
+    @Mock
+    private Charge penaltyCharge;
 
     private MnzlOverdueChargeGraceAspect aspect;
 
@@ -86,7 +100,11 @@ class MnzlOverdueChargeGraceAspectTest {
     void setUp() {
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default Tenant", "UTC", null));
         ThreadLocalContextUtil.setActionContext(ActionContext.DEFAULT);
-        aspect = new MnzlOverdueChargeGraceAspect(calculator, configurationDomainService, loanRepositoryWrapper);
+        aspect = new MnzlOverdueChargeGraceAspect(calculator, configurationDomainService, loanRepositoryWrapper, chargeRepository,
+                loanChargeReadPlatformService, scheduledDateGenerator);
+        // One-off penalty by default; the repeat tests switch it to monthly.
+        when(chargeRepository.findOneWithNotFoundDetection(14L)).thenReturn(penaltyCharge);
+        when(penaltyCharge.feeFrequency()).thenReturn(null);
 
         when(configurationDomainService.retrievePenaltyWaitPeriod()).thenReturn(5L);
         when(loanRepositoryWrapper.findOneWithNotFoundDetection(LOAN_ID)).thenReturn(loan);
@@ -157,6 +175,127 @@ class MnzlOverdueChargeGraceAspectTest {
 
         assertThat(capturedProceedInstallments()).isEmpty(); // proceeded with the original (empty) collection
         verify(calculator, never()).addWorkingDays(any(), anyInt(), any(), any());
+    }
+
+    // ---- Recurring ("2% Monthly") penalties: staging loan 120944, installment due Thu 12 Nov 2026, wait 5. ----
+    // Upstream's occurrences start on 18 Nov (due + wait + 1) and repeat monthly: 18 Dec (a Friday), 18 Jan (a Monday).
+
+    private static final LocalDate MONTHLY_DUE_DATE = LocalDate.of(2026, 11, 12);
+
+    private void monthlyPenaltyAlreadyCharged(Integer... frequencyNumbers) {
+        when(installment1.getDueDate()).thenReturn(MONTHLY_DUE_DATE);
+        when(calculator.addWorkingDays(eq(MONTHLY_DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2026, 11, 19));
+        when(penaltyCharge.feeFrequency()).thenReturn(PeriodFrequencyType.MONTHS.getValue());
+        when(penaltyCharge.feeInterval()).thenReturn(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.MONTHS), eq(1), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.<LocalDate>getArgument(2).plusMonths(1));
+        when(loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, penaltyCharge, 1))
+                .thenReturn(List.of(frequencyNumbers));
+    }
+
+    @Test
+    void repeatPenaltyFallingOnFridayIsWithheldUntilSunday() {
+        monthlyPenaltyAlreadyCharged(1);
+        when(calculator.nextWorkingDayOnOrAfter(eq(LocalDate.of(2026, 12, 18)), eq(WORKING_DAYS), any()))
+                .thenReturn(LocalDate.of(2026, 12, 20));
+        setBusinessDate(LocalDate.of(2026, 12, 18));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+
+        Object result = aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(result).isNull();
+        verifyNeverProceeded();
+    }
+
+    @Test
+    void repeatPenaltyIsChargedOnTheNextWorkingDay() {
+        monthlyPenaltyAlreadyCharged(1);
+        when(calculator.nextWorkingDayOnOrAfter(eq(LocalDate.of(2026, 12, 18)), eq(WORKING_DAYS), any()))
+                .thenReturn(LocalDate.of(2026, 12, 20));
+        setBusinessDate(LocalDate.of(2026, 12, 20));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
+    }
+
+    @Test
+    void repeatPenaltyOnAWorkingDayIsChargedThatDay() {
+        monthlyPenaltyAlreadyCharged(1, 2);
+        when(calculator.nextWorkingDayOnOrAfter(eq(LocalDate.of(2027, 1, 18)), eq(WORKING_DAYS), any()))
+                .thenReturn(LocalDate.of(2027, 1, 18));
+        setBusinessDate(LocalDate.of(2027, 1, 18));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
+    }
+
+    @Test
+    void firstPenaltyIsLeftToTheWorkingDayGrace() {
+        // On 19 Nov only the first occurrence (18 Nov) is pending; the repeat rule must not second-guess it.
+        monthlyPenaltyAlreadyCharged();
+        setBusinessDate(LocalDate.of(2026, 11, 19));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
+        verify(calculator, never()).nextWorkingDayOnOrAfter(any(), any(), any());
+    }
+
+    @Test
+    void nothingPendingProceedsForUpstreamToSkip() {
+        monthlyPenaltyAlreadyCharged(1, 2);
+        setBusinessDate(LocalDate.of(2026, 12, 25));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
+        verify(calculator, never()).nextWorkingDayOnOrAfter(any(), any(), any());
+    }
+
+    @Test
+    void dailyRepeatBeyondAThousandOccurrencesStillWaitsForAWorkingDay() {
+        // Daily overdue penalties are allowed; after 1000 charged repeats the 1001st must still move off a non-working day.
+        when(installment1.getDueDate()).thenReturn(MONTHLY_DUE_DATE);
+        when(calculator.addWorkingDays(eq(MONTHLY_DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2026, 11, 19));
+        when(penaltyCharge.feeFrequency()).thenReturn(PeriodFrequencyType.DAYS.getValue());
+        when(penaltyCharge.feeInterval()).thenReturn(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.DAYS), eq(1), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.<LocalDate>getArgument(2).plusDays(1));
+        when(loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, penaltyCharge, 1))
+                .thenReturn(IntStream.rangeClosed(1, 1000).boxed().toList());
+        LocalDate occurrence1001 = LocalDate.of(2026, 11, 18).plusDays(1000);
+        when(calculator.nextWorkingDayOnOrAfter(eq(occurrence1001), eq(WORKING_DAYS), any())).thenReturn(occurrence1001.plusDays(2));
+        setBusinessDate(occurrence1001);
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+
+        Object result = aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(result).isNull();
+        verifyNeverProceeded();
+    }
+
+    @Test
+    void feeIntervalThatDoesNotAdvanceEndsTheWalk() {
+        monthlyPenaltyAlreadyCharged(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.MONTHS), eq(1), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.<LocalDate>getArgument(2));
+        setBusinessDate(LocalDate.of(2026, 12, 18));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
     }
 
     // ---- proceed(...) stub/verify helpers: wrapped so test methods need not declare `throws Throwable`. ----
