@@ -83,12 +83,17 @@ public class MnzlLoanArrearsAgingService extends LoanArrearsAgingServiceImpl {
         BigDecimal penaltyOverdue = BigDecimal.ZERO;
         LocalDate overDueSince = businessDate;
         for (LoanRepaymentScheduleInstallment installment : installments) {
+            // Installments not yet due or fully paid add nothing; skipping them also keeps a long holiday run after a
+            // future due date from tripping the calculator's search cap on a repayment.
+            if (!DateUtils.isBefore(installment.getDueDate(), businessDate) || !installment.isNotFullyPaidOff()) {
+                continue;
+            }
             if (workingDayCalculator.isPastWorkingDayGrace(installment.getDueDate(), graceDays, businessDate, workingDays, holidays)) {
                 principalOverdue = principalOverdue.add(installment.getPrincipalOutstanding(currency).getAmount());
                 interestOverdue = interestOverdue.add(installment.getInterestOutstanding(currency).getAmount());
                 feeOverdue = feeOverdue.add(installment.getFeeChargesOutstanding(currency).getAmount());
                 penaltyOverdue = penaltyOverdue.add(installment.getPenaltyChargesOutstanding(currency).getAmount());
-                if (installment.isNotFullyPaidOff() && DateUtils.isAfter(overDueSince, installment.getDueDate())) {
+                if (DateUtils.isAfter(overDueSince, installment.getDueDate())) {
                     overDueSince = installment.getDueDate();
                 }
             }

@@ -21,7 +21,9 @@ package co.mnzl.fineract.custom.loan.grace;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
@@ -72,9 +74,6 @@ import org.aspectj.lang.annotation.Aspect;
 @Slf4j
 @RequiredArgsConstructor
 public class MnzlOverdueChargeGraceAspect {
-
-    // Guards the repeat walk against a charge whose fee interval never advances the date.
-    private static final int MAX_PENALTY_REPEATS = 1000;
 
     private final MnzlWorkingDayCalculator workingDayCalculator;
     private final ConfigurationDomainService configurationDomainService;
@@ -166,19 +165,23 @@ public class MnzlOverdueChargeGraceAspect {
         if (feeFrequency == null) {
             return false;
         }
-        final Collection<Integer> charged = loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, charge,
-                data.getPeriodNumber());
+        final Set<Integer> charged = new HashSet<>(
+                loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, charge, data.getPeriodNumber()));
 
         LocalDate occurrenceDate = installmentDueDate.plusDays(penaltyWaitPeriod + 1L);
         LocalDate newestPendingDate = null;
         int newestPendingNumber = 0;
-        for (int number = 1; number <= MAX_PENALTY_REPEATS && !occurrenceDate.isAfter(currentDate); number++) {
+        for (int number = 1; !occurrenceDate.isAfter(currentDate); number++) {
             if (!charged.contains(number)) {
                 newestPendingDate = occurrenceDate;
                 newestPendingNumber = number;
             }
-            occurrenceDate = scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.fromInt(feeFrequency), charge.feeInterval(),
-                    occurrenceDate);
+            final LocalDate next = scheduledDateGenerator.getRepaymentPeriodDate(PeriodFrequencyType.fromInt(feeFrequency),
+                    charge.feeInterval(), occurrenceDate);
+            if (!next.isAfter(occurrenceDate)) {
+                break; // a fee interval that does not advance the date would never end
+            }
+            occurrenceDate = next;
         }
         return newestPendingNumber > 1
                 && workingDayCalculator.nextWorkingDayOnOrAfter(newestPendingDate, workingDays, holidays).isAfter(currentDate);

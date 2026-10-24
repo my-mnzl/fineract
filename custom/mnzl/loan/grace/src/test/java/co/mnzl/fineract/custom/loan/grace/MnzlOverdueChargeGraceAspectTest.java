@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
@@ -259,6 +260,42 @@ class MnzlOverdueChargeGraceAspectTest {
 
         assertThat(capturedProceedInstallments()).hasSize(1);
         verify(calculator, never()).nextWorkingDayOnOrAfter(any(), any(), any());
+    }
+
+    @Test
+    void dailyRepeatBeyondAThousandOccurrencesStillWaitsForAWorkingDay() {
+        // Daily overdue penalties are allowed; after 1000 charged repeats the 1001st must still move off a non-working day.
+        when(installment1.getDueDate()).thenReturn(MONTHLY_DUE_DATE);
+        when(calculator.addWorkingDays(eq(MONTHLY_DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2026, 11, 19));
+        when(penaltyCharge.feeFrequency()).thenReturn(PeriodFrequencyType.DAYS.getValue());
+        when(penaltyCharge.feeInterval()).thenReturn(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.DAYS), eq(1), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.<LocalDate>getArgument(2).plusDays(1));
+        when(loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, penaltyCharge, 1))
+                .thenReturn(IntStream.rangeClosed(1, 1000).boxed().toList());
+        LocalDate occurrence1001 = LocalDate.of(2026, 11, 18).plusDays(1000);
+        when(calculator.nextWorkingDayOnOrAfter(eq(occurrence1001), eq(WORKING_DAYS), any())).thenReturn(occurrence1001.plusDays(2));
+        setBusinessDate(occurrence1001);
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+
+        Object result = aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(result).isNull();
+        verifyNeverProceeded();
+    }
+
+    @Test
+    void feeIntervalThatDoesNotAdvanceEndsTheWalk() {
+        monthlyPenaltyAlreadyCharged(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.MONTHS), eq(1), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.<LocalDate>getArgument(2));
+        setBusinessDate(LocalDate.of(2026, 12, 18));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
     }
 
     // ---- proceed(...) stub/verify helpers: wrapped so test methods need not declare `throws Throwable`. ----

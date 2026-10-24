@@ -33,7 +33,9 @@ import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
+import org.apache.fineract.organisation.holiday.domain.Holiday;
 import org.apache.fineract.organisation.holiday.domain.HolidayRepositoryWrapper;
+import org.apache.fineract.organisation.holiday.domain.HolidayStatusType;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.workingdays.domain.RepaymentRescheduleType;
@@ -141,6 +143,32 @@ class MnzlLoanArrearsAgingServiceTest {
         LoanArrearsData arrears = service.calculateArrearsForLoan(loan);
 
         assertThat(arrears.isOverdue()).isTrue();
+    }
+
+    @Test
+    void futureInstallmentInsideALongHolidayDoesNotFailTheRefresh() {
+        // A 30-day closure after a not-yet-due installment would exhaust the calculator's search cap if it were
+        // evaluated; it cannot be in arrears, so the event-driven refresh must skip it.
+        when(productRelatedDetail.getGraceOnArrearsAgeing()).thenReturn(1); // search cap 1 * 7 + 14 = 21 days
+        when(holidayRepository.findByOfficeIdAndGreaterThanDate(eq(OFFICE_ID), any(LocalDate.class)))
+                .thenReturn(List.of(new Holiday().setName("closure").setFromDate(DUE_DATE.plusMonths(1).plusDays(1))
+                        .setToDate(DUE_DATE.plusMonths(1).plusDays(30)).setStatus(HolidayStatusType.ACTIVE.getValue())
+                        .setReschedulingType(0).setProcessed(false)));
+        setBusinessDate(LocalDate.of(2026, 11, 18));
+
+        LoanArrearsData arrears = service.calculateArrearsForLoan(loan);
+
+        assertThat(arrears.getTotalOverdue()).isEqualByComparingTo("120.00");
+    }
+
+    @Test
+    void paidInstallmentIsNotCounted() {
+        when(overdueInstallment.isNotFullyPaidOff()).thenReturn(false);
+        setBusinessDate(LocalDate.of(2026, 11, 18));
+
+        LoanArrearsData arrears = service.calculateArrearsForLoan(loan);
+
+        assertThat(arrears.isOverdue()).isFalse();
     }
 
     private static void stubInstallment(LoanRepaymentScheduleInstallment installment, LocalDate dueDate, String principal,
