@@ -96,21 +96,36 @@ public class MnzlWorkingDayCalculator {
     }
 
     /**
-     * The day after {@code graceDays} working days of grace following {@code dueDate}: when an unpaid installment is
-     * overdue and its first penalty is charged. The due date itself is never counted.
+     * Last day of the grace on an installment due on {@code dueDate}. Upstream reads a grace setting of
+     * {@code graceDays} as the {@code graceDays + 1} calendar days from the due date through
+     * {@code dueDate + graceDays}; this holds {@code graceDays + 1} <em>working</em> days instead, counting the due
+     * date when it is one. Never earlier than upstream's {@code dueDate + graceDays}, so the working-day rule can only
+     * lengthen upstream's calendar grace.
      */
-    public LocalDate firstDayAfterGrace(LocalDate dueDate, int graceDays, WorkingDays config, List<Holiday> holidays) {
-        return addWorkingDays(dueDate, graceDays, config, holidays).plusDays(1);
+    public LocalDate lastGraceDay(LocalDate dueDate, int graceDays, WorkingDays config, List<Holiday> holidays) {
+        return addWorkingDays(dueDate.minusDays(1), graceDays + 1, config, holidays);
     }
 
     /**
-     * Whether an installment due on {@code dueDate} is in arrears on {@code businessDate} after {@code graceDays}
-     * working days of grace: the working-day reading of upstream's
-     * {@code dueDate < businessDate - graceOnArrearsAgeing}.
+     * Convenience form of {@link #lastGraceDay(LocalDate, int, WorkingDays, List)} that fetches working-days config and
+     * the office's holidays on every call.
+     */
+    public LocalDate lastGraceDay(LocalDate dueDate, int graceDays, Long officeId) {
+        return addWorkingDays(dueDate.minusDays(1), graceDays + 1, officeId);
+    }
+
+    /** The day after the grace on an installment due on {@code dueDate}: when it is overdue and first penalised. */
+    public LocalDate firstDayAfterGrace(LocalDate dueDate, int graceDays, WorkingDays config, List<Holiday> holidays) {
+        return lastGraceDay(dueDate, graceDays, config, holidays).plusDays(1);
+    }
+
+    /**
+     * Whether an installment due on {@code dueDate} is in arrears on {@code businessDate}: the working-day reading of
+     * upstream's {@code dueDate < businessDate - graceOnArrearsAgeing}.
      */
     public boolean isPastWorkingDayGrace(LocalDate dueDate, int graceDays, LocalDate businessDate, WorkingDays config,
             List<Holiday> holidays) {
-        return addWorkingDays(dueDate, graceDays, config, holidays).isBefore(businessDate);
+        return lastGraceDay(dueDate, graceDays, config, holidays).isBefore(businessDate);
     }
 
     /**

@@ -71,7 +71,7 @@ public class MnzlLoanDelinquencyDomainService implements LoanDelinquencyDomainSe
         Long officeId = loan.getOffice() != null ? loan.getOffice().getId() : null;
         LocalDate calendarDelinquentDate = data.getDelinquentDate();
         LocalDate overdueSinceDate = calendarDelinquentDate.minusDays(graceDays);
-        LocalDate workingDelinquentDate = workingDayCalculator.addWorkingDays(overdueSinceDate, graceDays, officeId);
+        LocalDate workingDelinquentDate = workingDayCalculator.lastGraceDay(overdueSinceDate, graceDays, officeId);
 
         long extraGraceDays = ChronoUnit.DAYS.between(calendarDelinquentDate, workingDelinquentDate);
         if (extraGraceDays <= 0) {

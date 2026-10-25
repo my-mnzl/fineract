@@ -298,8 +298,8 @@ class MnzlWorkingDayCalculatorTest {
 
     @Test
     void isPastWorkingDayGrace_thursdayDueDateWaitsOutTheFridaySaturdayWeekend() {
-        // Staging loan 120944: due Thu 12 Nov 2026, grace 3 -> Sun 15, Mon 16, Tue 17. In arrears from Wed 18 Nov;
-        // the calendar rule (due < businessDate - 3) would already say so on Mon 16 Nov.
+        // Due Thu 12 Nov 2026, grace 3 -> Thu 12 (the due date counts), Sun 15, Mon 16, Tue 17. In arrears from Wed 18
+        // Nov; the calendar rule (due < businessDate - 3) would already say so on Mon 16 Nov.
         LocalDate due = LocalDate.of(2026, 11, 12);
 
         assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 11, 16), egyptConfig(), List.of())).isFalse();
@@ -309,12 +309,14 @@ class MnzlWorkingDayCalculatorTest {
 
     @Test
     void isPastWorkingDayGrace_holidayPushesTheCutOff() {
-        // Due Sat 12 Dec 2026, grace 3, holiday Mon 14-Tue 15: Sun 13, Wed 16, Thu 17 -> in arrears from Fri 18 Dec.
+        // Due Sat 12 Dec 2026 (not a working day, so not counted), grace 2, holiday Mon 14-Tue 15: Sun 13, Wed 16, Thu
+        // 17
+        // -> in arrears from Fri 18 Dec.
         LocalDate due = LocalDate.of(2026, 12, 12);
         List<Holiday> holidays = List.of(activeHoliday(LocalDate.of(2026, 12, 14), LocalDate.of(2026, 12, 15)));
 
-        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 12, 17), egyptConfig(), holidays)).isFalse();
-        assertThat(calculator.isPastWorkingDayGrace(due, 3, LocalDate.of(2026, 12, 18), egyptConfig(), holidays)).isTrue();
+        assertThat(calculator.isPastWorkingDayGrace(due, 2, LocalDate.of(2026, 12, 17), egyptConfig(), holidays)).isFalse();
+        assertThat(calculator.isPastWorkingDayGrace(due, 2, LocalDate.of(2026, 12, 18), egyptConfig(), holidays)).isTrue();
     }
 
     @Test
@@ -326,11 +328,34 @@ class MnzlWorkingDayCalculatorTest {
     }
 
     @Test
+    void lastGraceDay_countsTheDueDateOnlyWhenItIsAWorkingDay() {
+        // Grace 4 is the due date plus four more days, so five working days: due Sun 1 Nov 2026 -> Sun 1 - Thu 5.
+        assertThat(calculator.lastGraceDay(LocalDate.of(2026, 11, 1), 4, egyptConfig(), List.of())).isEqualTo(LocalDate.of(2026, 11, 5));
+        // Due Fri 30 Oct (weekend) is not counted: Sun 1 - Thu 5 again.
+        assertThat(calculator.lastGraceDay(LocalDate.of(2026, 10, 30), 4, egyptConfig(), List.of())).isEqualTo(LocalDate.of(2026, 11, 5));
+        // A holiday on the due date is not counted either.
+        List<Holiday> holidays = List.of(activeHoliday(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 1)));
+        assertThat(calculator.lastGraceDay(LocalDate.of(2026, 11, 1), 4, egyptConfig(), holidays)).isEqualTo(LocalDate.of(2026, 11, 8));
+    }
+
+    @Test
+    void lastGraceDay_isNeverBeforeTheCalendarGrace() {
+        LocalDate start = LocalDate.of(2026, 11, 1);
+        for (int offset = 0; offset < 14; offset++) {
+            LocalDate due = start.plusDays(offset);
+            for (int grace = 0; grace <= 10; grace++) {
+                assertThat(calculator.lastGraceDay(due, grace, egyptConfig(), List.of())).isAfterOrEqualTo(due.plusDays(grace));
+            }
+        }
+    }
+
+    @Test
     void firstDayAfterGrace_isTheDayAfterTheLastGraceDay() {
-        // MNZL-447 illustration: due Sun 1 Nov 2026, 5 working days of grace (Mon 2 - Thu 5, then Sun 8 after the
-        // Fri/Sat weekend); overdue and the first penalty start Mon 9 Nov.
-        assertThat(calculator.firstDayAfterGrace(LocalDate.of(2026, 11, 1), 5, egyptConfig(), List.of()))
-                .isEqualTo(LocalDate.of(2026, 11, 9));
+        // MNZL-447 (Ops, May 2026): due Fri 1 May, Thu 7 May off. Five working days are Sun 3 - Wed 6 and Sun 10; the
+        // late fee is charged at the start of Mon 11 May.
+        List<Holiday> holidays = List.of(activeHoliday(LocalDate.of(2026, 5, 7), LocalDate.of(2026, 5, 7)));
+        assertThat(calculator.firstDayAfterGrace(LocalDate.of(2026, 5, 1), 4, egyptConfig(), holidays))
+                .isEqualTo(LocalDate.of(2026, 5, 11));
         // Grace ending on a Thursday: the next day is the Friday, not the next working day.
         assertThat(calculator.firstDayAfterGrace(LocalDate.of(2026, 11, 1), 4, egyptConfig(), List.of()))
                 .isEqualTo(LocalDate.of(2026, 11, 6));
