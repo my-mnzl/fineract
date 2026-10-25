@@ -326,6 +326,17 @@ class MnzlWorkingDayCalculatorTest {
     }
 
     @Test
+    void firstDayAfterGrace_isTheDayAfterTheLastGraceDay() {
+        // MNZL-447 illustration: due Sun 1 Nov 2026, 5 working days of grace (Mon 2 - Thu 5, then Sun 8 after the
+        // Fri/Sat weekend); overdue and the first penalty start Mon 9 Nov.
+        assertThat(calculator.firstDayAfterGrace(LocalDate.of(2026, 11, 1), 5, egyptConfig(), List.of()))
+                .isEqualTo(LocalDate.of(2026, 11, 9));
+        // Grace ending on a Thursday: the next day is the Friday, not the next working day.
+        assertThat(calculator.firstDayAfterGrace(LocalDate.of(2026, 11, 1), 4, egyptConfig(), List.of()))
+                .isEqualTo(LocalDate.of(2026, 11, 6));
+    }
+
+    @Test
     void nextWorkingDayOnOrAfter_keepsAWorkingDay() {
         LocalDate wednesday = LocalDate.of(2026, 12, 16);
 
