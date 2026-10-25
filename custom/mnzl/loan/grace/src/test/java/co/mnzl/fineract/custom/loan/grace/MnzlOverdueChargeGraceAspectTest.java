@@ -285,6 +285,30 @@ class MnzlOverdueChargeGraceAspectTest {
     }
 
     @Test
+    void firstDailyPenaltyIsNotHeldWhenGraceEndsBeforeAWeekend() {
+        // Due Thu 12 Nov, 5 working days of grace end Thu 19; the first penalty is due Fri 20, when the daily
+        // occurrences of 18, 19 and 20 Nov are all pending. The newest is on a Friday, but the first penalty must
+        // still go through (with backdating off it would otherwise never be charged).
+        when(installment1.getDueDate()).thenReturn(MONTHLY_DUE_DATE);
+        when(calculator.firstDayAfterGrace(eq(MONTHLY_DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2026, 11, 20));
+        when(penaltyCharge.feeFrequency()).thenReturn(PeriodFrequencyType.DAYS.getValue());
+        when(penaltyCharge.feeInterval()).thenReturn(1);
+        when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.DAYS), eq(1), any(LocalDate.class)))
+                .thenAnswer(invocation -> invocation.<LocalDate>getArgument(2).plusDays(1));
+        when(loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, penaltyCharge, 1)).thenReturn(List.of());
+        when(calculator.nextWorkingDayOnOrAfter(eq(LocalDate.of(2026, 11, 20)), eq(WORKING_DAYS), any()))
+                .thenReturn(LocalDate.of(2026, 11, 22));
+        setBusinessDate(LocalDate.of(2026, 11, 20));
+        when(joinPoint.getArgs()).thenReturn(new Object[] { LOAN_ID, List.of(overdue(1)) });
+        stubProceedReturnsNull();
+
+        aspect.enforceWorkingDayGrace(joinPoint);
+
+        assertThat(capturedProceedInstallments()).hasSize(1);
+        verify(calculator, never()).nextWorkingDayOnOrAfter(any(), any(), any());
+    }
+
+    @Test
     void feeIntervalThatDoesNotAdvanceEndsTheWalk() {
         monthlyPenaltyAlreadyCharged(1);
         when(scheduledDateGenerator.getRepaymentPeriodDate(eq(PeriodFrequencyType.MONTHS), eq(1), any(LocalDate.class)))

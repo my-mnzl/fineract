@@ -168,6 +168,11 @@ public class MnzlOverdueChargeGraceAspect {
         }
         final Set<Integer> charged = new HashSet<>(
                 loanChargeReadPlatformService.retrieveOverdueInstallmentChargeFrequencyNumber(loan, charge, data.getPeriodNumber()));
+        // Until the first penalty is charged, the working-day grace alone decides the day; by then a daily charge
+        // already has several occurrences pending, and holding them would hold (with backdating off, lose) the first.
+        if (!charged.contains(1)) {
+            return false;
+        }
 
         LocalDate occurrenceDate = installmentDueDate.plusDays(penaltyWaitPeriod + 1L);
         LocalDate newestPendingDate = null;
