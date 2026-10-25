@@ -236,41 +236,40 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
     /**
      * Test 2b: Working-day grace on the overdue-penalty COB job — reproduces Mnzl staging loan 39550.
      *
-     * Mirrors staging exactly: Egyptian working week (Sun–Thu) with MOVE_TO_NEXT_WORKING_DAY rescheduling,
-     * {@code penalty-wait-period = 5}, an active office-1 holiday 24–28 June 2026, and a loan whose first installment
-     * falls due Sunday 21 June 2026 (disbursed 21 May 2026, monthly). 21 June is a Sunday — a working day in the
-     * Sun–Thu week — so it is not rescheduled.
+     * Egyptian working week (Sun–Thu) with MOVE_TO_NEXT_WORKING_DAY rescheduling, {@code penalty-wait-period = 4} (the
+     * due date plus four days: five working days, the due date included), an active office-1 holiday 24–28 June 2026,
+     * and a loan whose first installment falls due Sunday 21 June 2026 (disbursed 21 May 2026, monthly). 21 June is a
+     * Sunday — a working day in the Sun–Thu week — so it is not rescheduled, and it counts.
      *
      * <p>
-     * Counting 5 <em>working</em> days from 21 June, skipping Fri/Sat weekends AND the 24–28 June holiday, the 5th
-     * working day is 01 July 2026:
+     * Counting 5 <em>working</em> days from 21 June, skipping Fri/Sat weekends AND the 24–28 June holiday:
      *
      * <pre>
-     *   Jun 22 Mon  working day 1
-     *   Jun 23 Tue  working day 2
+     *   Jun 21 Sun  working day 1 (due date)
+     *   Jun 22 Mon  working day 2
+     *   Jun 23 Tue  working day 3
      *   Jun 24 Wed  HOLIDAY
      *   Jun 25 Thu  HOLIDAY
      *   Jun 26 Fri  weekend
      *   Jun 27 Sat  weekend
      *   Jun 28 Sun  HOLIDAY
-     *   Jun 29 Mon  working day 3
-     *   Jun 30 Tue  working day 4
-     *   Jul 01 Wed  working day 5  ← penalty first applies here
+     *   Jun 29 Mon  working day 4
+     *   Jun 30 Tue  working day 5
+     *   Jul 01 Wed  penalty first applies here
      * </pre>
      *
-     * So the 5th working day is 01 July. The overdue-penalty COB step evaluates the loan as of the COB date (= business
-     * date - 1), so the penalty must be ABSENT while the COB date is 28 June (business date 29 June — where a
-     * holiday-blind calculation would already charge) and PRESENT once the COB date reaches 01 July (business date 02
-     * July).
+     * The overdue-penalty COB step evaluates the loan as of the COB date (= business date - 1), so the penalty must be
+     * ABSENT while the COB date is 28 June (business date 29 June — where upstream's calendar grace, over since 26
+     * June, would already charge) and PRESENT once the COB date reaches 01 July (business date 02 July).
      */
     @Test
     public void testOverduePenaltyGraceCountsWorkingDaysSkippingWeekendsAndHolidays() {
         runAt("21 May 2026", () -> {
             // Egyptian working week with MOVE_TO_NEXT_WORKING_DAY rescheduling (matches staging m_working_days).
             setWorkingDays("FREQ=WEEKLY;INTERVAL=1;BYDAY=SU,MO,TU,WE,TH", 2);
-            // Staging penalty wait period.
+            // Ops penalty wait period: the due date plus four days.
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
-                    new PutGlobalConfigurationsRequest().value(5L));
+                    new PutGlobalConfigurationsRequest().value(4L));
             // Active office-1 holiday spanning the same dates as the staging "testing" holiday.
             createAndActivateHoliday("24 June 2026", "28 June 2026");
 
@@ -289,46 +288,45 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             // The overdue-penalty COB step reads the COB date (= business date - 1), so a business date of D evaluates
             // the loan as of COB date D-1.
 
-            // (1) Business date 29 June -> COB date 28 June. A holiday-blind calc lands the 5th working day on 28 June
-            // and WOULD charge here; the working-day-aware grace (24-28 June holiday + Fri/Sat) pushes it to 01 July,
-            // so
-            // there must still be NO penalty. This is the regression guard against the staging behaviour.
+            // (1) Business date 29 June -> COB date 28 June. Upstream's calendar grace ended 26 June and WOULD charge
+            // here; the working-day grace (24-28 June holiday + Fri/Sat) runs to 30 June, so there must still be NO
+            // penalty.
             updateBusinessDate("29 June 2026");
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
             loan = loanTransactionHelper.getLoanDetails(loanId);
             assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
                     "No penalty while COB date is 28 June: holiday 24-28 + weekend push the 5th working day to 01 July");
 
-            // (2) Business date 02 July -> COB date 01 July = the 5th working day, still inside the grace. No penalty.
-            updateBusinessDate("02 July 2026");
+            // (2) Business date 01 July -> COB date 30 June = the 5th working day, still inside the grace. No penalty.
+            updateBusinessDate("01 July 2026");
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
             loan = loanTransactionHelper.getLoanDetails(loanId);
             assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
-                    "No penalty on the 5th working day (01 July): the grace includes it");
+                    "No penalty on the 5th working day (30 June): the grace includes it");
 
-            // (3) Business date 03 July -> COB date 02 July, the day after the grace. Applies.
-            updateBusinessDate("03 July 2026");
+            // (3) Business date 02 July -> COB date 01 July, the day after the grace. Applies.
+            updateBusinessDate("02 July 2026");
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
             loan = loanTransactionHelper.getLoanDetails(loanId);
             assertTrue(Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()) > 0,
-                    "Overdue penalty should be applied on 02 July, the day after the 5th working day");
+                    "Overdue penalty should be applied on 01 July, the day after the 5th working day");
         });
     }
 
     /**
      * Test 2c: Working-day grace via the standalone "Apply penalty to overdue loans" scheduled job — the exact job run
      * on Mnzl staging (not COB). Same staging config as the COB test above. Unlike the COB step, this job evaluates the
-     * loan as of the business date directly (no COB-date lag), so the penalty must be ABSENT at business date 30 June
-     * (where the calendar-day query already surfaces the installment and a holiday-blind run would charge) and PRESENT
-     * at business date 01 July (the 5th working day). {@code backdate-penalties-enabled = true} so the job's query
-     * keeps surfacing the installment up to the working-day date.
+     * loan as of the business date directly (no COB-date lag), so the penalty must be ABSENT at business date 29 June
+     * (where the calendar-day query already surfaces the installment and a holiday-blind run would charge) and on 30
+     * June (the 5th working day), and PRESENT at business date 01 July. {@code backdate-penalties-enabled = true} so
+     * the job's query keeps surfacing the installment up to the working-day date.
      */
     @Test
     public void testScheduledJobOverduePenaltyHonoursWorkingDayGrace() {
         runAt("21 May 2026", () -> {
             setWorkingDays("FREQ=WEEKLY;INTERVAL=1;BYDAY=SU,MO,TU,WE,TH", 2);
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.PENALTY_WAIT_PERIOD,
-                    new PutGlobalConfigurationsRequest().value(5L));
+                    new PutGlobalConfigurationsRequest().value(4L));
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.BACKDATE_PENALTIES_ENABLED,
                     new PutGlobalConfigurationsRequest().enabled(true));
             createAndActivateHoliday("24 June 2026", "28 June 2026");
@@ -344,37 +342,36 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             assertEquals(LocalDate.of(2026, 6, 21), firstInstallmentDueDate(loanTransactionHelper.getLoanDetails(loanId)),
                     "First installment should be due Sunday 21 June 2026");
 
-            // (1) Business date 30 June: calendar grace (since 26 June) has elapsed and the job's query surfaces the
-            // installment, but the working-day grace runs to 01 July -> the aspect must withhold. NO penalty. This is
-            // the regression guard for the standalone-job path against the staging behaviour.
-            updateBusinessDate("30 June 2026");
+            // (1) Business date 29 June: calendar grace (over since 26 June) has elapsed and the job's query surfaces
+            // the installment, but the working-day grace runs to 30 June -> the aspect must withhold. NO penalty.
+            updateBusinessDate("29 June 2026");
             schedulerJobHelper.executeAndAwaitJob("Apply penalty to overdue loans");
             GetLoansLoanIdResponse loan = loanTransactionHelper.getLoanDetails(loanId);
             assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
-                    "Scheduled job must NOT charge on 30 June: working-day grace runs to 01 July");
+                    "Scheduled job must NOT charge on 29 June: working-day grace runs to 30 June");
 
-            // (2) Business date 01 July = the 5th working day, still inside the grace. No penalty.
-            updateBusinessDate("01 July 2026");
+            // (2) Business date 30 June = the 5th working day, still inside the grace. No penalty.
+            updateBusinessDate("30 June 2026");
             schedulerJobHelper.executeAndAwaitJob("Apply penalty to overdue loans");
             loan = loanTransactionHelper.getLoanDetails(loanId);
             assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
-                    "Scheduled job must NOT charge on the 5th working day (01 July)");
+                    "Scheduled job must NOT charge on the 5th working day (30 June)");
 
-            // (3) Business date 02 July = the day after the grace. Penalty applies.
-            updateBusinessDate("02 July 2026");
+            // (3) Business date 01 July = the day after the grace. Penalty applies.
+            updateBusinessDate("01 July 2026");
             schedulerJobHelper.executeAndAwaitJob("Apply penalty to overdue loans");
             loan = loanTransactionHelper.getLoanDetails(loanId);
             assertTrue(Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()) > 0,
-                    "Scheduled job should charge on 02 July, the day after the 5th working day");
+                    "Scheduled job should charge on 01 July, the day after the 5th working day");
         });
     }
 
     /**
      * Test 2d: Working-day grace on arrears ageing via the standalone "Update Loan Arrears Ageing" job (the path
      * production uses). Reproduces staging loan 120944: Sun–Thu week, {@code graceOnArrearsAgeing = 3}, installment 1
-     * due Thursday 12 November 2026. Upstream counts the grace in calendar days and reports the loan overdue from 15
-     * November; counting Sun 15, Mon 16, Tue 17 as the three working days, it must stay out of arrears until 18
-     * November.
+     * due Thursday 12 November 2026. Upstream counts the grace in calendar days and reports the loan overdue from 16
+     * November; counting the due date plus three days as four working days (Thu 12, Sun 15, Mon 16, Tue 17), it must
+     * stay out of arrears until 18 November.
      */
     @Test
     public void testArrearsAgeingJobCountsGraceInWorkingDays() {
@@ -407,10 +404,11 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
 
     /**
      * Test 2e: A recurring ("monthly") overdue penalty that upstream would repeat on a non-working day is charged on
-     * the next working day instead. Installment 1 is due Thursday 12 November 2026 with
-     * {@code penalty-wait-period = 5}: upstream's occurrences start 18 November and repeat monthly, so the second lands
-     * on Friday 18 December. With a Sun–Thu week it must wait for Sunday 20 December. Upstream dates that repeat charge
-     * 12 December (due date + one interval), which is how it is told apart from installment 2's own penalty.
+     * the next working day instead. Installment 1 is due Thursday 12 November 2026 with {@code penalty-wait-period = 5}
+     * (six working days with the due date: 12 to 19 November, first penalty Friday 20 November): upstream's occurrences
+     * start 18 November and repeat monthly, so the second lands on Friday 18 December. With a Sun–Thu week it must wait
+     * for Sunday 20 December. Upstream dates that repeat charge 12 December (due date + one interval), which is how it
+     * is told apart from installment 2's own penalty.
      */
     @Test
     public void testRecurringOverduePenaltyRollsOffNonWorkingDay() {
@@ -429,7 +427,7 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             setMnzlProductStrategy(product.getResourceId());
             Long loanId = applyApproveDisburseLoan(clientId, product.getResourceId(), 120000.0, 12.0, 12, "12 October 2026");
 
-            // (1) Close through Friday 20 November, the day after the 5th working day (19 November): the first penalty.
+            // (1) Close through Friday 20 November, the day after the grace (19 November): the first penalty.
             updateBusinessDate("21 November 2026");
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
             assertTrue(penaltyDueDates(loanId, penaltyChargeId).contains(LocalDate.of(2026, 11, 12)),

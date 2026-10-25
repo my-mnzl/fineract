@@ -46,8 +46,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
  * Upstream rebuilds {@code m_loan_arrears_aging} in one statement that counts the grace in calendar days
  * ({@code duedate < businessDate - grace}). That stays as is; this subclass then recomputes the loans whose answer can
  * change. Working-day grace is never shorter than calendar grace, so it can only take installments <em>out</em> of
- * arrears, and only those due in {@code [businessDate - (7 * grace + 14), businessDate - grace)}: the lower bound is
- * the {@link MnzlWorkingDayCalculator#addWorkingDays} search cap, and anything older is past the grace under either
+ * arrears, and only those due in {@code [businessDate - (7 * (grace + 1) + 14), businessDate - grace)}: the lower bound
+ * is the {@link MnzlWorkingDayCalculator#lastGraceDay} search cap, and anything older is past the grace under either
  * rule. One query loads the calendar-overdue installments of loans with an unpaid installment in that window; their
  * rows are rewritten from the installments still past the working-day grace.
  * </p>
@@ -155,7 +155,7 @@ public class MnzlLoanArrearsAgeingUpdateHandler extends LoanArrearsAgeingUpdateH
     }
 
     private static LocalDate windowStart(LocalDate businessDate, int graceDays) {
-        return businessDate.minusDays(7L * graceDays + 14);
+        return businessDate.minusDays(7L * (graceDays + 1) + 14);
     }
 
     /**
@@ -186,7 +186,7 @@ public class MnzlLoanArrearsAgeingUpdateHandler extends LoanArrearsAgeingUpdateH
                 .append("and mr.completed_derived is false ").append("and mr.duedate < ").append(calendarCutoff).append(' ')
                 .append("and exists (select 1 from m_loan_repayment_schedule w where w.loan_id = ml.id ")
                 .append("and w.completed_derived is false and w.duedate < ").append(calendarCutoff).append(" and w.duedate >= ")
-                .append(sqlGenerator.subDate(businessDate, "(ml.grace_on_arrears_ageing * 7 + 14)", "day")).append(") ");
+                .append(sqlGenerator.subDate(businessDate, "((ml.grace_on_arrears_ageing + 1) * 7 + 14)", "day")).append(") ");
         final MapSqlParameterSource parameters = new MapSqlParameterSource("purchasedReceivableStrategy",
                 Loan.FIXED_RECEIVABLE_TRANSACTION_STRATEGY);
         if (loanIds != null) {

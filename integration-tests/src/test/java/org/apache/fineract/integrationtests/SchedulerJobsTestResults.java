@@ -1088,7 +1088,16 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             Assertions.assertEquals(0, repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),
                     "Verifying From Penalty Charges due fot first Repayment after Successful completion of Scheduler Job");
 
-            LocalDate lastBusinessDateBeforeFastForward = LocalDate.of(2019, 4, 2);
+            // MNZL working-day grace: the first penalty is charged the day after the grace, so with no wait the due
+            // date
+            // (02 April) still carries none and it lands on 03 April, dated the due date.
+            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2019, 4, 2));
+            this.schedulerJobHelper.executeAndAwaitJob(jobName);
+            repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID);
+            Assertions.assertEquals(0, repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),
+                    "No penalty on the due date: the first one is charged the day after");
+
+            LocalDate lastBusinessDateBeforeFastForward = LocalDate.of(2019, 4, 3);
             BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, lastBusinessDateBeforeFastForward);
             this.schedulerJobHelper.executeAndAwaitJob(jobName);
             repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID);
@@ -1156,7 +1165,15 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             Assertions.assertEquals(0, repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),
                     "Verifying From Penalty Charges due fot first Repayment after Successful completion of Scheduler Job");
 
+            // MNZL working-day grace: a 1-day wait keeps 03 May, the last grace day, free of penalty; the first one is
+            // charged on 04 May, dated the due date.
             BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 5, 3));
+            this.schedulerJobHelper.executeAndAwaitJob(jobName);
+            repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID2);
+            Assertions.assertEquals(0, repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),
+                    "No penalty on the last grace day: the first one is charged the day after");
+
+            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.COB_DATE, LocalDate.of(2020, 5, 4));
             this.schedulerJobHelper.executeAndAwaitJob(jobName);
             repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID2);
             Assertions.assertEquals(39.39f, (Float) repaymentScheduleDataAfter.get(1).get("penaltyChargesDue"),

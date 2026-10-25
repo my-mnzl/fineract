@@ -80,7 +80,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
 
         assertThat(result.getDelinquentDate()).isEqualTo(LocalDate.of(2025, 1, 10));
         assertThat(result.getDelinquentDays()).isEqualTo(5L);
-        verify(workingDayCalculator, never()).addWorkingDays(any(), anyInt(), any());
+        verify(workingDayCalculator, never()).lastGraceDay(any(), anyInt(), any());
     }
 
     @Test
@@ -91,18 +91,18 @@ class MnzlLoanDelinquencyDomainServiceTest {
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
         assertThat(result.getDelinquentDate()).isNull();
-        verify(workingDayCalculator, never()).addWorkingDays(any(), anyInt(), any());
+        verify(workingDayCalculator, never()).lastGraceDay(any(), anyInt(), any());
     }
 
     @Test
     void workingDayGraceLandingOnSameDayAsCalendarLeavesOutputUnchanged() {
-        // No weekends/holidays inside the grace window — addWorkingDays returns the same date as calendar plusDays.
+        // No weekends/holidays inside the grace window — lastGraceDay returns the same date as calendar plusDays.
         when(productDetail.getGraceOnArrearsAgeing()).thenReturn(5);
         LocalDate calendarDelinquent = LocalDate.of(2025, 1, 15);
         LocalDate overdueSince = LocalDate.of(2025, 1, 10);
         CollectionData base = collectionDataWith(calendarDelinquent, 3L);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(calendarDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(calendarDelinquent);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
@@ -118,7 +118,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         LocalDate workingDelinquent = LocalDate.of(2025, 1, 12); // 2 weekend days inside the window
         CollectionData base = collectionDataWith(calendarDelinquent, 4L);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
@@ -134,7 +134,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         LocalDate workingDelinquent = LocalDate.of(2025, 1, 13); // 3 extra grace days
         CollectionData base = collectionDataWith(calendarDelinquent, 1L);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
@@ -150,7 +150,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         LocalDate workingDelinquent = LocalDate.of(2025, 1, 12);
         CollectionData base = collectionDataWith(calendarDelinquent, 0L);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
@@ -167,7 +167,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         CollectionData loanLevel = collectionDataWith(calendarDelinquent, 4L);
         LoanDelinquencyData base = new LoanDelinquencyData(loanLevel, Collections.emptyMap());
         when(delegate.getLoanDelinquencyData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
 
         LoanDelinquencyData result = service.getLoanDelinquencyData(loan, Collections.emptyList());
 
@@ -203,7 +203,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         assertThat(result).isSameAs(base);
         assertThat(result.getDelinquentDate()).isEqualTo(LocalDate.of(2025, 2, 20));
         assertThat(result.getDelinquentDays()).isEqualTo(7L);
-        verify(workingDayCalculator, never()).addWorkingDays(any(), anyInt(), any());
+        verify(workingDayCalculator, never()).lastGraceDay(any(), anyInt(), any());
     }
 
     /**
@@ -219,7 +219,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         Long upstreamDelinquentDays = 6L;
         CollectionData base = collectionDataWith(calendarDelinquent, upstreamDelinquentDays);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(5), eq(OFFICE_ID))).thenReturn(workingDelinquent);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
@@ -240,7 +240,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         Long upstreamDelinquentDays = 4L;
         CollectionData base = collectionDataWith(sameDayBothCalcs, upstreamDelinquentDays);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(3), eq(OFFICE_ID))).thenReturn(sameDayBothCalcs);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(3), eq(OFFICE_ID))).thenReturn(sameDayBothCalcs);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
@@ -261,7 +261,7 @@ class MnzlLoanDelinquencyDomainServiceTest {
         Long upstreamDelinquentDays = 5L;
         CollectionData base = collectionDataWith(calendarDelinquent, upstreamDelinquentDays);
         when(delegate.getOverdueCollectionData(eq(loan), any())).thenReturn(base);
-        when(workingDayCalculator.addWorkingDays(eq(overdueSince), eq(3), eq(OFFICE_ID))).thenReturn(workingDelinquent);
+        when(workingDayCalculator.lastGraceDay(eq(overdueSince), eq(3), eq(OFFICE_ID))).thenReturn(workingDelinquent);
 
         CollectionData result = service.getOverdueCollectionData(loan, Collections.emptyList());
 
