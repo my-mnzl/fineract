@@ -122,9 +122,10 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
 
     @Test
     void appliesPenaltyOnTheFirstWorkingDayPastGrace() {
-        LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13); // 5 working days from Sun 2025-01-05.
+        LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13); // The day after 5 working days of grace from Sun
+                                                                // 2025-01-05.
         setBusinessDate(firstPenaltyDate);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
 
         step.execute(loan);
 
@@ -136,7 +137,7 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
         // Calendar grace would have expired (5 calendar days from due) but only 3 working days have passed.
         LocalDate stillInGrace = LocalDate.of(2025, 1, 10);
         setBusinessDate(stillInGrace);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
 
         step.execute(loan);
 
@@ -148,7 +149,7 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
         // backdate=false: penalty fires only on the first day. On day-2 past grace, do nothing.
         LocalDate dayAfterFirstPenalty = LocalDate.of(2025, 1, 14);
         setBusinessDate(dayAfterFirstPenalty);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
 
         step.execute(loan);
 
@@ -160,7 +161,7 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
         when(configurationDomainService.isBackdatePenaltiesEnabled()).thenReturn(true);
         LocalDate dayAfterFirstPenalty = LocalDate.of(2025, 1, 14);
         setBusinessDate(dayAfterFirstPenalty);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(LocalDate.of(2025, 1, 13));
 
         step.execute(loan);
 
@@ -208,7 +209,7 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
         LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13);
         LocalDate dayAfterGrace = LocalDate.of(2025, 1, 15);
         setBusinessDate(dayAfterGrace);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
 
         step.execute(loan);
 
@@ -223,7 +224,7 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
         LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13);
         LocalDate insideGrace = LocalDate.of(2025, 1, 11);
         setBusinessDate(insideGrace);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
 
         step.execute(loan);
 
@@ -238,7 +239,7 @@ class MnzlApplyChargeToOverdueLoansBusinessStepTest {
     void chargeApplied_onExactlyExpiryDay() {
         LocalDate firstPenaltyDate = LocalDate.of(2025, 1, 13);
         setBusinessDate(firstPenaltyDate);
-        when(workingDayCalculator.addWorkingDays(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
+        when(workingDayCalculator.firstDayAfterGrace(eq(DUE_DATE), eq(5), eq(WORKING_DAYS), any())).thenReturn(firstPenaltyDate);
 
         step.execute(loan);
 

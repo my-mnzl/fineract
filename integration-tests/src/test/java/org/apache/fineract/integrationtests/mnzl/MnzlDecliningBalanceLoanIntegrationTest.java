@@ -299,12 +299,19 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
                     "No penalty while COB date is 28 June: holiday 24-28 + weekend push the 5th working day to 01 July");
 
-            // (2) Business date 02 July -> COB date 01 July = the 5th working day after the 21 June due date. Applies.
+            // (2) Business date 02 July -> COB date 01 July = the 5th working day, still inside the grace. No penalty.
             updateBusinessDate("02 July 2026");
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
             loan = loanTransactionHelper.getLoanDetails(loanId);
+            assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
+                    "No penalty on the 5th working day (01 July): the grace includes it");
+
+            // (3) Business date 03 July -> COB date 02 July, the day after the grace. Applies.
+            updateBusinessDate("03 July 2026");
+            inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
+            loan = loanTransactionHelper.getLoanDetails(loanId);
             assertTrue(Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()) > 0,
-                    "Overdue penalty should be applied once the COB date reaches 01 July (5th working day after 21 June)");
+                    "Overdue penalty should be applied on 02 July, the day after the 5th working day");
         });
     }
 
@@ -346,12 +353,19 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
                     "Scheduled job must NOT charge on 30 June: working-day grace runs to 01 July");
 
-            // (2) Business date 01 July = the 5th working day after the 21 June due date. Penalty applies.
+            // (2) Business date 01 July = the 5th working day, still inside the grace. No penalty.
             updateBusinessDate("01 July 2026");
             schedulerJobHelper.executeAndAwaitJob("Apply penalty to overdue loans");
             loan = loanTransactionHelper.getLoanDetails(loanId);
+            assertEquals(0.0, Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()), 0.0001,
+                    "Scheduled job must NOT charge on the 5th working day (01 July)");
+
+            // (3) Business date 02 July = the day after the grace. Penalty applies.
+            updateBusinessDate("02 July 2026");
+            schedulerJobHelper.executeAndAwaitJob("Apply penalty to overdue loans");
+            loan = loanTransactionHelper.getLoanDetails(loanId);
             assertTrue(Utils.getDoubleValue(loan.getSummary().getPenaltyChargesOutstanding()) > 0,
-                    "Scheduled job should charge on 01 July (5th working day after the 21 June due date)");
+                    "Scheduled job should charge on 02 July, the day after the 5th working day");
         });
     }
 
@@ -415,11 +429,11 @@ public class MnzlDecliningBalanceLoanIntegrationTest extends BaseLoanIntegration
             setMnzlProductStrategy(product.getResourceId());
             Long loanId = applyApproveDisburseLoan(clientId, product.getResourceId(), 120000.0, 12.0, 12, "12 October 2026");
 
-            // (1) Close through Thursday 19 November (5th working day after 12 November): the first penalty.
-            updateBusinessDate("20 November 2026");
+            // (1) Close through Friday 20 November, the day after the 5th working day (19 November): the first penalty.
+            updateBusinessDate("21 November 2026");
             inlineLoanCOBHelper.executeInlineCOB(List.of(loanId));
             assertTrue(penaltyDueDates(loanId, penaltyChargeId).contains(LocalDate.of(2026, 11, 12)),
-                    "First penalty should be charged by 19 November");
+                    "First penalty should be charged on 20 November");
 
             // (2) Close through Friday 18 December, where upstream would charge the repeat: it must be withheld.
             updateBusinessDate("19 December 2026");

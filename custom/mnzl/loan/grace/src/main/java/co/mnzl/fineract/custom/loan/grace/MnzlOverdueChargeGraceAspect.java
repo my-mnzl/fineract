@@ -121,7 +121,8 @@ public class MnzlOverdueChargeGraceAspect {
                 due.add(data);
                 continue;
             }
-            LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installmentDueDate, penaltyWaitPeriod, workingDays, holidays);
+            LocalDate firstPenaltyDate = workingDayCalculator.firstDayAfterGrace(installmentDueDate, penaltyWaitPeriod, workingDays,
+                    holidays);
             if (currentDate.isBefore(firstPenaltyDate)) {
                 stillInGrace.add(data);
             } else if (repeatAwaitsWorkingDay(loan, data, installmentDueDate, penaltyWaitPeriod, currentDate, workingDays, holidays)) {

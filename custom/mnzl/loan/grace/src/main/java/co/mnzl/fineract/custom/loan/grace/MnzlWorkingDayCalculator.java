@@ -96,6 +96,14 @@ public class MnzlWorkingDayCalculator {
     }
 
     /**
+     * The day after {@code graceDays} working days of grace following {@code dueDate}: when an unpaid installment is
+     * overdue and its first penalty is charged. The due date itself is never counted.
+     */
+    public LocalDate firstDayAfterGrace(LocalDate dueDate, int graceDays, WorkingDays config, List<Holiday> holidays) {
+        return addWorkingDays(dueDate, graceDays, config, holidays).plusDays(1);
+    }
+
+    /**
      * Whether an installment due on {@code dueDate} is in arrears on {@code businessDate} after {@code graceDays}
      * working days of grace: the working-day reading of upstream's
      * {@code dueDate < businessDate - graceOnArrearsAgeing}.

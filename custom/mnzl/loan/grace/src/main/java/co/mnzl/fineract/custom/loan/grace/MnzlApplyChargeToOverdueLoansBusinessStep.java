@@ -81,8 +81,8 @@ public class MnzlApplyChargeToOverdueLoansBusinessStep implements LoanCOBBusines
                 continue;
             }
             // First calendar date on which the penalty is due, after `penaltyWaitPeriod` working days of grace.
-            LocalDate firstPenaltyDate = workingDayCalculator.addWorkingDays(installment.getDueDate(), penaltyWaitPeriodDays, workingDays,
-                    holidays);
+            LocalDate firstPenaltyDate = workingDayCalculator.firstDayAfterGrace(installment.getDueDate(), penaltyWaitPeriodDays,
+                    workingDays, holidays);
             boolean isPenaltyDue = !businessDate.isBefore(firstPenaltyDate);
             boolean isFirstPenaltyDay = businessDate.equals(firstPenaltyDate);
             if (!isPenaltyDue) {
