@@ -63,6 +63,7 @@ public class ReceivablesReadApiResource {
         }
     }
 
+    /** Scope headers are optional and deprecated; any that are sent must match the configured scope. */
     @GET
     @Path("/context")
     public String context(@Context HttpHeaders headers) {

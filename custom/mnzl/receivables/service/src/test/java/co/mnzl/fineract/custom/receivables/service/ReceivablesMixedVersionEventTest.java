@@ -117,6 +117,7 @@ class ReceivablesMixedVersionEventTest {
         when(security.authenticatedUser()).thenReturn(user);
         when(configuration.scopeKey(any())).thenReturn("scope");
         when(configuration.tenantId()).thenReturn("default");
+        when(configuration.withScope(any())).thenAnswer(invocation -> invocation.getArgument(0));
         Map<String, Object> config = Map.of("office_id", 1L, "mapping_revision", "map", "policy_revision", "policy", "calculator_build",
                 "build");
         when(configuration.authorize(any(), eq(true))).thenReturn(config);

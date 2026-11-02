@@ -23,6 +23,7 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -31,6 +32,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import java.util.List;
 import java.util.function.BiFunction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,22 +56,41 @@ public class ReceivablesWriteApiResource {
     private final ReceivablesJson json;
     private final PlatformSecurityContext security;
 
-    private JsonNode scope(HttpHeaders headers) {
+    static final List<String> SCOPE_HEADERS = List.of("X-MNZL-Platform", "X-MNZL-Financier", "X-MNZL-Environment");
+
+    /** Scope headers are optional and deprecated; blank ones count as omitted. */
+    private ObjectNode namedScope(HttpHeaders headers) {
         var scope = json.object();
-        String[] fields = { "platformId", "financierOrganizationId", "environment" };
-        String[] names = { "X-MNZL-Platform", "X-MNZL-Financier", "X-MNZL-Environment" };
-        for (int i = 0; i < fields.length; i++) {
-            String value = headers.getHeaderString(names[i]);
-            require(value != null && !value.isBlank(), "INVALID_DATA");
-            scope.put(fields[i], value);
+        for (int i = 0; i < SCOPE_HEADERS.size(); i++) {
+            String value = headers.getHeaderString(SCOPE_HEADERS.get(i));
+            if (value != null && !value.isBlank()) {
+                scope.put(ReceivablesConfiguration.SCOPE_FIELDS.get(i), value);
+            }
         }
         return scope;
     }
 
+    private JsonNode scope(HttpHeaders headers) {
+        return configuration.resolveScope(namedScope(headers));
+    }
+
+    /** The body's scope, which a bootstrap names in full; scope headers, when sent, must name the same one. */
+    private JsonNode scope(HttpHeaders headers, JsonNode input) {
+        require(input != null && input.isObject(), "INVALID_DATA");
+        JsonNode requested = configuration.resolveScope(input.get("scope"));
+        ObjectNode named = namedScope(headers);
+        require(named.isEmpty() || configuration.scopeKey(requested).equals(configuration.scopeKey(configuration.resolveScope(named))),
+                "OWNERSHIP_CONFLICT");
+        return requested;
+    }
+
+    private void requireSameScope(HttpHeaders headers, String request) {
+        scope(headers, json.read(request));
+    }
+
     private void authorizeRequest(HttpHeaders headers, String request) {
         JsonNode input = json.read(request);
-        JsonNode requested = scope(headers);
-        require(configuration.scopeKey(input.get("scope")).equals(configuration.scopeKey(requested)), "OWNERSHIP_CONFLICT");
+        requireSameScope(headers, request);
         require(text(input, "accountMappingRevisionId").equals(headers.getHeaderString("X-MNZL-Account-Mapping")),
                 "FINERACT_CAPABILITY_MISSING");
     }
@@ -198,7 +219,7 @@ public class ReceivablesWriteApiResource {
             event.put("activationId", telemetryId(input, "activationId"));
             event.put("expectedActiveRevision", telemetryId(input, "expectedActiveAccountMappingRevisionId"));
             event.put("targetRevision", telemetryId(input, "accountMappingRevisionId"));
-            var requestedScope = scope(headers);
+            var requestedScope = input.has("scope") ? scope(headers, input) : scope(headers);
             event.put("scopeHash", json.hash(requestedScope));
             var response = operation.apply(input, requestedScope);
             // The service proxy returns only after transaction completion. Retries retain the original activation
@@ -259,16 +280,14 @@ public class ReceivablesWriteApiResource {
     @POST
     @Path("/authorizations/v2")
     public String authorize(@Context HttpHeaders headers, String request) {
-        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
-                "OWNERSHIP_CONFLICT");
+        requireSameScope(headers, request);
         return json.write(configuration.authorizeHistory(request));
     }
 
     @POST
     @Path("/workout-authorizations")
     public String authorizeWorkout(@Context HttpHeaders headers, String request) {
-        require(configuration.scopeKey(json.read(request).get("scope")).equals(configuration.scopeKey(scope(headers))),
-                "OWNERSHIP_CONFLICT");
+        requireSameScope(headers, request);
         return json.write(configuration.authorizeWorkout(request));
     }
 

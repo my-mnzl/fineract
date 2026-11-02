@@ -66,6 +66,7 @@ class ReceivablesConfigurationApiTest {
         when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("test");
         when(headers.getHeaderString("X-MNZL-Account-Mapping")).thenReturn("revision-2");
         when(configuration.scopeKey(any())).thenAnswer(invocation -> json.hash(invocation.getArgument(0)));
+        when(configuration.resolveScope(any())).thenAnswer(invocation -> invocation.getArgument(0));
         logs.start();
         logger.addAppender(logs);
     }

@@ -67,6 +67,8 @@ class ReceivablesDatabaseIntegrationTest {
     private String storeUrl;
     private String activeTenant = "default";
     private String activeFinancier = "financier";
+    /** False sends no scope headers, as callers do once MNZL is the only lender. */
+    boolean scopeHeaders = true;
     String authentication = "mifos:password";
     private String databaseUser;
     private String databasePassword;
@@ -115,6 +117,7 @@ class ReceivablesDatabaseIntegrationTest {
                 JsonNode purchase = purchase("account-1");
                 assertThat(purchase.path("nativeTransactionIds").size()).isEqualTo(1);
                 verifyPurchaseAndIdempotency(purchase);
+                new ReceivablesScopelessScenarios(this).verify(purchase);
                 verifyRollback(database);
                 boolean ordinaryPassed = ordinaryRegression();
                 verifyServicingAndClose();
@@ -142,8 +145,8 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("pendingOutboxEvents", queryLong("select count(*) from m_mnzl_r_event where delivered_at is null"));
                 evidence.set("assertions", json.value(List.of("historical-purchase-without-cash-or-risk",
                         "historical-partial-reconciliation", "historical-risk-and-funding-snapshots", "exact-face-and-small-cheque",
-                        "actual-native-journal-readback", "idempotent-retry", "changed-payload-conflict", "stale-version", "scope-conflict",
-                        "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
+                        "actual-native-journal-readback", "idempotent-retry", "scopeless-requests", "changed-payload-conflict",
+                        "stale-version", "scope-conflict", "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
                         "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
                         "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
                         "canonical-borrower-without-financial-effects", "partial-and-full-settlement", "developer-cash-settlement",
@@ -200,8 +203,10 @@ class ReceivablesDatabaseIntegrationTest {
                 .header("Authorization",
                         "Basic " + Base64.getEncoder().encodeToString(authentication.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .header("Fineract-Platform-TenantId", activeTenant).header("Content-Type", "application/json")
-                .header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", activeFinancier).header("X-MNZL-Environment", "test")
                 .header("X-MNZL-Account-Mapping", mapping);
+        if (scopeHeaders) {
+            builder.header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", activeFinancier).header("X-MNZL-Environment", "test");
+        }
         var response = http.send(builder
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))

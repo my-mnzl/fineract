@@ -47,6 +47,12 @@ public class ReceivablesConfiguration {
     public static final String CALCULATION = ReceivablesMath.CALCULATION_VERSION;
     public static final List<String> CALCULATIONS = ReceivablesMath.SUPPORTED_VERSIONS;
     public static final String POLICY = "EG_RECEIVABLES_V1";
+    /**
+     * The native scope. MNZL is the only lender, so a caller may omit any of these fields, in headers or bodies, and
+     * the tenant's only configuration supplies them. They stay in stored rows, keys and hashes, and in responses
+     * (deprecated).
+     */
+    public static final List<String> SCOPE_FIELDS = List.of("platformId", "financierOrganizationId", "environment");
     public static final String ADMIN_FEE_INCOME = "adminFeeIncome";
     /** The admin fee account set: every semantic account a command can post to. */
     public static final Set<String> ACCOUNTS = Set.of("contractualReceivable", "installmentDues", "deferredDiscount", "deferredAdminFee",
@@ -72,7 +78,8 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode resolveBorrower(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
-        JsonNode input = json.validate("nativeBorrowerRequest", request);
+        JsonNode sent = json.read(request);
+        JsonNode input = json.validate("nativeBorrowerRequest", withScope(sent));
         Map<String, Object> config = authorize(input.get("scope"), true);
         require(text(input, "accountMappingRevisionId").equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
         String customer = text(input, "customerReferenceId");
@@ -81,7 +88,9 @@ public class ReceivablesConfiguration {
                         "R" + ReceivablesStore.key(scopeKey(input.get("scope")), "customer", customer), customer,
                         number(config, "office_id")));
         ObjectNode result = json.object();
-        result.set("scope", input.get("scope"));
+        if (sent.has("scope")) {
+            result.set("scope", sent.get("scope"));
+        }
         result.put("customerReferenceId", customer);
         result.put("nativeClientId", Long.toString(clientId));
         return result;
@@ -95,6 +104,58 @@ public class ReceivablesConfiguration {
         return json.hash(financier);
     }
 
+    /**
+     * The scope a request names. A caller that names all three fields keeps the original behaviour. One that names
+     * fewer, or none, gets them from the tenant's only configuration, and every field it does name must match that
+     * configuration.
+     */
+    public ObjectNode resolveScope(JsonNode requested) {
+        ObjectNode scope = json.object();
+        for (String field : SCOPE_FIELDS) {
+            JsonNode value = requested == null ? null : requested.get(field);
+            if (value != null && !value.isNull()) {
+                scope.set(field, value);
+            }
+        }
+        if (scope.size() == SCOPE_FIELDS.size()) {
+            return scope;
+        }
+        var rows = store.jdbc().queryForList("select scope_json from m_mnzl_r_configuration");
+        require(rows.size() == 1, "FINERACT_CAPABILITY_MISSING");
+        JsonNode configured = json.read(string(rows.getFirst(), "scope_json"));
+        for (String field : SCOPE_FIELDS) {
+            require(!scope.has(field) || scope.get(field).equals(configured.get(field)), "FINERACT_CAPABILITY_MISSING");
+            scope.set(field, configured.get(field));
+        }
+        return scope;
+    }
+
+    /**
+     * The request with its scope, and a correction's replacement command scope, completed by {@link #resolveScope}.
+     * Other scope fields, such as the developer, are kept. Payload hashes stay over the request as sent.
+     */
+    public JsonNode withScope(JsonNode input) {
+        if (input == null || !input.isObject()) {
+            return input;
+        }
+        ObjectNode completed = input.deepCopy();
+        completeScope(completed);
+        if (completed.path("replacementCommand").isObject()) {
+            completeScope((ObjectNode) completed.get("replacementCommand"));
+        }
+        return completed;
+    }
+
+    /** An absent or object scope is completed; any other value is left for schema validation to reject. */
+    private void completeScope(ObjectNode request) {
+        JsonNode scope = request.get("scope");
+        if (scope == null || scope.isObject()) {
+            ObjectNode completed = scope == null ? json.object() : (ObjectNode) scope;
+            completed.setAll(resolveScope(scope));
+            request.set("scope", completed);
+        }
+    }
+
     public String tenantId() {
         return ThreadLocalContextUtil.getTenant().getTenantIdentifier();
     }
@@ -104,16 +165,23 @@ public class ReceivablesConfiguration {
     public JsonNode discoverContext(String platform, String financier, String environment) {
         var user = security.authenticatedUser();
         user.validateHasPermissionTo("READ_MNZL_RECEIVABLES");
-        for (String value : new String[] { platform, financier, environment }) {
-            require(value != null && !value.isBlank(), "INVALID_DATA");
-        }
-        require(Set.of("local", "test", "staging", "production").contains(environment), "INVALID_DATA");
-        var candidates = store.jdbc().queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?",
-                user.getId(), financier).stream().filter(row -> {
-                    var scope = json.read(string(row, "scope_json"));
-                    return platform.equals(text(scope, "platformId")) && financier.equals(text(scope, "financierOrganizationId"))
-                            && environment.equals(text(scope, "environment"));
-                }).toList();
+        // Each identity value is optional, and a blank one counts as omitted; one that is sent must match.
+        String[] requested = java.util.stream.Stream.of(platform, financier, environment)
+                .map(value -> value == null || value.isBlank() ? null : value).toArray(String[]::new);
+        require(requested[2] == null || Set.of("local", "test", "staging", "production").contains(requested[2]), "INVALID_DATA");
+        var rows = requested[1] == null
+                ? store.jdbc().queryForList("select * from m_mnzl_r_configuration where integration_user_id=?", user.getId())
+                : store.jdbc().queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?",
+                        user.getId(), requested[1]);
+        var candidates = rows.stream().filter(row -> {
+            var scope = json.read(string(row, "scope_json"));
+            for (int i = 0; i < requested.length; i++) {
+                if (requested[i] != null && !requested[i].equals(text(scope, SCOPE_FIELDS.get(i)))) {
+                    return false;
+                }
+            }
+            return true;
+        }).toList();
         require(candidates.size() == 1, "FINERACT_CAPABILITY_MISSING");
         var config = candidates.getFirst();
         var scope = json.read(string(config, "scope_json"));
@@ -135,7 +203,7 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode configure(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        JsonNode input = json.validate("nativeConfiguration", request);
+        JsonNode input = json.validate("nativeConfiguration", withScope(json.read(request)));
         String scope = scopeKey(input.get("scope"));
         input = normalizeConfiguration(input);
         validateConfiguration(input);
@@ -323,7 +391,7 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode stage(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        var input = normalizeConfiguration(json.validate("nativeConfiguration", request));
+        var input = normalizeConfiguration(json.validate("nativeConfiguration", withScope(json.read(request))));
         String scope = scopeKey(input.get("scope"));
         var active = store.lockConfiguration(scope);
         var old = store.jdbc().queryForList("select * from m_mnzl_r_configuration_revision where scope_key=? and mapping_revision=?", scope,
@@ -481,6 +549,14 @@ public class ReceivablesConfiguration {
     }
 
     public void validateExecution(JsonNode command, Map<String, Object> config, String payloadHash) {
+        validateExecution(command, config, Set.of(payloadHash));
+    }
+
+    /**
+     * An authorization binds the command payload hash its caller computed. That hash may cover the request as sent or
+     * the request with its scope completed, so either is accepted while callers stop sending the scope.
+     */
+    public void validateExecution(JsonNode command, Map<String, Object> config, Set<String> payloadHashes) {
         String scope = scopeKey(command.get("scope"));
         verifyActiveProjection(config);
         require(string(config, "mapping_revision").equals(text(command, "accountMappingRevisionId")), "FINERACT_CAPABILITY_MISSING");
@@ -501,7 +577,7 @@ public class ReceivablesConfiguration {
             Map<String, Object> recorded = store.require("authorization",
                     ReceivablesStore.key(scope, "authorization", text(authorization, "authorizationId")));
             require(!Boolean.parseBoolean(string(recorded, "revoked")) && !"1".equals(string(recorded, "revoked"))
-                    && mode.equals(string(recorded, "mode")) && payloadHash.equals(string(recorded, "command_payload_hash"))
+                    && mode.equals(string(recorded, "mode")) && payloadHashes.contains(string(recorded, "command_payload_hash"))
                     && text(command, "executionScopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "scopeHash").equals(string(recorded, "scope_hash"))
                     && text(authorization, "approvedBy").equals(string(recorded, "approved_by"))
@@ -531,7 +607,8 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode authorizeHistory(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        JsonNode input = json.validate("nativeHistoricalAuthorizationV2", request);
+        JsonNode sent = json.read(request);
+        JsonNode input = json.validate("nativeHistoricalAuthorizationV2", withScope(sent));
         String scope = scopeKey(input.get("scope"));
         store.lockConfiguration(scope);
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString()), "APPROVAL_SCOPE_CHANGED");
@@ -551,13 +628,14 @@ public class ReceivablesConfiguration {
             require(old.get("payload_json") != null && input.equals(json.read(string(old, "payload_json")))
                     && text(input, "commandPayloadHash").equals(string(old, "command_payload_hash")), "IDEMPOTENCY_CONFLICT");
         }
-        return input;
+        return sent;
     }
 
     @Transactional
     public JsonNode authorizeWorkout(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        JsonNode input = json.validate("nativeWorkoutAuthorization", request);
+        JsonNode sent = json.read(request);
+        JsonNode input = json.validate("nativeWorkoutAuthorization", withScope(sent));
         String scope = scopeKey(input.get("scope"));
         var config = store.lockConfiguration(scope);
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString())
@@ -569,14 +647,14 @@ public class ReceivablesConfiguration {
         String hash = json.hash(input);
         if (previous != null) {
             require(hash.equals(string(previous, "scope_hash")), "IDEMPOTENCY_CONFLICT");
-            return input;
+            return sent;
         }
         LocalDate date = LocalDate.parse(text(input, "businessDate"));
         store.insert("authorization", key,
                 Map.of("scope_key", scope, "authorization_id", text(input, "approvedWorkoutCaseId"), "scope_hash", hash, "approved_by",
                         text(input, "approvedBy"), "effective_from", date, "effective_through", date, "mode", "WORKOUT", "revoked", false,
                         "payload_json", json.write(input)));
-        return input;
+        return sent;
     }
 
     public void requireWorkout(ReceivablesExecution e, String classification, java.math.BigInteger consideration) {

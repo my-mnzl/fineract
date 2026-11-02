@@ -79,15 +79,18 @@ public class ReceivablesReadService {
         return configuration.discoverContext(platform, financier, environment);
     }
 
+    /** The scope values are optional; the account mapping revision is still required. */
     public JsonNode authorize(String platform, String financier, String environment, String mapping) {
         security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES");
-        ObjectNode scope = json.object();
-        for (String value : new String[] { platform, financier, environment, mapping }) {
-            require(value != null && !value.isBlank(), "INVALID_DATA");
+        require(mapping != null && !mapping.isBlank(), "INVALID_DATA");
+        ObjectNode requested = json.object();
+        String[] values = { platform, financier, environment };
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] != null && !values[i].isBlank()) {
+                requested.put(ReceivablesConfiguration.SCOPE_FIELDS.get(i), values[i]);
+            }
         }
-        scope.put("platformId", platform);
-        scope.put("financierOrganizationId", financier);
-        scope.put("environment", environment);
+        ObjectNode scope = configuration.resolveScope(requested);
         configuration.authorize(scope, false);
         configuration.revision(key(scope), mapping);
         return scope;
