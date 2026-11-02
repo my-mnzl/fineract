@@ -74,13 +74,16 @@ public class ReceivablesWriteApiResource {
         return configuration.resolveScope(namedScope(headers));
     }
 
-    /** The body's scope, which a bootstrap names in full; scope headers, when sent, must name the same one. */
+    /**
+     * The body's scope, which a bootstrap names in full; each scope header that is sent must equal the body's value.
+     * Headers are compared field by field rather than resolved, so a bootstrap with partial headers needs no stored
+     * configuration.
+     */
     private JsonNode scope(HttpHeaders headers, JsonNode input) {
         require(input != null && input.isObject(), "INVALID_DATA");
         JsonNode requested = configuration.resolveScope(input.get("scope"));
-        ObjectNode named = namedScope(headers);
-        require(named.isEmpty() || configuration.scopeKey(requested).equals(configuration.scopeKey(configuration.resolveScope(named))),
-                "OWNERSHIP_CONFLICT");
+        namedScope(headers).fields()
+                .forEachRemaining(field -> require(field.getValue().equals(requested.path(field.getKey())), "OWNERSHIP_CONFLICT"));
         return requested;
     }
 
