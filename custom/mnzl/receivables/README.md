@@ -385,6 +385,6 @@ Bootstrapping a tenant that has no configuration still needs the full scope in t
 
 The completed scope is what execution uses, so scope keys, record keys, stored request,
 account and event JSON, and event content hashes are unchanged. Responses still return
-the full scope (deprecated). A command's operation echoes its `scope` as sent, and is
-absent when the request had none. `payloadHash` still covers the request exactly as
+the full scope (deprecated), including borrower resolution and grant responses. Only a
+command's operation echoes its `scope` as sent, and it is absent when the request had none. `payloadHash` still covers the request exactly as
 sent, so an idempotent retry must resend the same bytes, scope included or not.

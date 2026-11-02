@@ -22,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
+import java.util.Map;
 
 /** MNZL is the only lender: requests may omit the native scope, in headers and bodies, during and after the rollout. */
 final class ReceivablesScopelessScenarios {
@@ -74,5 +76,53 @@ final class ReceivablesScopelessScenarios {
             harness.scopeHeaders = true;
         }
         assertThat(harness.counts()).isEqualTo(before);
+    }
+
+    /**
+     * A grant the app issued over the full-scope command authorizes the same command sent without the native scope. The
+     * command posts under the completed scope, its operation echoes the scope as sent, and it replays exactly.
+     */
+    void verifyAuthorizedCommand() throws Exception {
+        ObjectNode command = harness.command("RECORD_CASH_MOVEMENT", "scopeless-history", "history-deal", "DEAL");
+        command.put("executionMode", "CORRECTION");
+        command.set("executionAuthorization",
+                harness.json.value(Map.of("authorizationId", "scopeless-history-grant", "scopeHash", "0".repeat(64), "approvedBy", "1",
+                        "effectiveFrom", harness.today.toString(), "effectiveThrough", harness.today.toString())));
+        command.set("source", harness.json.value(Map.of("bankSourceId", "scopeless-history-bank", "bankAccountReference", "test-bank",
+                "verificationEvidenceId", "verified", "valueDate", harness.today.toString(), "currency", "EGP", "amountMinor", "1",
+                "direction", "INCOMING", "allocations", List.of(Map.of("allocationId", "scopeless-history-allocation", "kind",
+                        "RECEIPT_UNAPPLIED", "dealId", "history-deal", "beneficiaryReferenceId", "financier", "amountMinor", "1")))));
+        harness.issueHistory(command);
+        ObjectNode unscoped = command.deepCopy();
+        ObjectNode sentScope = harness.json.object().put("developerOrganizationId", "developer");
+        unscoped.set("scope", sentScope);
+        var before = harness.counts();
+        harness.scopeHeaders = false;
+        try {
+            // The grant binds the amount: a changed payload is refused without reissuing it.
+            ObjectNode changed = unscoped.deepCopy();
+            ((ObjectNode) changed.get("source")).put("amountMinor", "2");
+            ((ObjectNode) changed.get("source").get("allocations").get(0)).put("amountMinor", "2");
+            assertThat(harness.request("POST", PREFIX + "/commands", changed, 409).path("code").asText())
+                    .isEqualTo("APPROVAL_SCOPE_CHANGED");
+            assertThat(harness.counts()).isEqualTo(before);
+
+            JsonNode result = harness.request("POST", PREFIX + "/commands", unscoped, 200);
+            assertThat(result.path("payloadHash").asText()).isEqualTo(harness.json.hash(unscoped)).isNotEqualTo(harness.json.hash(command));
+            assertThat(result.path("scope")).isEqualTo(sentScope);
+            assertThat(
+                    harness.json.read(harness.queryText("select request_json from m_mnzl_r_command where operation_id='scopeless-history'"))
+                            .path("scope"))
+                    .isEqualTo(harness.scope(true));
+            String event = result.path("financialEventIds").get(0).asText();
+            assertThat(harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key='" + event + "'"))
+                    .path("scope")).isEqualTo(harness.scope(true));
+            var committed = harness.counts();
+            assertThat(harness.request("POST", PREFIX + "/commands", unscoped, 200)).isEqualTo(result);
+            assertThat(harness.request("GET", PREFIX + "/operations/scopeless-history", null, 200)).isEqualTo(result);
+            assertThat(harness.counts()).isEqualTo(committed);
+        } finally {
+            harness.scopeHeaders = true;
+        }
     }
 }

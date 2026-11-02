@@ -125,6 +125,7 @@ class ReceivablesDatabaseIntegrationTest {
                 // Runs while mapping-1 is still active; the configuration scenarios retire it at the end.
                 new ReceivablesSimpleAccretionScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
+                new ReceivablesScopelessScenarios(this).verifyAuthorizedCommand();
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify();
                 new ReceivablesPeriodProofScenarios(this).verify();
@@ -145,13 +146,14 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("pendingOutboxEvents", queryLong("select count(*) from m_mnzl_r_event where delivered_at is null"));
                 evidence.set("assertions", json.value(List.of("historical-purchase-without-cash-or-risk",
                         "historical-partial-reconciliation", "historical-risk-and-funding-snapshots", "exact-face-and-small-cheque",
-                        "actual-native-journal-readback", "idempotent-retry", "scopeless-requests", "changed-payload-conflict",
-                        "stale-version", "scope-conflict", "late-event-failure-rolls-back-native-and-subledger", "retry-after-rollback",
-                        "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing", "separate-tenant-database-isolation",
-                        "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection", "due-collection-reversal",
-                        "canonical-borrower-without-financial-effects", "partial-and-full-settlement", "developer-cash-settlement",
-                        "cashless-substitution-carries-basis", "substitution-transfers-lot-controls", "forecast-stage-transitions",
-                        "impaired-reversal-restores-allowance", "independent-controls-detect-mirrored-corruption", "future-close-rejected",
+                        "actual-native-journal-readback", "idempotent-retry", "scopeless-requests", "scopeless-authorized-command",
+                        "changed-payload-conflict", "stale-version", "scope-conflict", "late-event-failure-rolls-back-native-and-subledger",
+                        "retry-after-rollback", "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing",
+                        "separate-tenant-database-isolation", "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection",
+                        "due-collection-reversal", "canonical-borrower-without-financial-effects", "partial-and-full-settlement",
+                        "developer-cash-settlement", "cashless-substitution-carries-basis", "substitution-transfers-lot-controls",
+                        "forecast-stage-transitions", "impaired-reversal-restores-allowance",
+                        "independent-controls-detect-mirrored-corruption", "future-close-rejected",
                         "preparing-close-blocks-historical-posting", "developer-payment-crosses-receivable-due-date",
                         "developer-buyback-no-share", "workout-release", "workout-exchange", "workout-modification-and-writeoff",
                         "immutable-event-correction", "funding-actual360-no-capitalization", "hel-native-financed-fees",

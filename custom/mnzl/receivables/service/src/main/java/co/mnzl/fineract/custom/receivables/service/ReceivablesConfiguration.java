@@ -78,8 +78,7 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode resolveBorrower(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
-        JsonNode sent = json.read(request);
-        JsonNode input = json.validate("nativeBorrowerRequest", withScope(sent));
+        JsonNode input = json.validate("nativeBorrowerRequest", withScope(json.read(request)));
         Map<String, Object> config = authorize(input.get("scope"), true);
         require(text(input, "accountMappingRevisionId").equals(string(config, "mapping_revision")), "FINERACT_CAPABILITY_MISSING");
         String customer = text(input, "customerReferenceId");
@@ -88,9 +87,7 @@ public class ReceivablesConfiguration {
                         "R" + ReceivablesStore.key(scopeKey(input.get("scope")), "customer", customer), customer,
                         number(config, "office_id")));
         ObjectNode result = json.object();
-        if (sent.has("scope")) {
-            result.set("scope", sent.get("scope"));
-        }
+        result.set("scope", input.get("scope"));
         result.put("customerReferenceId", customer);
         result.put("nativeClientId", Long.toString(clientId));
         return result;
@@ -607,8 +604,7 @@ public class ReceivablesConfiguration {
     @Transactional
     public JsonNode authorizeHistory(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        JsonNode sent = json.read(request);
-        JsonNode input = json.validate("nativeHistoricalAuthorizationV2", withScope(sent));
+        JsonNode input = json.validate("nativeHistoricalAuthorizationV2", withScope(json.read(request)));
         String scope = scopeKey(input.get("scope"));
         store.lockConfiguration(scope);
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString()), "APPROVAL_SCOPE_CHANGED");
@@ -628,14 +624,13 @@ public class ReceivablesConfiguration {
             require(old.get("payload_json") != null && input.equals(json.read(string(old, "payload_json")))
                     && text(input, "commandPayloadHash").equals(string(old, "command_payload_hash")), "IDEMPOTENCY_CONFLICT");
         }
-        return sent;
+        return input;
     }
 
     @Transactional
     public JsonNode authorizeWorkout(String request) {
         security.authenticatedUser().validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
-        JsonNode sent = json.read(request);
-        JsonNode input = json.validate("nativeWorkoutAuthorization", withScope(sent));
+        JsonNode input = json.validate("nativeWorkoutAuthorization", withScope(json.read(request)));
         String scope = scopeKey(input.get("scope"));
         var config = store.lockConfiguration(scope);
         require(text(input, "approvedBy").equals(security.authenticatedUser().getId().toString())
@@ -647,14 +642,14 @@ public class ReceivablesConfiguration {
         String hash = json.hash(input);
         if (previous != null) {
             require(hash.equals(string(previous, "scope_hash")), "IDEMPOTENCY_CONFLICT");
-            return sent;
+            return input;
         }
         LocalDate date = LocalDate.parse(text(input, "businessDate"));
         store.insert("authorization", key,
                 Map.of("scope_key", scope, "authorization_id", text(input, "approvedWorkoutCaseId"), "scope_hash", hash, "approved_by",
                         text(input, "approvedBy"), "effective_from", date, "effective_through", date, "mode", "WORKOUT", "revoked", false,
                         "payload_json", json.write(input)));
-        return sent;
+        return input;
     }
 
     public void requireWorkout(ReceivablesExecution e, String classification, java.math.BigInteger consideration) {
