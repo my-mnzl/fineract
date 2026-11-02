@@ -115,8 +115,9 @@ final class ReceivablesScopelessScenarios {
                             .path("scope"))
                     .isEqualTo(harness.scope(true));
             String event = result.path("financialEventIds").get(0).asText();
-            assertThat(harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key='" + event + "'"))
-                    .path("scope")).isEqualTo(harness.scope(true));
+            assertThat(
+                    harness.json.read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?", event)).path("scope"))
+                    .isEqualTo(harness.scope(true));
             var committed = harness.counts();
             assertThat(harness.request("POST", PREFIX + "/commands", unscoped, 200)).isEqualTo(result);
             assertThat(harness.request("GET", PREFIX + "/operations/scopeless-history", null, 200)).isEqualTo(result);
