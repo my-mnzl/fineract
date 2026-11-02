@@ -59,9 +59,11 @@ public class ReceivablesCommandService {
     public JsonNode execute(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
         // The payload is hashed exactly as sent. A payload stored before the admin fee rename keeps its legacy names:
-        // they are aliased to validate its replay, and a new command must already use the current names.
+        // they are aliased to validate its replay, and a new command must already use the current names. A scope the
+        // caller omits is completed for execution only, so stored keys and events keep it.
         JsonNode input = json.read(request);
-        JsonNode command = ReceivablesLegacy.current(input);
+        JsonNode scoped = configuration.withScope(input);
+        JsonNode command = ReceivablesLegacy.current(scoped);
         String type = text(command, "commandType");
         json.validate(type.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "helFundingCommand"
                 : type.equals("ALLOCATE_HEL_DEVELOPER_ADVANCE") ? "helAdvanceAllocationCommand" : "financialCommand", command);
@@ -82,7 +84,7 @@ public class ReceivablesCommandService {
         require(!ReceivablesLegacy.legacy(input), "INVALID_DATA");
         // Lock before any core or custom financial effects. Exact durable replay above never needs this lock.
         ledger.lockOffice(number(config, "office_id"));
-        configuration.validateExecution(command, config, payloadHash);
+        configuration.validateExecution(command, config, Set.copyOf(List.of(payloadHash, json.hash(scoped))));
         validateVersions(execution);
         Instant now = Instant.now();
         var fields = new LinkedHashMap<String, Object>();
@@ -135,7 +137,7 @@ public class ReceivablesCommandService {
                 require(number(touched, "version") == 0 || covered.contains(string(touched, "external_id")), "ACCOUNT_VERSION_CHANGED");
             }
         }
-        return finish(execution, payloadHash, now);
+        return finish(execution, input.get("scope"), payloadHash, now);
     }
 
     private void validateVersions(ReceivablesExecution e) {
@@ -180,7 +182,7 @@ public class ReceivablesCommandService {
                 : pinnedVersions.size() == 1 ? pinnedVersions.iterator().next() : null;
     }
 
-    private JsonNode finish(ReceivablesExecution e, String payloadHash, Instant now) {
+    private JsonNode finish(ReceivablesExecution e, JsonNode sentScope, String payloadHash, Instant now) {
         List<JsonNode> positions = new ArrayList<>();
         Set<String> versions = new HashSet<>();
         for (String accountKey : e.accountKeys) {
@@ -262,7 +264,12 @@ public class ReceivablesCommandService {
         var result = json.object();
         for (String key : List.of("operationId", "commandType", "subjectKind", "subjectId", "scope", "businessDate", "expectedVersion",
                 "affectedAccountVersions", "executionScopeHash", "actorId", "approverIds")) {
-            result.set(key, e.command.get(key));
+            // The operation echoes the scope as sent; the caller matches it against its command.
+            if (!key.equals("scope")) {
+                result.set(key, e.command.get(key));
+            } else if (sentScope != null) {
+                result.set(key, sentScope);
+            }
         }
         result.put("eventWatermark", Long.toString(watermark));
         result.put("payloadHash", payloadHash);

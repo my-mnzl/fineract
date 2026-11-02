@@ -98,8 +98,29 @@ class ReceivablesContextTest {
     }
 
     @Test
-    void rejectsIncompleteIdentityAndInconsistentScope() {
-        assertThatThrownBy(() -> configuration.discoverContext(null, "mnzl", "test")).isInstanceOf(ReceivablesException.class);
+    void discoversTheOnlyContextWithoutIdentityHeaders() {
+        var configured = List.of(row("platform"));
+        when(jdbc.queryForList(anyString(), eq(7L))).thenReturn(configured);
+        for (var blank : new String[] { null, "" }) {
+            var result = configuration.discoverContext(blank, blank, blank);
+            assertThat(result.path("scope").path("platformId").asText()).isEqualTo("platform");
+            assertThat(result.path("accountMappingRevisionId").asText()).isEqualTo("map-1");
+        }
+        verify(jdbc, org.mockito.Mockito.times(2)).queryForList("select * from m_mnzl_r_configuration where integration_user_id=?", 7L);
+    }
+
+    @Test
+    void identityHeadersThatAreSentMustMatch() {
+        var configured = List.of(row("platform"));
+        when(jdbc.queryForList(anyString(), eq(7L))).thenReturn(configured);
+        assertThat(configuration.discoverContext(null, null, "test").path("scope").path("environment").asText()).isEqualTo("test");
+        assertThatThrownBy(() -> configuration.discoverContext("other-platform", null, null)).isInstanceOf(ReceivablesException.class);
+        assertThatThrownBy(() -> configuration.discoverContext(null, null, "staging")).isInstanceOf(ReceivablesException.class);
+    }
+
+    @Test
+    void rejectsUnknownEnvironmentAndInconsistentScope() {
+        assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "nope")).isInstanceOf(ReceivablesException.class);
         var row = row("platform");
         row.put("scope_key", "different");
         rows(List.of(row));

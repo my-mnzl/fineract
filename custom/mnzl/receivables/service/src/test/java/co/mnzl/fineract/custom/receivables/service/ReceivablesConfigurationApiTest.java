@@ -66,6 +66,7 @@ class ReceivablesConfigurationApiTest {
         when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("test");
         when(headers.getHeaderString("X-MNZL-Account-Mapping")).thenReturn("revision-2");
         when(configuration.scopeKey(any())).thenAnswer(invocation -> json.hash(invocation.getArgument(0)));
+        when(configuration.resolveScope(any())).thenAnswer(invocation -> invocation.getArgument(0));
         logs.start();
         logger.addAppender(logs);
     }
@@ -178,6 +179,27 @@ class ReceivablesConfigurationApiTest {
         assertThatThrownBy(() -> api.stage(headers, json.write(request()))).isInstanceOf(ReceivablesException.class);
         assertThat(event().path("action").asText()).isEqualTo("STAGE");
         assertThat(event().path("rejectionCode").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
+    }
+
+    /** On an empty tenant only a full scope resolves, so partial headers are checked against the body, not resolved. */
+    @Test
+    void bootstrapsWithPartialScopeHeadersAndNoStoredConfiguration() {
+        when(configuration.resolveScope(any())).thenAnswer(invocation -> {
+            JsonNode scope = invocation.getArgument(0);
+            if (!ReceivablesConfiguration.SCOPE_FIELDS.stream().allMatch(scope::has)) {
+                throw new ReceivablesException("FINERACT_CAPABILITY_MISSING");
+            }
+            return scope;
+        });
+        when(headers.getHeaderString("X-MNZL-Platform")).thenReturn(null);
+        when(headers.getHeaderString("X-MNZL-Financier")).thenReturn(" ");
+        when(configuration.stage(anyString())).thenReturn(json.object().put("state", "STAGED"));
+        api.stage(headers, json.write(request()));
+        assertThat(event().path("outcome").asText()).isEqualTo("SUCCEEDED");
+        logs.list.clear();
+        when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("live");
+        assertThatThrownBy(() -> api.stage(headers, json.write(request()))).isInstanceOf(ReceivablesException.class)
+                .hasMessage("OWNERSHIP_CONFLICT");
     }
 
     @Test

@@ -17,6 +17,9 @@ period state, mapping, ownership and expected-version checks. Reusing a grant wi
 changed command is rejected. Reissuing the same grant ID requires equality of every
 immutable grant field; it never changes or reactivates the stored grant.
 
+A grant may also carry the digest of the command with its scope completed (see below),
+so a grant issued over the full scope still matches a command sent without it.
+
 The legacy `/authorizations` issuance endpoint returns `UNSUPPORTED_VERSION`. Existing
 grants without a command digest cannot authorize new effects and cannot be upgraded
 from a caller assertion. The forward migration leaves these grants unbound. Exact
@@ -368,3 +371,20 @@ new command shape. Previously saved booking payloads without `acquisition` fail
 schema validation, including replay through `/commands`; their persisted
 receipts remain available through `/operations/{id}`. Re-enter obsolete data
 through the corrected workflow rather than inventing acquisition metadata.
+
+# Optional native scope
+
+MNZL is the only lender, so the native scope (`platformId`, `financierOrganizationId`,
+`environment`) is optional and deprecated in requests. The `X-MNZL-Platform`,
+`X-MNZL-Financier` and `X-MNZL-Environment` headers, and those fields of a request
+body's `scope`, may each be omitted, and a blank header counts as omitted. The tenant's
+only configuration supplies what is missing, and every value that is sent must match
+it. A request that names all three values behaves as before. `X-MNZL-Account-Mapping`
+is still required where it was, and a body `scope` keeps `developerOrganizationId`.
+Bootstrapping a tenant that has no configuration still needs the full scope in the body.
+
+The completed scope is what execution uses, so scope keys, record keys, stored request,
+account and event JSON, and event content hashes are unchanged. Responses still return
+the full scope (deprecated), including borrower resolution and grant responses. Only a
+command's operation echoes its `scope` as sent, and it is absent when the request had none. `payloadHash` still covers the request exactly as
+sent, so an idempotent retry must resend the same bytes, scope included or not.
