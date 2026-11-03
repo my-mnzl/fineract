@@ -70,14 +70,6 @@
             "schema": {
               "$ref": "#/components/schemas/version"
             }
-          },
-          {
-            "name": "financierOrganizationId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
           }
         ],
         "responses": {
@@ -1746,14 +1738,6 @@
             }
           },
           {
-            "name": "financierOrganizationId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
             "name": "dealId",
             "in": "query",
             "schema": {
@@ -1841,30 +1825,6 @@
             "schema": {
               "type": "string",
               "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
             }
           }
         ],
@@ -1969,33 +1929,6 @@
             }
           },
           {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
             "name": "X-MNZL-Account-Mapping",
             "in": "header",
             "required": true,
@@ -2066,33 +1999,6 @@
               "type": "string",
               "minLength": 1
             }
-          },
-          {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
           }
         ],
         "responses": {
@@ -2132,33 +2038,6 @@
         "parameters": [
           {
             "name": "Fineract-Platform-TenantId",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
             "in": "header",
             "required": true,
             "schema": {
@@ -2223,33 +2102,6 @@
         "parameters": [
           {
             "name": "Fineract-Platform-TenantId",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
             "in": "header",
             "required": true,
             "schema": {
@@ -2367,30 +2219,6 @@
             }
           },
           {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
             "name": "X-MNZL-Account-Mapping",
             "in": "header",
             "required": true,
@@ -2475,30 +2303,6 @@
             }
           },
           {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
             "name": "X-MNZL-Account-Mapping",
             "in": "header",
             "required": true,
@@ -2558,30 +2362,6 @@
             "schema": {
               "type": "string",
               "minLength": 1
-            }
-          },
-          {
-            "name": "X-MNZL-Platform",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Financier",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
-            }
-          },
-          {
-            "name": "X-MNZL-Environment",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/id"
             }
           },
           {
@@ -2727,44 +2507,6 @@
         "format": "date",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
       },
-      "financialScope": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/scope"
-          },
-          {
-            "$ref": "#/components/schemas/financierScope"
-          }
-        ]
-      },
-      "financierScope": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "platformId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "financierOrganizationId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "environment": {
-            "type": "string",
-            "enum": [
-              "local",
-              "test",
-              "staging",
-              "production"
-            ]
-          }
-        },
-        "required": [
-          "platformId",
-          "financierOrganizationId",
-          "environment"
-        ],
-        "additionalProperties": false
-      },
       "id": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "string",
@@ -2795,29 +2537,11 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "platformId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "financierOrganizationId": {
-            "$ref": "#/components/schemas/id"
-          },
-          "environment": {
-            "type": "string",
-            "enum": [
-              "local",
-              "test",
-              "staging",
-              "production"
-            ]
-          },
           "developerOrganizationId": {
             "$ref": "#/components/schemas/id"
           }
         },
         "required": [
-          "platformId",
-          "financierOrganizationId",
-          "environment",
           "developerOrganizationId"
         ],
         "additionalProperties": false
@@ -3090,7 +2814,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/sealedScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -4460,7 +4184,7 @@
                 "$ref": "#/components/schemas/sha256"
               },
               "scope": {
-                "$ref": "#/components/schemas/financialScope"
+                "$ref": "#/components/schemas/scope"
               },
               "subjectId": {
                 "$ref": "#/components/schemas/id"
@@ -4515,7 +4239,6 @@
               "expectedVersion",
               "businessDate",
               "basisHash",
-              "scope",
               "subjectId",
               "subjectKind",
               "affectedAccountVersions",
@@ -6762,7 +6485,7 @@
                 "$ref": "#/components/schemas/sha256"
               },
               "scope": {
-                "$ref": "#/components/schemas/financialScope"
+                "$ref": "#/components/schemas/scope"
               },
               "subjectId": {
                 "$ref": "#/components/schemas/id"
@@ -6838,7 +6561,6 @@
               "expectedVersion",
               "businessDate",
               "basisHash",
-              "scope",
               "subjectId",
               "subjectKind",
               "affectedAccountVersions",
@@ -6921,7 +6643,7 @@
                 "$ref": "#/components/schemas/sha256"
               },
               "scope": {
-                "$ref": "#/components/schemas/financialScope"
+                "$ref": "#/components/schemas/scope"
               },
               "subjectId": {
                 "$ref": "#/components/schemas/id"
@@ -7183,7 +6905,7 @@
                         "$ref": "#/components/schemas/sha256"
                       },
                       "scope": {
-                        "$ref": "#/components/schemas/financialScope"
+                        "$ref": "#/components/schemas/scope"
                       },
                       "subjectId": {
                         "$ref": "#/components/schemas/id"
@@ -7238,7 +6960,6 @@
                       "expectedVersion",
                       "businessDate",
                       "basisHash",
-                      "scope",
                       "subjectId",
                       "subjectKind",
                       "affectedAccountVersions",
@@ -9485,7 +9206,7 @@
                         "$ref": "#/components/schemas/sha256"
                       },
                       "scope": {
-                        "$ref": "#/components/schemas/financialScope"
+                        "$ref": "#/components/schemas/scope"
                       },
                       "subjectId": {
                         "$ref": "#/components/schemas/id"
@@ -9561,7 +9282,6 @@
                       "expectedVersion",
                       "businessDate",
                       "basisHash",
-                      "scope",
                       "subjectId",
                       "subjectKind",
                       "affectedAccountVersions",
@@ -9594,7 +9314,6 @@
               "expectedVersion",
               "businessDate",
               "basisHash",
-              "scope",
               "subjectId",
               "subjectKind",
               "affectedAccountVersions",
@@ -10428,7 +10147,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/financialScope"
+            "$ref": "#/components/schemas/sealedScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -10516,7 +10235,6 @@
           "eventType",
           "sourceKind",
           "eventId",
-          "scope",
           "tenantId",
           "allocationIds",
           "operationId",
@@ -10634,7 +10352,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/financialScope"
+            "$ref": "#/components/schemas/sealedScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -10722,7 +10440,6 @@
           "eventType",
           "sourceKind",
           "eventId",
-          "scope",
           "tenantId",
           "allocationIds",
           "operationId",
@@ -10816,7 +10533,7 @@
         "type": "object",
         "properties": {
           "scope": {
-            "$ref": "#/components/schemas/scope"
+            "$ref": "#/components/schemas/sealedScope"
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
@@ -11191,9 +10908,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "productCode": {
             "type": "string",
             "const": "MNZL_PURCHASED_RECEIVABLE"
@@ -11227,7 +10941,6 @@
           }
         },
         "required": [
-          "scope",
           "productCode",
           "asOfDate",
           "eventWatermark",
@@ -11472,9 +11185,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financialScope"
-          },
           "dealId": {
             "$ref": "#/components/schemas/id"
           },
@@ -11541,7 +11251,6 @@
           }
         },
         "required": [
-          "scope",
           "businessDate",
           "boundarySide",
           "eventWatermark",
@@ -11632,9 +11341,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "businessDate": {
             "$ref": "#/components/schemas/financialDate"
           },
@@ -11663,7 +11369,6 @@
           }
         },
         "required": [
-          "scope",
           "businessDate",
           "boundarySide",
           "eventWatermark",
@@ -11753,7 +11458,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/financialScope"
+            "$ref": "#/components/schemas/scope"
           },
           "businessDate": {
             "$ref": "#/components/schemas/financialDate"
@@ -11852,7 +11557,6 @@
           "commandType",
           "subjectKind",
           "subjectId",
-          "scope",
           "businessDate",
           "payloadHash",
           "expectedVersion",
@@ -11874,9 +11578,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "businessDate": {
             "$ref": "#/components/schemas/financialDate"
           },
@@ -11905,7 +11606,6 @@
           }
         },
         "required": [
-          "scope",
           "businessDate",
           "boundarySide",
           "eventWatermark",
@@ -11989,9 +11689,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "eventWatermark": {
             "$ref": "#/components/schemas/version"
           },
@@ -12050,7 +11747,6 @@
           }
         },
         "required": [
-          "scope",
           "eventWatermark",
           "lines"
         ],
@@ -12923,7 +12619,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/financialScope"
+            "$ref": "#/components/schemas/scope"
           },
           "businessDate": {
             "$ref": "#/components/schemas/financialDate"
@@ -13022,7 +12718,6 @@
           "commandType",
           "subjectKind",
           "subjectId",
-          "scope",
           "businessDate",
           "payloadHash",
           "expectedVersion",
@@ -13217,7 +12912,7 @@
             "$ref": "#/components/schemas/id"
           },
           "scope": {
-            "$ref": "#/components/schemas/financialScope"
+            "$ref": "#/components/schemas/scope"
           },
           "businessDate": {
             "$ref": "#/components/schemas/financialDate"
@@ -13316,7 +13011,6 @@
           "commandType",
           "subjectKind",
           "subjectId",
-          "scope",
           "businessDate",
           "payloadHash",
           "expectedVersion",
@@ -13471,9 +13165,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "nativeLoanId": {
             "$ref": "#/components/schemas/id"
           },
@@ -13497,7 +13188,6 @@
           }
         },
         "required": [
-          "scope",
           "nativeLoanId",
           "businessDate",
           "eventWatermark",
@@ -13841,9 +13531,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "accountMappingRevisionId": {
             "$ref": "#/components/schemas/id"
           },
@@ -13852,7 +13539,6 @@
           }
         },
         "required": [
-          "scope",
           "accountMappingRevisionId",
           "customerReferenceId"
         ],
@@ -13862,9 +13548,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "customerReferenceId": {
             "$ref": "#/components/schemas/id"
           },
@@ -13873,7 +13556,6 @@
           }
         },
         "required": [
-          "scope",
           "customerReferenceId",
           "nativeClientId"
         ],
@@ -13900,9 +13582,6 @@
           },
           "calculatorBuild": {
             "$ref": "#/components/schemas/id"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
           },
           "accountMappingRevisionId": {
             "$ref": "#/components/schemas/id",
@@ -13978,7 +13657,6 @@
           "schemaVersion",
           "policyRevisionId",
           "calculatorBuild",
-          "scope",
           "accountMappingRevisionId",
           "productId",
           "officeId",
@@ -13994,9 +13672,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "authorizationId": {
             "$ref": "#/components/schemas/id"
           },
@@ -14021,7 +13696,6 @@
           }
         },
         "required": [
-          "scope",
           "authorizationId",
           "scopeHash",
           "approvedBy",
@@ -14110,16 +13784,12 @@
           "tenantId": {
             "$ref": "#/components/schemas/id"
           },
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "accountMappingRevisionId": {
             "$ref": "#/components/schemas/id"
           }
         },
         "required": [
           "tenantId",
-          "scope",
           "accountMappingRevisionId"
         ],
         "additionalProperties": false
@@ -14128,9 +13798,6 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
-          },
           "authorizationId": {
             "$ref": "#/components/schemas/id"
           },
@@ -14158,7 +13825,6 @@
           }
         },
         "required": [
-          "scope",
           "authorizationId",
           "scopeHash",
           "approvedBy",
@@ -14216,9 +13882,6 @@
           },
           "tenantId": {
             "$ref": "#/components/schemas/id"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/financierScope"
           },
           "postingPeriod": {
             "type": "string",
@@ -14308,7 +13971,6 @@
         "required": [
           "schemaVersion",
           "tenantId",
-          "scope",
           "postingPeriod",
           "eventWatermark",
           "readAccountMappingRevisionId",
@@ -15077,6 +14739,35 @@
           "EG_RECEIVABLES_ACT360_SIMPLE_V1",
           "EG_RECEIVABLES_ACT360_DAILY_V2"
         ]
+      },
+      "sealedScope": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "description": "A scope inside a hash-sealed body. Bodies recorded before MNZL became the only lender also name its platform, financier and environment; newer bodies name only the developer.",
+        "properties": {
+          "developerOrganizationId": {
+            "$ref": "#/components/schemas/id"
+          },
+          "platformId": {
+            "$ref": "#/components/schemas/id",
+            "deprecated": true
+          },
+          "financierOrganizationId": {
+            "$ref": "#/components/schemas/id",
+            "deprecated": true
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "local",
+              "test",
+              "staging",
+              "production"
+            ],
+            "deprecated": true
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

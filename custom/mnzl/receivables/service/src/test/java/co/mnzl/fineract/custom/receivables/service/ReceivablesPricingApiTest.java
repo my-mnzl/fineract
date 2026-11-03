@@ -20,15 +20,12 @@ package co.mnzl.fineract.custom.receivables.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Map;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.useradministration.domain.AppUser;
@@ -42,7 +39,6 @@ class ReceivablesPricingApiTest {
     private final ReceivablesConfiguration configuration = mock(ReceivablesConfiguration.class);
     private final PlatformSecurityContext security = mock(PlatformSecurityContext.class);
     private final AppUser user = mock(AppUser.class);
-    private final HttpHeaders headers = mock(HttpHeaders.class);
     private final ReceivablesWriteApiResource api = new ReceivablesWriteApiResource(commands,
             new ReceivablesCalculationService(json, new ReceivablesMeasurement(null, json, null)), configuration, json, security);
 
@@ -51,10 +47,7 @@ class ReceivablesPricingApiTest {
     @BeforeEach
     void configureTrustedOwner() {
         when(security.authenticatedUser()).thenReturn(user);
-        when(configuration.authorize(any(), eq(false))).thenReturn(Map.of("policy_revision", "mnzl-policy", "calculator_build", "build-1"));
-        when(headers.getHeaderString("X-MNZL-Platform")).thenReturn("platform");
-        when(headers.getHeaderString("X-MNZL-Financier")).thenReturn("mnzl");
-        when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("test");
+        when(configuration.authorize(false)).thenReturn(Map.of("policy_revision", "mnzl-policy", "calculator_build", "build-1"));
     }
 
     private ObjectNode request(String type) {
@@ -96,7 +89,7 @@ class ReceivablesPricingApiTest {
     void preservesExternalPolicyAndPureMathWithoutCommands() {
         for (String type : new String[] { "PRICE", "FUNDING" }) {
             ObjectNode input = request(type);
-            var result = json.read(api.calculatePricing(headers, json.write(input)));
+            var result = json.read(api.calculatePricing(json.write(input)));
             assertThat(result.path("policyRevisionId").asText()).isEqualTo("external-authentic-policy");
             assertThat(result.path("basisHash")).isEqualTo(input.path("basisHash"));
             assertThat(result.path("calculationType").asText()).isEqualTo(type);
@@ -111,12 +104,12 @@ class ReceivablesPricingApiTest {
         input.put("calculationVersion", "EG_RECEIVABLES_ACT360_SIMPLE_V1");
         ((ObjectNode) input.get("basis")).put("calculationVersion", "EG_RECEIVABLES_ACT360_SIMPLE_V1");
         input.put("basisHash", json.hash(input.get("basis")));
-        var result = json.read(api.calculatePricing(headers, json.write(input)));
+        var result = json.read(api.calculatePricing(json.write(input)));
         assertThat(result.path("calculationVersion").asText()).isEqualTo("EG_RECEIVABLES_ACT360_SIMPLE_V1");
         assertThat(result.path("pricing").path("totals").path("grossPurchasePriceMinor").asText()).isEqualTo("100");
         ObjectNode unknown = request("PRICE");
         unknown.put("calculationVersion", "EG_RECEIVABLES_ACT365_SIMPLE_V1");
-        assertThatThrownBy(() -> api.calculatePricing(headers, json.write(unknown))).isInstanceOf(ReceivablesException.class);
+        assertThatThrownBy(() -> api.calculatePricing(json.write(unknown))).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(commands);
     }
 
@@ -126,7 +119,7 @@ class ReceivablesPricingApiTest {
         input.put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V2");
         ((ObjectNode) input.get("basis")).put("calculationVersion", "EG_RECEIVABLES_ACT360_DAILY_V2");
         input.put("basisHash", json.hash(input.get("basis")));
-        var result = json.read(api.calculatePricing(headers, json.write(input)));
+        var result = json.read(api.calculatePricing(json.write(input)));
         assertThat(result.path("calculationVersion").asText()).isEqualTo("EG_RECEIVABLES_ACT360_DAILY_V2");
         assertThat(result.path("pricing").path("totals").path("grossPurchasePriceMinor").asText()).isEqualTo("100");
         assertThat(result.path("pricing").path("totals").has("adminFeeMinor")).isTrue();
@@ -135,7 +128,7 @@ class ReceivablesPricingApiTest {
 
     @Test
     void retainsLedgerPolicyCheckOnOriginalCalculationRoute() {
-        assertThatThrownBy(() -> api.calculate(headers, json.write(request("PRICE")))).isInstanceOf(ReceivablesException.class);
+        assertThatThrownBy(() -> api.calculate(json.write(request("PRICE")))).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(commands);
     }
 
@@ -144,18 +137,18 @@ class ReceivablesPricingApiTest {
         for (String field : new String[] { "calculationType", "calculatorBuild", "schemaVersion", "basisHash" }) {
             ObjectNode input = request("PRICE");
             input.put(field, field.equals("calculationType") ? "SCHEDULE" : "invalid");
-            assertThatThrownBy(() -> api.calculatePricing(headers, json.write(input))).isInstanceOf(ReceivablesException.class);
+            assertThatThrownBy(() -> api.calculatePricing(json.write(input))).isInstanceOf(ReceivablesException.class);
         }
         ObjectNode input = request("PRICE");
         ((ObjectNode) input.get("basis")).put("policyRevisionId", "changed");
-        assertThatThrownBy(() -> api.calculatePricing(headers, json.write(input))).isInstanceOf(ReceivablesException.class);
+        assertThatThrownBy(() -> api.calculatePricing(json.write(input))).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(commands);
     }
 
     @Test
     void requiresTheConfiguredIntegrationUserBeforeCalculation() {
-        when(configuration.authorize(any(), eq(false))).thenThrow(new ReceivablesException("FINERACT_CAPABILITY_MISSING"));
-        assertThatThrownBy(() -> api.calculatePricing(headers, json.write(request("PRICE")))).isInstanceOf(ReceivablesException.class);
+        when(configuration.authorize(false)).thenThrow(new ReceivablesException("FINERACT_CAPABILITY_MISSING"));
+        assertThatThrownBy(() -> api.calculatePricing(json.write(request("PRICE")))).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(commands);
     }
 }

@@ -18,7 +18,6 @@
  */
 package co.mnzl.fineract.custom.receivables.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -46,13 +45,13 @@ public class ReceivablesReadApiResource {
     private final ReceivablesPeriodProof periodProof;
     private final ReceivablesAcquisitions acquisitions;
 
-    private JsonNode scope(HttpHeaders headers) {
-        return reads.authorize(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
-                headers.getHeaderString("X-MNZL-Environment"), headers.getHeaderString("X-MNZL-Account-Mapping"));
+    /** The tenant's book key, for a read that names an existing account mapping revision. */
+    private String scope(HttpHeaders headers) {
+        return reads.authorize(headers.getHeaderString("X-MNZL-Account-Mapping"));
     }
 
     @SuppressWarnings("AvoidHidingCauseException") // Cause retained through initCause.
-    private ReceivablesReadService.Boundary boundary(JsonNode scope, String date, String side, String watermark) {
+    private ReceivablesReadService.Boundary boundary(String scope, String date, String side, String watermark) {
         try {
             return new ReceivablesReadService.Boundary(date == null ? DateUtils.getBusinessLocalDate() : LocalDate.parse(date),
                     side == null ? "AFTER_EVENTS" : side, watermark == null ? reads.watermark(scope) : Long.parseLong(watermark));
@@ -63,12 +62,10 @@ public class ReceivablesReadApiResource {
         }
     }
 
-    /** Scope headers are optional and deprecated; any that are sent must match the configured scope. */
     @GET
     @Path("/context")
-    public String context(@Context HttpHeaders headers) {
-        return json.write(reads.discoverContext(headers.getHeaderString("X-MNZL-Platform"), headers.getHeaderString("X-MNZL-Financier"),
-                headers.getHeaderString("X-MNZL-Environment")));
+    public String context() {
+        return json.write(reads.discoverContext());
     }
 
     @GET
@@ -100,20 +97,20 @@ public class ReceivablesReadApiResource {
     public String acquisitions(@Context HttpHeaders headers, @QueryParam("dealId") String deal,
             @QueryParam("developerReferenceId") String developer, @QueryParam("cursor") String cursor,
             @QueryParam("limit") @DefaultValue("100") int limit) {
-        return json.write(acquisitions.acquisitions(reads.scopeKey(scope(headers)), deal, developer, cursor, limit));
+        return json.write(acquisitions.acquisitions(scope(headers), deal, developer, cursor, limit));
     }
 
     @GET
     @Path("/acquisitions/{id}")
     public String acquisition(@Context HttpHeaders headers, @PathParam("id") String id) {
-        return json.write(acquisitions.acquisition(reads.scopeKey(scope(headers)), id));
+        return json.write(acquisitions.acquisition(scope(headers), id));
     }
 
     @GET
     @Path("/acquisitions/{id}/accounts")
     public String acquisitionAccounts(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("cursor") String cursor,
             @QueryParam("limit") @DefaultValue("100") int limit) {
-        return json.write(acquisitions.accounts(reads.scopeKey(scope(headers)), id, cursor, limit));
+        return json.write(acquisitions.accounts(scope(headers), id, cursor, limit));
     }
 
     @GET
@@ -126,7 +123,7 @@ public class ReceivablesReadApiResource {
     @Path("/accounts/{id}/position")
     public String position(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
             @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.position(scope, id, boundary(scope, date, side, maximum)));
     }
 
@@ -134,7 +131,7 @@ public class ReceivablesReadApiResource {
     @Path("/accounts/{id}/measurement")
     public String measurement(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
             @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.measurement(scope, id, boundary(scope, date, side, maximum)));
     }
 
@@ -142,7 +139,7 @@ public class ReceivablesReadApiResource {
     @Path("/accounts/{id}/schedule")
     public String schedule(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date,
             @QueryParam("boundarySide") String side, @QueryParam("eventWatermark") String maximum) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.schedule(scope, id, boundary(scope, date, side, maximum)));
     }
 
@@ -157,7 +154,7 @@ public class ReceivablesReadApiResource {
     @Path("/events")
     public String events(@Context HttpHeaders headers, @QueryParam("cursor") String cursor,
             @QueryParam("limit") @DefaultValue("100") int limit, @QueryParam("eventWatermark") String maximum) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.events(scope, cursor, limit, boundary(scope, null, null, maximum).watermark()));
     }
 
@@ -166,7 +163,7 @@ public class ReceivablesReadApiResource {
     public String accounts(@Context HttpHeaders headers, @QueryParam("asOfDate") String date, @QueryParam("periodStartDate") String start,
             @QueryParam("eventWatermark") String maximum, @QueryParam("cursor") String cursor,
             @QueryParam("limit") @DefaultValue("100") int limit) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         var boundary = boundary(scope, date, null, maximum);
         return json.write(
                 reads.accounts(scope, boundary.date(), boundary(scope, start, null, maximum).date(), boundary.watermark(), cursor, limit));
@@ -177,7 +174,7 @@ public class ReceivablesReadApiResource {
     public String lots(@Context HttpHeaders headers, @QueryParam("businessDate") String date, @QueryParam("boundarySide") String side,
             @QueryParam("eventWatermark") String maximum, @QueryParam("cursor") String cursor,
             @QueryParam("limit") @DefaultValue("100") int limit) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.snapshots(scope, boundary(scope, date, side, maximum), "LOT", cursor, limit));
     }
 
@@ -186,7 +183,7 @@ public class ReceivablesReadApiResource {
     public String facilities(@Context HttpHeaders headers, @QueryParam("businessDate") String date, @QueryParam("boundarySide") String side,
             @QueryParam("eventWatermark") String maximum, @QueryParam("cursor") String cursor,
             @QueryParam("limit") @DefaultValue("100") int limit) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.snapshots(scope, boundary(scope, date, side, maximum), "FUNDING", cursor, limit));
     }
 
@@ -195,7 +192,7 @@ public class ReceivablesReadApiResource {
     public String controls(@Context HttpHeaders headers, @QueryParam("businessDate") String date, @QueryParam("boundarySide") String side,
             @QueryParam("eventWatermark") String maximum, @QueryParam("dealId") String deal, @QueryParam("accountId") String account,
             @QueryParam("acquisitionId") String acquisition) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.controls(scope, boundary(scope, date, side, maximum), deal, account, acquisition));
     }
 
@@ -210,7 +207,7 @@ public class ReceivablesReadApiResource {
     @Path("/journals")
     public String journals(@Context HttpHeaders headers, @QueryParam("operationIds") List<String> ids,
             @QueryParam("eventWatermark") String maximum) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.journals(scope, ids, boundary(scope, null, null, maximum).watermark()));
     }
 
@@ -218,7 +215,7 @@ public class ReceivablesReadApiResource {
     @Path("/hel-loans/{id}")
     public String helLoan(@Context HttpHeaders headers, @PathParam("id") String id, @QueryParam("businessDate") String date) {
         var scope = scope(headers);
-        return json.write(helHistory.read(reads.scopeKey(scope), id, boundary(scope, date, null, null).date()));
+        return json.write(helHistory.read(scope, id, boundary(scope, date, null, null).date()));
     }
 
     @GET
@@ -231,7 +228,7 @@ public class ReceivablesReadApiResource {
     @Path("/hel-journals")
     public String helJournals(@Context HttpHeaders headers, @QueryParam("loanId") long loanId, @QueryParam("transactionIds") List<Long> ids,
             @QueryParam("eventWatermark") String maximum) {
-        JsonNode scope = scope(headers);
+        String scope = scope(headers);
         return json.write(reads.helJournals(scope, loanId, ids, boundary(scope, null, null, maximum).watermark()));
     }
 }

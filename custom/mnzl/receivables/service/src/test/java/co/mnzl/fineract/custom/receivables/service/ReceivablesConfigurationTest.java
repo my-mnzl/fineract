@@ -68,33 +68,33 @@ class ReceivablesConfigurationTest {
 
     @Test
     void exactActivationReplayDoesNotRevalidateOrRevertTheCurrentRevision() {
-        var scope = json.object().put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
-        String key = configuration.scopeKey(scope);
+        String key = "book";
+        when(jdbc.queryForList("select * from m_mnzl_r_configuration")).thenReturn(List.of(Map.of("scope_key", key)));
         var request = json.object().put("activationId", "deployment-1").put("accountMappingRevisionId", "second")
                 .put("contentHash", "a".repeat(64)).put("expectedActiveAccountMappingRevisionId", "first");
         when(store.lockConfiguration(key)).thenReturn(Map.of("mapping_revision", "third"));
         var result = json.object().put("accountMappingRevisionId", "second");
         when(store.find(eq("configuration_activation"), anyString()))
                 .thenReturn(Map.of("request_hash", json.hash(request), "result_json", json.write(result)));
-        assertThat(configuration.activate(scope, json.write(request))).isEqualTo(result);
+        assertThat(configuration.activate(json.write(request))).isEqualTo(result);
         verify(store, never()).update(anyString(), anyString(), org.mockito.ArgumentMatchers.anyMap());
         request.put("accountMappingRevisionId", "fourth");
-        assertThatThrownBy(() -> configuration.activate(scope, json.write(request))).isInstanceOf(ReceivablesException.class)
+        assertThatThrownBy(() -> configuration.activate(json.write(request))).isInstanceOf(ReceivablesException.class)
                 .hasMessage("IDEMPOTENCY_CONFLICT");
     }
 
     @Test
     void historicalReadAuthorizesCurrentPrincipalAndReturnsImmutableSnapshot() {
-        var scope = json.object().put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
-        String key = configuration.scopeKey(scope);
-        when(store.require("configuration", key)).thenReturn(Map.of("integration_user_id", 7L, "mapping_revision", "current"));
+        String key = "book";
+        when(jdbc.queryForList("select * from m_mnzl_r_configuration"))
+                .thenReturn(List.of(Map.of("scope_key", key, "integration_user_id", 7L, "mapping_revision", "current")));
         var historical = json.object().put("integrationUserId", "4").put("accountMappingRevisionId", "previous");
         historical.putArray("accountMap");
         when(jdbc.queryForList(anyString(), eq(key), eq("previous"))).thenReturn(List.of(Map.of("config_json", json.write(historical))));
-        assertThat(configuration.readConfiguration(scope, "previous")).isEqualTo(historical);
+        assertThat(configuration.readConfiguration("previous")).isEqualTo(historical);
         verify(user).validateHasPermissionTo("READ_MNZL_RECEIVABLES");
         when(user.getId()).thenReturn(4L);
-        configuration.readConfiguration(scope, "previous");
+        configuration.readConfiguration("previous");
         verify(user).validateHasPermissionTo("CONFIGURE_MNZL_RECEIVABLES");
     }
 
@@ -198,7 +198,6 @@ class ReceivablesConfigurationTest {
                     .put("productPolicyCode", "EG_RECEIVABLES_V1").put("schemaVersion", "1").put("policyRevisionId", "policy")
                     .put("calculatorBuild", "build").put("productId", "1").put("officeId", "1").put("integrationUserId", "1")
                     .put("bankAccountReference", "bank").putNull("helPaymentTypeId").putNull("helProductId");
-            input.putObject("scope").put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
             json.validate("nativeConfiguration", input);
         }
     }

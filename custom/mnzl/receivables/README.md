@@ -2,7 +2,7 @@
 
 Historical commands require a grant from `POST /v1/mnzl/receivables/authorizations/v2`.
 The strict `nativeHistoricalAuthorizationV2` request and response contain the existing
-`scope`, `authorizationId`, `scopeHash`, `approvedBy`, `effectiveFrom`, `effectiveThrough`
+`authorizationId`, `scopeHash`, `approvedBy`, `effectiveFrom`, `effectiveThrough`
 and `mode` fields, plus required `commandPayloadHash`.
 
 Finalize the entire command, including its original operation and idempotency IDs and
@@ -16,9 +16,6 @@ it against the stored grant in addition to existing permissions, revocation, dat
 period state, mapping, ownership and expected-version checks. Reusing a grant with a
 changed command is rejected. Reissuing the same grant ID requires equality of every
 immutable grant field; it never changes or reactivates the stored grant.
-
-A grant may also carry the digest of the command with its scope completed (see below),
-so a grant issued over the full scope still matches a command sent without it.
 
 The legacy `/authorizations` issuance endpoint returns `UNSUPPORTED_VERSION`. Existing
 grants without a command digest cannot authorize new effects and cannot be upgraded
@@ -98,7 +95,7 @@ classification.
 
 All hashes below use lowercase SHA-256 over JCS UTF-8:
 
-- `selection` consists exactly of response `schemaVersion`, `tenantId`, `scope`,
+- `selection` consists exactly of response `schemaVersion`, `tenantId`,
   `postingPeriod`, `eventWatermark`, `readAccountMappingRevisionId`, `coverage`, and
   `excludedJournalPopulations`.
 - `eventManifest.sha256` hashes `{selection, events}`, where `events` contains
@@ -158,7 +155,7 @@ fails the metadata-generation task with instructions. This revision describes th
 artifact and must not be substituted with the configurable `calculatorBuild` value.
 
 Bootstrap, staging and activation requests emit `mnzl.receivables.configuration` JSON
-log events with actor ID, hashed authenticated tenant and scope, revision/activation identifiers, outcome,
+log events with actor ID, hashed authenticated tenant, revision/activation identifiers, outcome,
 rejection code and latency. Each event describes one HTTP attempt after transaction
 completion; activation retries retain the original `activatedAt`. `expectedActiveRevision`
 is the caller's precondition, while `sourceRevision` is the recorded predecessor on
@@ -372,19 +369,23 @@ schema validation, including replay through `/commands`; their persisted
 receipts remain available through `/operations/{id}`. Re-enter obsolete data
 through the corrected workflow rather than inventing acquisition metadata.
 
-# Optional native scope
+# Book key
 
-MNZL is the only lender, so the native scope (`platformId`, `financierOrganizationId`,
-`environment`) is optional and deprecated in requests. The `X-MNZL-Platform`,
-`X-MNZL-Financier` and `X-MNZL-Environment` headers, and those fields of a request
-body's `scope`, may each be omitted, and a blank header counts as omitted. The tenant's
-only configuration supplies what is missing, and every value that is sent must match
-it. A request that names all three values behaves as before. `X-MNZL-Account-Mapping`
-is still required where it was, and a body `scope` keeps `developerOrganizationId`.
-Bootstrapping a tenant that has no configuration still needs the full scope in the body.
+MNZL is the only lender, so requests and responses name no platform, financier or
+environment, and the `X-MNZL-Platform`, `X-MNZL-Financier` and `X-MNZL-Environment`
+headers are ignored. A `scope` names only `developerOrganizationId`, where a command,
+account, position or event names a developer, and is absent otherwise.
 
-The completed scope is what execution uses, so scope keys, record keys, stored request,
-account and event JSON, and event content hashes are unchanged. Responses still return
-the full scope (deprecated), including borrower resolution and grant responses. Only a
-command's operation echoes its `scope` as sent, and it is absent when the request had none. `payloadHash` still covers the request exactly as
-sent, so an idempotent retry must resend the same bytes, scope included or not.
+A tenant has at most one configuration. Its `scope_key` is the tenant's book key: every
+`m_mnzl_r_*` row, record key, event ID and native journal reference (`"R"` and the first
+40 characters of the event ID) derives from it. Tenants configured before MNZL became the
+only lender keep the key derived from their former platform, financier and environment,
+so none of those values change. A new tenant's key is derived from its tenant identifier
+at bootstrap.
+
+Migration `0009` removed the platform, financier and environment from stored request
+copies (accounts, commands and their operations, grants, HEL funding and configuration
+revisions). Hash-sealed bodies keep the scope they were recorded with, so their hashes
+still verify: an event recorded before then, and the positions inside it, may still name
+them. `payloadHash` covers the request exactly as sent, so an idempotent retry must
+resend the same bytes.

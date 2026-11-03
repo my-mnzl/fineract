@@ -115,13 +115,10 @@ class ReceivablesMixedVersionEventTest {
         when(jdbc.queryForObject(anyString(), eq(Long.class), any(), any())).thenReturn(0L);
         AppUser user = mock(AppUser.class);
         when(security.authenticatedUser()).thenReturn(user);
-        when(configuration.scopeKey(any())).thenReturn("scope");
         when(configuration.tenantId()).thenReturn("default");
-        when(configuration.withScope(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        Map<String, Object> config = Map.of("office_id", 1L, "mapping_revision", "map", "policy_revision", "policy", "calculator_build",
-                "build");
-        when(configuration.authorize(any(), eq(true))).thenReturn(config);
-        ObjectNode scope = json.object().put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
+        Map<String, Object> config = Map.of("scope_key", "scope", "office_id", 1L, "mapping_revision", "map", "policy_revision", "policy",
+                "calculator_build", "build");
+        when(configuration.authorize(true)).thenReturn(config);
         for (int i = 0; i < versions.length; i++) {
             String key = ReceivablesStore.key("scope", "account", "account-" + i);
             var segment = ReceivablesMath.price(versions[i], START,
@@ -134,7 +131,7 @@ class ReceivablesMixedVersionEventTest {
             account.put("record_key", key);
             account.put("external_id", "account-" + i);
             account.put("deal_id", "deal");
-            account.put("scope_json", json.write(scope.deepCopy().put("developerOrganizationId", "developer")));
+            account.put("scope_json", json.write(json.object().put("developerOrganizationId", "developer")));
             account.put("native_loan_id", 10L + i);
             account.put("status", "ACTIVE");
             account.put("version", 1L);
@@ -164,7 +161,6 @@ class ReceivablesMixedVersionEventTest {
                 .put("subjectKind", "PERIOD").put("executionScopeHash", "0".repeat(64)).put("actorId", "operator").put("phase", "PREPARE")
                 .put("periodId", "2030-01").put("boundaryDate", BOUNDARY.toString()).put("eventWatermark", "8")
                 .put("sourceCutoffHash", "0".repeat(64));
-        command.set("scope", scope);
         command.putArray("affectedAccountVersions");
         command.putArray("approverIds");
         command.putArray("approvalEvidenceIds").add("approved");

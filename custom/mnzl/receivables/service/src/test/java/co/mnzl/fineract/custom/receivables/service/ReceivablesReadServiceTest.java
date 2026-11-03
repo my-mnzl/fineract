@@ -43,9 +43,8 @@ class ReceivablesReadServiceTest {
         var store = mock(ReceivablesStore.class);
         var config = mock(ReceivablesConfiguration.class);
         var json = new ReceivablesJson();
-        var scope = json.object();
+        var scope = "scope";
         when(store.jdbc()).thenReturn(jdbc);
-        when(config.scopeKey(scope)).thenReturn("scope");
         var date = LocalDate.of(2026, 9, 1);
         when(jdbc.queryForList(anyString(), eq("scope"), eq("LOT"), eq(7L), eq(date), eq(date))).thenReturn(List.of(
                 Map.of("subject_key", "a", "record_key", "a1", "created_at", "2026-08-01T00:00:00Z", "snapshot_json",
@@ -75,9 +74,8 @@ class ReceivablesReadServiceTest {
         var store = mock(ReceivablesStore.class);
         var config = mock(ReceivablesConfiguration.class);
         var json = new ReceivablesJson();
-        var scope = json.object();
+        var scope = "scope";
         when(store.jdbc()).thenReturn(jdbc);
-        when(config.scopeKey(scope)).thenReturn("scope");
         var row = new java.util.HashMap<String, Object>();
         row.put("actual_id", 91L);
         row.put("actual_gl", 42L);

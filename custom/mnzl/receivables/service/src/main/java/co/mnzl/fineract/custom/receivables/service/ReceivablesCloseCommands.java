@@ -42,7 +42,7 @@ public class ReceivablesCloseCommands {
     private final ReceivablesReadService reads;
 
     public void close(ReceivablesExecution e) {
-        require(!e.command.get("scope").has("developerOrganizationId"), "INVALID_DATA");
+        require(!e.command.path("scope").has("developerOrganizationId"), "INVALID_DATA");
         LocalDate boundary = LocalDate.parse(text(e.command, "boundaryDate"));
         require(boundary.getDayOfMonth() == 1 && text(e.command, "periodId").equals(boundary.minusDays(1).toString().substring(0, 7)),
                 "INVALID_DATA");
@@ -124,8 +124,8 @@ public class ReceivablesCloseCommands {
         require(family.equals("COLLECT")
                 || (family.equals("RECOURSE_RECOVERY") && text(originalCommand, "recoveryKind").equals("DUE_REIMBURSEMENT")),
                 "RECOVERY_REQUIRED");
-        require(text(originalCommand, "subjectId").equals(e.subjectId()) && originalCommand.get("scope").equals(correction.get("scope")),
-                "OWNERSHIP_CONFLICT");
+        require(text(originalCommand, "subjectId").equals(e.subjectId())
+                && java.util.Objects.equals(originalCommand.get("scope"), correction.get("scope")), "OWNERSHIP_CONFLICT");
         require(text(original, "businessDate").equals(text(correction, "originalValueDate")), "SOURCE_CHANGED");
         Set<String> selected = new HashSet<>();
         correction.get("sourceLineIds").forEach(id -> selected.add(id.asText()));
@@ -146,7 +146,7 @@ public class ReceivablesCloseCommands {
                 "SOURCE_CHANGED");
         var replacement = correction.get("replacementCommand");
         require(text(replacement, "commandType").equals(family) && text(replacement, "subjectId").equals(e.subjectId())
-                && replacement.get("scope").equals(correction.get("scope"))
+                && java.util.Objects.equals(replacement.get("scope"), correction.get("scope"))
                 && text(replacement, "businessDate").equals(text(correction, "businessDate"))
                 && text(replacement, "operationId").equals(text(correction, "replacementCommandOperationId"))
                 && text(replacement, "operationId").equals(text(correction, "operationId") + ":replacement")

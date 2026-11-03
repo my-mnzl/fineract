@@ -20,7 +20,6 @@ package co.mnzl.fineract.custom.receivables.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -61,12 +60,7 @@ class ReceivablesConfigurationApiTest {
         when(security.authenticatedUser()).thenReturn(user);
         when(user.getId()).thenReturn(16L);
         when(configuration.tenantId()).thenReturn("PRIVATE_AUTHENTICATED_TENANT");
-        when(headers.getHeaderString("X-MNZL-Platform")).thenReturn("private-platform");
-        when(headers.getHeaderString("X-MNZL-Financier")).thenReturn("private-financier");
-        when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("test");
         when(headers.getHeaderString("X-MNZL-Account-Mapping")).thenReturn("revision-2");
-        when(configuration.scopeKey(any())).thenAnswer(invocation -> json.hash(invocation.getArgument(0)));
-        when(configuration.resolveScope(any())).thenAnswer(invocation -> invocation.getArgument(0));
         logs.start();
         logger.addAppender(logs);
     }
@@ -81,16 +75,13 @@ class ReceivablesConfigurationApiTest {
         var input = json.object().put("activationId", "activation-1").put("accountMappingRevisionId", "revision-2")
                 .put("expectedActiveAccountMappingRevisionId", "revision-1").put("bankAccountReference", "PRIVATE_BANK_REFERENCE")
                 .put("contentHash", "a".repeat(64));
-        input.set("scope", json.object().put("platformId", "private-platform").put("financierOrganizationId", "private-financier")
-                .put("environment", "test"));
         return input;
     }
 
     private JsonNode event() {
         assertThat(logs.list).hasSize(1);
         var message = logs.list.getFirst().getFormattedMessage();
-        assertThat(message).startsWith("MNZL receivables configuration ").doesNotContain("PRIVATE_BANK_REFERENCE", "private-platform",
-                "private-financier");
+        assertThat(message).startsWith("MNZL receivables configuration ").doesNotContain("PRIVATE_BANK_REFERENCE");
         return json.read(message.substring(message.indexOf('{')));
     }
 
@@ -98,7 +89,7 @@ class ReceivablesConfigurationApiTest {
     void recordsCommittedActivationAndExactRetryWithoutLoggingConfiguration() {
         var response = json.object().put("activationId", "activation-1").put("previousAccountMappingRevisionId", "revision-1")
                 .put("accountMappingRevisionId", "revision-2").put("activatedAt", "2026-09-13T12:00:00Z");
-        when(configuration.activate(any(), anyString())).thenReturn(response);
+        when(configuration.activate(anyString())).thenReturn(response);
         for (int attempt = 0; attempt < 2; attempt++) {
             logs.list.clear();
             assertThat(json.read(api.activate(headers, json.write(request())))).isEqualTo(response);
@@ -108,7 +99,6 @@ class ReceivablesConfigurationApiTest {
             assertThat(event.path("rejectionCode").isNull()).isTrue();
             assertThat(event.path("actorId").asLong()).isEqualTo(16);
             assertThat(event.path("tenantHash").asText()).isEqualTo(ReceivablesJson.hashText("PRIVATE_AUTHENTICATED_TENANT"));
-            assertThat(event.path("scopeHash").asText()).isEqualTo(json.hash(request().path("scope")));
             assertThat(event.path("activationId").asText()).isEqualTo("activation-1");
             assertThat(event.path("sourceRevision").asText()).isEqualTo("revision-1");
             assertThat(event.path("expectedActiveRevision").asText()).isEqualTo("revision-1");
@@ -121,7 +111,7 @@ class ReceivablesConfigurationApiTest {
     @ValueSource(strings = { "ACCOUNT_VERSION_CHANGED", "PERIOD_CLOSED", "IDEMPOTENCY_CONFLICT", "FINERACT_CAPABILITY_MISSING" })
     void recordsActivationRejectionsWithoutReplacingTheNativeError(String code) {
         var failure = new ReceivablesException(code);
-        when(configuration.activate(any(), anyString())).thenThrow(failure);
+        when(configuration.activate(anyString())).thenThrow(failure);
         assertThatThrownBy(() -> api.activate(headers, json.write(request()))).isSameAs(failure);
         var event = event();
         assertThat(event.path("outcome").asText()).isEqualTo("REJECTED");
@@ -131,7 +121,7 @@ class ReceivablesConfigurationApiTest {
     }
 
     @Test
-    void distinguishesAuthenticatedTenantsWithTheSameScopeAndActor() {
+    void distinguishesAuthenticatedTenantsWithTheSameActor() {
         when(configuration.stage(anyString())).thenReturn(json.object().put("state", "STAGED"));
         when(headers.getHeaderString("Fineract-Platform-TenantId")).thenReturn("untrusted-header");
         api.stage(headers, json.write(request()));
@@ -142,7 +132,6 @@ class ReceivablesConfigurationApiTest {
         var second = event();
         assertThat(second.path("tenantHash").asText()).isEqualTo(ReceivablesJson.hashText("other-authenticated-tenant"))
                 .isNotEqualTo(first.path("tenantHash").asText());
-        assertThat(second.path("scopeHash")).isEqualTo(first.path("scopeHash"));
         assertThat(second.path("actorId")).isEqualTo(first.path("actorId"));
         assertThat(logs.list.getFirst().getFormattedMessage()).doesNotContain("other-authenticated-tenant", "untrusted-header");
     }
@@ -161,7 +150,7 @@ class ReceivablesConfigurationApiTest {
     @Test
     void logsCommitFailureAsFailedRatherThanSuccessfulActivation() {
         var failure = new TransactionSystemException("PRIVATE_DATABASE_CONTENT");
-        when(configuration.activate(any(), anyString())).thenThrow(failure);
+        when(configuration.activate(anyString())).thenThrow(failure);
         assertThatThrownBy(() -> api.activate(headers, json.write(request()))).isSameAs(failure);
         var event = event();
         assertThat(event.path("outcome").asText()).isEqualTo("FAILED");
@@ -179,27 +168,6 @@ class ReceivablesConfigurationApiTest {
         assertThatThrownBy(() -> api.stage(headers, json.write(request()))).isInstanceOf(ReceivablesException.class);
         assertThat(event().path("action").asText()).isEqualTo("STAGE");
         assertThat(event().path("rejectionCode").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
-    }
-
-    /** On an empty tenant only a full scope resolves, so partial headers are checked against the body, not resolved. */
-    @Test
-    void bootstrapsWithPartialScopeHeadersAndNoStoredConfiguration() {
-        when(configuration.resolveScope(any())).thenAnswer(invocation -> {
-            JsonNode scope = invocation.getArgument(0);
-            if (!ReceivablesConfiguration.SCOPE_FIELDS.stream().allMatch(scope::has)) {
-                throw new ReceivablesException("FINERACT_CAPABILITY_MISSING");
-            }
-            return scope;
-        });
-        when(headers.getHeaderString("X-MNZL-Platform")).thenReturn(null);
-        when(headers.getHeaderString("X-MNZL-Financier")).thenReturn(" ");
-        when(configuration.stage(anyString())).thenReturn(json.object().put("state", "STAGED"));
-        api.stage(headers, json.write(request()));
-        assertThat(event().path("outcome").asText()).isEqualTo("SUCCEEDED");
-        logs.list.clear();
-        when(headers.getHeaderString("X-MNZL-Environment")).thenReturn("live");
-        assertThatThrownBy(() -> api.stage(headers, json.write(request()))).isInstanceOf(ReceivablesException.class)
-                .hasMessage("OWNERSHIP_CONFLICT");
     }
 
     @Test

@@ -55,7 +55,7 @@ public class ReceivablesPeriodProof {
     private final ReceivablesJson json;
     private final ReceivablesConfiguration configuration;
 
-    public JsonNode read(JsonNode scope, String mapping, String period, String watermark) {
+    public JsonNode read(String scope, String mapping, String period, String watermark) {
         long started = System.nanoTime();
         Diagnostic diagnostic = new Diagnostic();
         try {
@@ -63,7 +63,7 @@ public class ReceivablesPeriodProof {
         } catch (RuntimeException failure) {
             log.warn(
                     "MNZL receivables period proof scope={} period={} watermark={} result={} category={} eventHash={} journalId={} latencyMs={}",
-                    ReceivablesJson.hashText(scope.toString()), period != null && period.matches("[0-9]{4}-[0-9]{2}") ? period : "INVALID",
+                    ReceivablesJson.hashText(scope), period != null && period.matches("[0-9]{4}-[0-9]{2}") ? period : "INVALID",
                     watermark != null && watermark.matches("[0-9]{1,19}") ? watermark : "INVALID",
                     failure instanceof ReceivablesException rejected ? rejected.code() : "FAILED", diagnostic.category,
                     diagnostic.eventId == null ? null : ReceivablesJson.hashText(diagnostic.eventId), diagnostic.journalId,
@@ -72,7 +72,7 @@ public class ReceivablesPeriodProof {
         }
     }
 
-    private JsonNode readProof(JsonNode scope, String mapping, String period, String watermark, Diagnostic diagnostic) {
+    private JsonNode readProof(String scopeKey, String mapping, String period, String watermark, Diagnostic diagnostic) {
         diagnostic.check(period != null && period.matches("[0-9]{4}-(0[1-9]|1[0-2])") && watermark != null
                 && watermark.matches("0|[1-9][0-9]{0,18}"), "INVALID_DATA", "INPUT");
         long maximum;
@@ -82,8 +82,7 @@ public class ReceivablesPeriodProof {
         } catch (IllegalArgumentException | java.time.DateTimeException failure) {
             throw new ReceivablesException("INVALID_DATA", failure);
         }
-        String scopeKey = configuration.scopeKey(scope);
-        configuration.authorize(scope, false);
+        configuration.authorize(false);
         configuration.revision(scopeKey, mapping);
         String tenant = configuration.tenantId();
         Long latest = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, scopeKey);
@@ -91,7 +90,6 @@ public class ReceivablesPeriodProof {
         ObjectNode selection = json.object();
         selection.put("schemaVersion", "1");
         selection.put("tenantId", tenant);
-        selection.set("scope", scope);
         selection.put("postingPeriod", period);
         selection.put("eventWatermark", watermark);
         selection.put("readAccountMappingRevisionId", mapping);
@@ -115,13 +113,14 @@ public class ReceivablesPeriodProof {
             String id = text(event, "eventId");
             ObjectNode unhashed = event.deepCopy();
             unhashed.remove("contentHash");
-            diagnostic.check(id.equals(string(row, "record_key")) && id.equals(string(row, "event_id"))
-                    && text(event, "contentHash").equals(string(row, "content_hash"))
-                    && text(event, "contentHash").equals(json.hash(unhashed))
-                    && text(event, "postingPeriod").equals(string(row, "posting_period"))
-                    && text(event, "businessDate").equals(string(row, "business_date"))
-                    && text(event, "operationId").equals(string(row, "operation_id")) && tenant.equals(text(event, "tenantId"))
-                    && configuration.scopeKey(event.get("scope")).equals(scopeKey), "JOURNAL_MISMATCH", "EVENT_INTEGRITY");
+            diagnostic.check(
+                    id.equals(string(row, "record_key")) && id.equals(string(row, "event_id"))
+                            && text(event, "contentHash").equals(string(row, "content_hash"))
+                            && text(event, "contentHash").equals(json.hash(unhashed))
+                            && text(event, "postingPeriod").equals(string(row, "posting_period"))
+                            && text(event, "businessDate").equals(string(row, "business_date"))
+                            && text(event, "operationId").equals(string(row, "operation_id")) && tenant.equals(text(event, "tenantId")),
+                    "JOURNAL_MISMATCH", "EVENT_INTEGRITY");
             LocalDate date = LocalDate.parse(text(event, "businessDate"));
             JsonNode command = json.read(string(row, "request_json"));
             if (string(row, "command_type").equals("CLOSE_PERIOD") && text(command, "phase").equals("PREPARE")) {

@@ -69,7 +69,7 @@ class ReceivablesLegacyTest {
                         {"commandType":"BOOK_HISTORICAL_PURCHASE","executionMode":"CURRENT","executionAuthorization":null,
                         "accountMappingRevisionId":"map","operationId":"book","idempotencyKey":"book","expectedVersion":"0",
                         "businessDate":"2026-09-06","basisHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                        "scope":{"platformId":"mnzl","financierOrganizationId":"mnzl-financier","developerOrganizationId":"developer","environment":"test"},
+                        "scope":{"developerOrganizationId":"developer"},
                         "subjectId":"account","subjectKind":"RECEIVABLE","affectedAccountVersions":[],
                         "executionScopeHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                         "actorId":"employee","approverIds":[],"approvalEvidenceIds":[],"accountId":"account","dealId":"deal","customerReferenceId":"customer",
