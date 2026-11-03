@@ -44,10 +44,23 @@ final class ReceivablesBookKeyScenarios {
         assertThat(booked.path("financialEventIds").get(0).asText())
                 .isEqualTo(ReceivablesStore.key(book, "event", ReceivablesStore.key(book, "operation", "account-1-book")));
 
+        // The book key is read from the configuration, never derived, so this key stands in for a former one. Its
+        // booking
+        // event is resealed as recorded before the upgrade: native scopes, with a content hash that covers them.
+        String eventId = booked.path("financialEventIds").get(0).asText();
+        ObjectNode sealed = (ObjectNode) harness.json
+                .read(harness.queryText("select event_json from m_mnzl_r_event where record_key=?", eventId));
+        addNativeScope((ObjectNode) sealed.get("scope"));
+        sealed.path("positionsAfter").forEach(position -> addNativeScope((ObjectNode) position.get("scope")));
+        sealed.remove("contentHash");
+        sealed.put("contentHash", harness.json.hash(sealed));
+        harness.executeSql("update m_mnzl_r_event set event_json=?, content_hash=? where record_key=?", harness.json.write(sealed),
+                sealed.path("contentHash").asText(), eventId);
+
         JsonNode context = harness.request("GET", PREFIX + "/context", null, 200);
         assertThat(context.has("scope")).isFalse();
         JsonNode account = harness.request("GET", PREFIX + "/accounts/account-1", null, 200);
-        assertThat(account.path("position").path("scope")).isEqualTo(harness.scope());
+        assertThat(account.path("position").path("scope")).isEqualTo(sealed.path("positionsAfter").get(0).path("scope"));
         JsonNode operation = harness.request("GET", PREFIX + "/operations/account-1-book", null, 200);
         assertThat(operation.path("scope")).isEqualTo(harness.scope());
         JsonNode active = harness.request("GET", PREFIX + "/configuration/active", null, 200);
@@ -66,8 +79,7 @@ final class ReceivablesBookKeyScenarios {
 
         // Stored copies recorded with the native scope lose it; the sealed event keeps its bytes.
         var before = harness.counts();
-        String event = harness.queryText("select event_json from m_mnzl_r_event where record_key=?",
-                booked.path("financialEventIds").get(0).asText());
+        String event = harness.queryText("select event_json from m_mnzl_r_event where record_key=?", eventId);
         withNativeScope("m_mnzl_r_account", "scope_json", "external_id='account-1'", null);
         withNativeScope("m_mnzl_r_command", "request_json", "operation_id='account-1-book'", "scope");
         withNativeScope("m_mnzl_r_command", "result_json", "operation_id='account-1-book'", "scope");
@@ -79,16 +91,26 @@ final class ReceivablesBookKeyScenarios {
         assertThat(harness.request("GET", PREFIX + "/configuration/active", null, 200)).isEqualTo(active);
         assertThat(harness.queryText("select scope_json from m_mnzl_r_account where external_id='account-1'"))
                 .isEqualTo(harness.json.write(harness.scope()));
-        assertThat(harness.queryText("select event_json from m_mnzl_r_event where record_key=?",
-                booked.path("financialEventIds").get(0).asText())).isEqualTo(event);
+        assertThat(harness.queryText("select event_json from m_mnzl_r_event where record_key=?", eventId)).isEqualTo(event);
         assertThat(harness.counts()).isEqualTo(before);
+
+        // The sealed event still verifies in a period proof. Later scenarios book developer-only commands on account-1.
+        String watermark = harness.request("GET", PREFIX + "/capabilities", null, 200).path("currentEventWatermark").asText();
+        JsonNode proof = harness.request("GET",
+                PREFIX + "/period-activity-proof?postingPeriod=" + sealed.path("postingPeriod").asText() + "&eventWatermark=" + watermark,
+                null, 200);
+        harness.json.validate("periodActivityProof", harness.json.write(proof));
+        assertThat(proof.has("scope")).isFalse();
+    }
+
+    private static void addNativeScope(ObjectNode scope) {
+        scope.put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
     }
 
     /** Adds the former native scope to the stored JSON, at its root or in its {@code field} object. */
     private void withNativeScope(String table, String column, String where, String field) throws Exception {
         ObjectNode stored = (ObjectNode) harness.json.read(harness.queryText("select " + column + " from " + table + " where " + where));
-        ObjectNode scope = field == null ? stored : stored.has(field) ? (ObjectNode) stored.get(field) : stored.putObject(field);
-        scope.put("platformId", "mnzl").put("financierOrganizationId", "financier").put("environment", "test");
+        addNativeScope(field == null ? stored : stored.has(field) ? (ObjectNode) stored.get(field) : stored.putObject(field));
         harness.executeSql("update " + table + " set " + column + "=? where " + where, harness.json.write(stored));
     }
 }
