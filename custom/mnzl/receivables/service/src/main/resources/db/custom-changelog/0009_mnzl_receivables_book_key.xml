@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+    <!--
+        MNZL is the only lender. A tenant's single configuration keeps its scope_key as the tenant's book key, so every
+        record key, event id and native journal reference keeps its value. Stored request copies lose the platform,
+        financier and environment; hash-sealed bodies keep them (see ReceivablesNativeScopeMigration).
+    -->
+    <changeSet id="mnzl-receivables-book-key-9" author="mnzl">
+        <preConditions onFail="HALT" onFailMessage="A receivables tenant must have at most one configuration">
+            <sqlCheck expectedResult="0">select count(*) from (select count(*) n from m_mnzl_r_configuration having count(*) &gt; 1) configurations</sqlCheck>
+        </preConditions>
+        <customChange class="co.mnzl.fineract.custom.receivables.service.ReceivablesNativeScopeMigration"/>
+    </changeSet>
+    <changeSet id="mnzl-receivables-book-key-columns-9" author="mnzl">
+        <dropColumn tableName="m_mnzl_r_configuration" columnName="scope_json"/>
+        <dropColumn tableName="m_mnzl_r_configuration" columnName="financier_id"/>
+    </changeSet>
+</databaseChangeLog>

@@ -23,7 +23,6 @@ import static co.mnzl.fineract.custom.receivables.service.ReceivablesJson.text;
 import static co.mnzl.fineract.custom.receivables.service.ReceivablesStore.string;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -32,8 +31,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
-import java.util.List;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.security.exception.NoAuthorizationException;
@@ -56,45 +54,8 @@ public class ReceivablesWriteApiResource {
     private final ReceivablesJson json;
     private final PlatformSecurityContext security;
 
-    static final List<String> SCOPE_HEADERS = List.of("X-MNZL-Platform", "X-MNZL-Financier", "X-MNZL-Environment");
-
-    /** Scope headers are optional and deprecated; blank ones count as omitted. */
-    private ObjectNode namedScope(HttpHeaders headers) {
-        var scope = json.object();
-        for (int i = 0; i < SCOPE_HEADERS.size(); i++) {
-            String value = headers.getHeaderString(SCOPE_HEADERS.get(i));
-            if (value != null && !value.isBlank()) {
-                scope.put(ReceivablesConfiguration.SCOPE_FIELDS.get(i), value);
-            }
-        }
-        return scope;
-    }
-
-    private JsonNode scope(HttpHeaders headers) {
-        return configuration.resolveScope(namedScope(headers));
-    }
-
-    /**
-     * The body's scope, which a bootstrap names in full; each scope header that is sent must equal the body's value.
-     * Headers are compared field by field rather than resolved, so a bootstrap with partial headers needs no stored
-     * configuration.
-     */
-    private JsonNode scope(HttpHeaders headers, JsonNode input) {
-        require(input != null && input.isObject(), "INVALID_DATA");
-        JsonNode requested = configuration.resolveScope(input.get("scope"));
-        namedScope(headers).fields()
-                .forEachRemaining(field -> require(field.getValue().equals(requested.path(field.getKey())), "OWNERSHIP_CONFLICT"));
-        return requested;
-    }
-
-    private void requireSameScope(HttpHeaders headers, String request) {
-        scope(headers, json.read(request));
-    }
-
     private void authorizeRequest(HttpHeaders headers, String request) {
-        JsonNode input = json.read(request);
-        requireSameScope(headers, request);
-        require(text(input, "accountMappingRevisionId").equals(headers.getHeaderString("X-MNZL-Account-Mapping")),
+        require(text(json.read(request), "accountMappingRevisionId").equals(headers.getHeaderString("X-MNZL-Account-Mapping")),
                 "FINERACT_CAPABILITY_MISSING");
     }
 
@@ -113,10 +74,9 @@ public class ReceivablesWriteApiResource {
             result = exception.code();
             throw exception;
         } finally {
-            log.info("MNZL receivables command type={} operationId={} scope={} subject={} result={} latencyMs={}",
+            log.info("MNZL receivables command type={} operationId={} subject={} result={} latencyMs={}",
                     input.path("commandType").asText(), input.path("operationId").asText(),
-                    ReceivablesJson.hashText(input.path("scope").toString()), ReceivablesJson.hashText(input.path("subjectId").asText()),
-                    result, (System.nanoTime() - started) / 1_000_000);
+                    ReceivablesJson.hashText(input.path("subjectId").asText()), result, (System.nanoTime() - started) / 1_000_000);
         }
     }
 
@@ -136,9 +96,9 @@ public class ReceivablesWriteApiResource {
 
     @POST
     @Path("/calculate")
-    public String calculate(@Context HttpHeaders headers, String request) {
+    public String calculate(String request) {
         security.authenticatedUser().validateHasPermissionTo("CALCULATE_MNZL_RECEIVABLES");
-        var config = configuration.authorize(scope(headers), false);
+        var config = configuration.authorize(false);
         var input = json.read(request);
         JsonNode versions = input.has("basis") ? input.get("basis") : input;
         require(text(versions, "policyRevisionId").equals(string(config, "policy_revision"))
@@ -151,9 +111,9 @@ public class ReceivablesWriteApiResource {
      */
     @POST
     @Path("/pricing-calculations")
-    public String calculatePricing(@Context HttpHeaders headers, String request) {
+    public String calculatePricing(String request) {
         security.authenticatedUser().validateHasPermissionTo("CALCULATE_MNZL_RECEIVABLES");
-        var config = configuration.authorize(scope(headers), false);
+        var config = configuration.authorize(false);
         var input = json.validate("pricingCalculationRequest", request);
         require(text(input, "calculatorBuild").equals(string(config, "calculator_build")), "UNSUPPORTED_VERSION");
         return json.write(calculations.calculate(request));
@@ -169,13 +129,13 @@ public class ReceivablesWriteApiResource {
     @GET
     @Path("/configuration")
     public String readConfiguration(@Context HttpHeaders headers) {
-        return json.write(configuration.readConfiguration(scope(headers), headers.getHeaderString("X-MNZL-Account-Mapping")));
+        return json.write(configuration.readConfiguration(headers.getHeaderString("X-MNZL-Account-Mapping")));
     }
 
     @POST
     @Path("/configuration")
     public String configure(@Context HttpHeaders headers, String request) {
-        return configurationAttempt("BOOTSTRAP", headers, request, (input, requestedScope) -> {
+        return configurationAttempt("BOOTSTRAP", request, input -> {
             authorizeRequest(headers, request);
             return configuration.configure(request);
         });
@@ -183,14 +143,14 @@ public class ReceivablesWriteApiResource {
 
     @GET
     @Path("/configuration/active")
-    public String activeConfiguration(@Context HttpHeaders headers) {
-        return json.write(configuration.activeConfiguration(scope(headers)));
+    public String activeConfiguration() {
+        return json.write(configuration.activeConfiguration());
     }
 
     @POST
     @Path("/configuration/revisions")
     public String stage(@Context HttpHeaders headers, String request) {
-        return configurationAttempt("STAGE", headers, request, (input, requestedScope) -> {
+        return configurationAttempt("STAGE", request, input -> {
             authorizeRequest(headers, request);
             return configuration.stage(request);
         });
@@ -199,21 +159,20 @@ public class ReceivablesWriteApiResource {
     @POST
     @Path("/configuration/activations")
     public String activate(@Context HttpHeaders headers, String request) {
-        return configurationAttempt("ACTIVATE", headers, request, (input, requestedScope) -> {
+        return configurationAttempt("ACTIVATE", request, input -> {
             require(text(input, "accountMappingRevisionId").equals(headers.getHeaderString("X-MNZL-Account-Mapping")),
                     "FINERACT_CAPABILITY_MISSING");
-            return configuration.activate(requestedScope, request);
+            return configuration.activate(request);
         });
     }
 
     /** Log one HTTP attempt after the transactional service has committed or rolled back, including exact retries. */
-    private String configurationAttempt(String action, HttpHeaders headers, String request,
-            BiFunction<JsonNode, JsonNode, JsonNode> operation) {
+    private String configurationAttempt(String action, String request, Function<JsonNode, JsonNode> operation) {
         long started = System.nanoTime();
         var event = json.object().put("event", "mnzl.receivables.configuration").put("action", action).put("outcome", "FAILED")
                 .put("rejectionCode", "INTERNAL_ERROR");
-        event.putNull("actorId").putNull("tenantHash").putNull("scopeHash").putNull("activationId").putNull("expectedActiveRevision")
-                .putNull("sourceRevision").putNull("targetRevision");
+        event.putNull("actorId").putNull("tenantHash").putNull("activationId").putNull("expectedActiveRevision").putNull("sourceRevision")
+                .putNull("targetRevision");
         try {
             event.put("actorId", security.authenticatedUser().getId());
             event.put("tenantHash", ReceivablesJson.hashText(configuration.tenantId()));
@@ -222,9 +181,7 @@ public class ReceivablesWriteApiResource {
             event.put("activationId", telemetryId(input, "activationId"));
             event.put("expectedActiveRevision", telemetryId(input, "expectedActiveAccountMappingRevisionId"));
             event.put("targetRevision", telemetryId(input, "accountMappingRevisionId"));
-            var requestedScope = input.has("scope") ? scope(headers, input) : scope(headers);
-            event.put("scopeHash", json.hash(requestedScope));
-            var response = operation.apply(input, requestedScope);
+            var response = operation.apply(input);
             // The service proxy returns only after transaction completion. Retries retain the original activation
             // timestamp.
             event.put("sourceRevision", telemetryId(response, "previousAccountMappingRevisionId"));
@@ -282,15 +239,13 @@ public class ReceivablesWriteApiResource {
 
     @POST
     @Path("/authorizations/v2")
-    public String authorize(@Context HttpHeaders headers, String request) {
-        requireSameScope(headers, request);
+    public String authorize(String request) {
         return json.write(configuration.authorizeHistory(request));
     }
 
     @POST
     @Path("/workout-authorizations")
-    public String authorizeWorkout(@Context HttpHeaders headers, String request) {
-        requireSameScope(headers, request);
+    public String authorizeWorkout(String request) {
         return json.write(configuration.authorizeWorkout(request));
     }
 

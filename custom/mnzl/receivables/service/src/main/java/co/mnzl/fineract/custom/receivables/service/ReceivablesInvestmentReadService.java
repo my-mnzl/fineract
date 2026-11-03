@@ -46,12 +46,12 @@ public class ReceivablesInvestmentReadService {
         user.validateHasPermissionTo("READ_MNZL_RECEIVABLES");
         // Reuse standard loan visibility, including current/transfer office hierarchy, before any native lookup.
         loans.retrieveOne(loanId);
-        var accounts = store.jdbc().queryForList("select scope_json,external_id from m_mnzl_r_account where native_loan_id=?", loanId);
+        var accounts = store.jdbc().queryForList("select scope_key,external_id from m_mnzl_r_account where native_loan_id=?", loanId);
         require(accounts.size() <= 1, "RECOVERY_REQUIRED");
         if (accounts.isEmpty()) {
             return json.object().put("applicable", false);
         }
         var account = accounts.getFirst();
-        return reads.investment(json.read(string(account, "scope_json")), string(account, "external_id"), includeProjections);
+        return reads.investment(string(account, "scope_key"), string(account, "external_id"), includeProjections);
     }
 }

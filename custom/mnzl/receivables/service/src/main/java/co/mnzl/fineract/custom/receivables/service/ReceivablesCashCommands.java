@@ -206,7 +206,8 @@ public class ReceivablesCashCommands {
 
     private void requireSourceScope(ReceivablesExecution e, Map<String, Object> source) {
         var operation = store.require("command", string(source, "operation_key"));
-        require(json.read(string(operation, "request_json")).get("scope").equals(e.command.get("scope")), "OWNERSHIP_CONFLICT");
+        require(java.util.Objects.equals(json.read(string(operation, "request_json")).get("scope"), e.command.get("scope")),
+                "OWNERSHIP_CONFLICT");
     }
 
     public void restoreReceipt(ReceivablesExecution e, String sourceKey, BigInteger amount, String deal) {

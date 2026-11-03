@@ -20,8 +20,6 @@ package co.mnzl.fineract.custom.receivables.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -58,72 +56,40 @@ class ReceivablesContextTest {
         doReturn("authenticated-tenant").when(configuration).tenantId();
     }
 
-    private Map<String, Object> row(String platform) {
-        var scope = json.object().put("platformId", platform).put("financierOrganizationId", "mnzl").put("environment", "test");
+    private Map<String, Object> row(long user) {
         var row = new HashMap<String, Object>();
-        row.put("scope_json", json.write(scope));
-        row.put("scope_key", configuration.scopeKey(scope));
+        row.put("scope_key", "book");
+        row.put("integration_user_id", user);
         row.put("mapping_revision", "map-1");
         return row;
     }
 
     private void rows(List<Map<String, Object>> rows) {
-        when(jdbc.queryForList(anyString(), eq(7L), eq("mnzl"))).thenReturn(rows);
+        when(jdbc.queryForList("select * from m_mnzl_r_configuration")).thenReturn(rows);
     }
 
     @Test
-    void discoversOnlyTheAuthenticatedUsersActiveMatchingContext() {
-        rows(List.of(row("other-platform"), row("platform")));
-        var result = configuration.discoverContext("platform", "mnzl", "test");
+    void discoversTheAuthenticatedUsersConfiguration() {
+        rows(List.of(row(7L)));
+        var result = configuration.discoverContext();
         assertThat(result.path("tenantId").asText()).isEqualTo("authenticated-tenant");
-        assertThat(result.path("scope").path("platformId").asText()).isEqualTo("platform");
         assertThat(result.path("accountMappingRevisionId").asText()).isEqualTo("map-1");
+        assertThat(result.has("scope")).isFalse();
         verify(user).validateHasPermissionTo("READ_MNZL_RECEIVABLES");
-        verify(jdbc).queryForList("select * from m_mnzl_r_configuration where integration_user_id=? and financier_id=?", 7L, "mnzl");
     }
 
     @Test
-    void rejectsMissingAndAmbiguousConfigurations() {
-        for (var candidates : List.of(List.<Map<String, Object>>of(), List.of(row("platform"), row("platform")))) {
+    void rejectsMissingAmbiguousAndForeignConfigurations() {
+        for (var candidates : List.of(List.<Map<String, Object>>of(), List.of(row(7L), row(7L)), List.of(row(8L)))) {
             rows(candidates);
-            assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test")).isInstanceOf(ReceivablesException.class);
+            assertThatThrownBy(configuration::discoverContext).isInstanceOf(ReceivablesException.class);
         }
     }
 
     @Test
     void deniedPermissionCannotDiscoverConfiguration() {
         doThrow(new ReceivablesException("FINERACT_CAPABILITY_MISSING")).when(user).validateHasPermissionTo("READ_MNZL_RECEIVABLES");
-        assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test")).isInstanceOf(ReceivablesException.class);
+        assertThatThrownBy(configuration::discoverContext).isInstanceOf(ReceivablesException.class);
         verifyNoInteractions(jdbc);
-    }
-
-    @Test
-    void discoversTheOnlyContextWithoutIdentityHeaders() {
-        var configured = List.of(row("platform"));
-        when(jdbc.queryForList(anyString(), eq(7L))).thenReturn(configured);
-        for (var blank : new String[] { null, "" }) {
-            var result = configuration.discoverContext(blank, blank, blank);
-            assertThat(result.path("scope").path("platformId").asText()).isEqualTo("platform");
-            assertThat(result.path("accountMappingRevisionId").asText()).isEqualTo("map-1");
-        }
-        verify(jdbc, org.mockito.Mockito.times(2)).queryForList("select * from m_mnzl_r_configuration where integration_user_id=?", 7L);
-    }
-
-    @Test
-    void identityHeadersThatAreSentMustMatch() {
-        var configured = List.of(row("platform"));
-        when(jdbc.queryForList(anyString(), eq(7L))).thenReturn(configured);
-        assertThat(configuration.discoverContext(null, null, "test").path("scope").path("environment").asText()).isEqualTo("test");
-        assertThatThrownBy(() -> configuration.discoverContext("other-platform", null, null)).isInstanceOf(ReceivablesException.class);
-        assertThatThrownBy(() -> configuration.discoverContext(null, null, "staging")).isInstanceOf(ReceivablesException.class);
-    }
-
-    @Test
-    void rejectsUnknownEnvironmentAndInconsistentScope() {
-        assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "nope")).isInstanceOf(ReceivablesException.class);
-        var row = row("platform");
-        row.put("scope_key", "different");
-        rows(List.of(row));
-        assertThatThrownBy(() -> configuration.discoverContext("platform", "mnzl", "test")).isInstanceOf(ReceivablesException.class);
     }
 }

@@ -59,17 +59,21 @@ public class ReceivablesCommandService {
     public JsonNode execute(String request) {
         security.authenticatedUser().validateHasPermissionTo("EXECUTE_MNZL_RECEIVABLES");
         // The payload is hashed exactly as sent. A payload stored before the admin fee rename keeps its legacy names:
-        // they are aliased to validate its replay, and a new command must already use the current names. A scope the
-        // caller omits is completed for execution only, so stored keys and events keep it.
+        // they are aliased to validate its replay, and a new command must already use the current names.
         JsonNode input = json.read(request);
-        JsonNode scoped = configuration.withScope(input);
-        JsonNode command = ReceivablesLegacy.current(scoped);
+        var config = configuration.authorize(true);
+        String payloadHash = json.hash(input);
+        // A command recorded with fields the schema has since dropped, such as the native scope, still replays exactly.
+        var recorded = store.find("command",
+                ReceivablesStore.key(string(config, "scope_key"), "operation", input.path("operationId").asText()));
+        if (recorded != null && payloadHash.equals(string(recorded, "payload_hash")) && recorded.get("result_json") != null) {
+            return json.read(string(recorded, "result_json"));
+        }
+        JsonNode command = ReceivablesLegacy.current(input);
         String type = text(command, "commandType");
         json.validate(type.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "helFundingCommand"
                 : type.equals("ALLOCATE_HEL_DEVELOPER_ADVANCE") ? "helAdvanceAllocationCommand" : "financialCommand", command);
-        var config = configuration.authorize(command.get("scope"), true);
-        var execution = new ReceivablesExecution(command, configuration.scopeKey(command.get("scope")), config);
-        String payloadHash = json.hash(input);
+        var execution = new ReceivablesExecution(command, string(config, "scope_key"), config);
         String idempotencyHash = ReceivablesJson.hashText(text(command, "idempotencyKey"));
         var existingKeys = store.jdbc().queryForList("select record_key from m_mnzl_r_command where scope_key=? and idempotency_hash=?",
                 execution.scope, idempotencyHash);
@@ -84,7 +88,7 @@ public class ReceivablesCommandService {
         require(!ReceivablesLegacy.legacy(input), "INVALID_DATA");
         // Lock before any core or custom financial effects. Exact durable replay above never needs this lock.
         ledger.lockOffice(number(config, "office_id"));
-        configuration.validateExecution(command, config, Set.copyOf(List.of(payloadHash, json.hash(scoped))));
+        configuration.validateExecution(command, config, payloadHash);
         validateVersions(execution);
         Instant now = Instant.now();
         var fields = new LinkedHashMap<String, Object>();
@@ -137,7 +141,7 @@ public class ReceivablesCommandService {
                 require(number(touched, "version") == 0 || covered.contains(string(touched, "external_id")), "ACCOUNT_VERSION_CHANGED");
             }
         }
-        return finish(execution, input.get("scope"), payloadHash, now);
+        return finish(execution, payloadHash, now);
     }
 
     private void validateVersions(ReceivablesExecution e) {
@@ -182,7 +186,7 @@ public class ReceivablesCommandService {
                 : pinnedVersions.size() == 1 ? pinnedVersions.iterator().next() : null;
     }
 
-    private JsonNode finish(ReceivablesExecution e, JsonNode sentScope, String payloadHash, Instant now) {
+    private JsonNode finish(ReceivablesExecution e, String payloadHash, Instant now) {
         List<JsonNode> positions = new ArrayList<>();
         Set<String> versions = new HashSet<>();
         for (String accountKey : e.accountKeys) {
@@ -209,7 +213,9 @@ public class ReceivablesCommandService {
         event.put("accountMappingRevisionId", string(e.configuration, "mapping_revision"));
         event.put("eventType", "flex.receivables.financial-event.v1");
         event.put("eventId", e.eventKey);
-        event.set("scope", e.command.get("scope"));
+        if (e.command.has("scope")) {
+            event.set("scope", e.command.get("scope"));
+        }
         event.put("tenantId", configuration.tenantId());
         String commandType = text(e.command, "commandType");
         event.put("sourceKind",
@@ -219,10 +225,10 @@ public class ReceivablesCommandService {
                                         : commandType.equals("RECORD_CASH_MOVEMENT") ? "CASH" : "RECEIVABLE");
         if (e.command.has("dealId")) {
             event.put("dealId", text(e.command, "dealId"));
-        } else if (!positions.isEmpty() && e.command.get("scope").has("developerOrganizationId")) {
+        } else if (!positions.isEmpty() && e.command.path("scope").has("developerOrganizationId")) {
             event.put("dealId", text(positions.getFirst(), "dealId"));
         }
-        if (positions.size() == 1 && e.command.get("scope").has("developerOrganizationId")) {
+        if (positions.size() == 1 && e.command.path("scope").has("developerOrganizationId")) {
             event.put("accountId", text(positions.getFirst(), "accountId"));
             event.put("accountSequence", text(positions.getFirst(), "accountVersion"));
         }
@@ -264,11 +270,9 @@ public class ReceivablesCommandService {
         var result = json.object();
         for (String key : List.of("operationId", "commandType", "subjectKind", "subjectId", "scope", "businessDate", "expectedVersion",
                 "affectedAccountVersions", "executionScopeHash", "actorId", "approverIds")) {
-            // The operation echoes the scope as sent; the caller matches it against its command.
-            if (!key.equals("scope")) {
+            // The operation names a developer scope only when its command does.
+            if (!key.equals("scope") || e.command.has("scope")) {
                 result.set(key, e.command.get(key));
-            } else if (sentScope != null) {
-                result.set(key, sentScope);
             }
         }
         result.put("eventWatermark", Long.toString(watermark));

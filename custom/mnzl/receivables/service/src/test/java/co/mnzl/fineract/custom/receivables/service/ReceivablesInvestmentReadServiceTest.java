@@ -55,9 +55,8 @@ class ReceivablesInvestmentReadServiceTest {
 
     @Test
     void authorizedStaffResolveScopeFromTheVisibleLoanOnly() {
-        var scope = json.object().put("platformId", "platform").put("financierOrganizationId", "financier");
-        when(jdbc.queryForList(anyString(), eq(42L)))
-                .thenReturn(List.of(Map.of("scope_json", json.write(scope), "external_id", "receivable")));
+        var scope = "book";
+        when(jdbc.queryForList(anyString(), eq(42L))).thenReturn(List.of(Map.of("scope_key", scope, "external_id", "receivable")));
         var result = json.object().put("applicable", true);
         when(reads.investment(scope, "receivable", true)).thenReturn(result);
         assertThat(service.read(42, true)).isSameAs(result);

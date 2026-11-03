@@ -75,58 +75,50 @@ public class ReceivablesReadService {
         }
     }
 
-    public JsonNode discoverContext(String platform, String financier, String environment) {
-        return configuration.discoverContext(platform, financier, environment);
+    public JsonNode discoverContext() {
+        return configuration.discoverContext();
     }
 
-    /** The scope values are optional; the account mapping revision is still required. */
-    public JsonNode authorize(String platform, String financier, String environment, String mapping) {
+    /** The book key a read is scoped to, once the account mapping revision it names exists. */
+    public String authorize(String mapping) {
         security.authenticatedUser().validateHasPermissionTo("READ_MNZL_RECEIVABLES");
         require(mapping != null && !mapping.isBlank(), "INVALID_DATA");
-        ObjectNode requested = json.object();
-        String[] values = { platform, financier, environment };
-        for (int i = 0; i < values.length; i++) {
-            if (values[i] != null && !values[i].isBlank()) {
-                requested.put(ReceivablesConfiguration.SCOPE_FIELDS.get(i), values[i]);
-            }
-        }
-        ObjectNode scope = configuration.resolveScope(requested);
-        configuration.authorize(scope, false);
-        configuration.revision(key(scope), mapping);
+        String scope = string(configuration.authorize(false), "scope_key");
+        configuration.revision(scope, mapping);
         return scope;
     }
 
     /** Internal close read: participate in the already locked financial transaction, including its own writes. */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY, isolation = Isolation.DEFAULT)
     public long executionWatermark(ReceivablesExecution execution) {
-        return watermark(execution.command.get("scope"));
+        return watermark(execution.scope);
     }
 
     /** Standalone controls keep repeatable-read; close controls use its existing scope and office locks. */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY, isolation = Isolation.DEFAULT)
     public JsonNode executionControls(ReceivablesExecution execution, long watermark) {
-        return controls(execution.command.get("scope"), new Boundary(execution.date, execution.boundarySide, watermark), null, null);
+        return controls(execution.scope, new Boundary(execution.date, execution.boundarySide, watermark), null, null);
     }
 
-    public long watermark(JsonNode scope) {
-        Long maximum = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, key(scope));
+    public long watermark(String scope) {
+        Long maximum = store.jdbc().queryForObject("select max(sequence_id) from m_mnzl_r_event where scope_key=?", Long.class, scope);
         return maximum == null ? 0 : maximum;
     }
 
-    public JsonNode capabilities(JsonNode scope) {
-        return configuration.capabilities(scope, true);
+    public JsonNode capabilities(String scope) {
+        return configuration.capabilities(true);
     }
 
-    public JsonNode operation(JsonNode scope, String id, boolean helFunding) {
+    public JsonNode operation(String scope, String id, boolean helFunding) {
         Map<String, Object> row = store.find(helFunding ? "hel_funding" : "command",
-                ReceivablesStore.key(key(scope), helFunding ? "hel-funding" : "operation", id));
+                ReceivablesStore.key(scope, helFunding ? "hel-funding" : "operation", id));
         if (row == null || row.get("result_json") == null) {
             throw new NotFoundException();
         }
         return json.read(string(row, "result_json"));
     }
 
-    public JsonNode account(JsonNode scope, String id) {
+    public JsonNode account(String scope, String id) {
         Boundary boundary = new Boundary(DateUtils.getBusinessLocalDate(), "AFTER_EVENTS", watermark(scope));
         var account = accountRow(scope, id);
         ObjectNode result = json.object();
@@ -144,7 +136,7 @@ public class ReceivablesReadService {
         return result;
     }
 
-    public JsonNode position(JsonNode scope, String id, Boundary boundary) {
+    public JsonNode position(String scope, String id, Boundary boundary) {
         var account = accountRow(scope, id);
         ObjectNode issued = issuedPositions(scope, boundary).get(id);
         if (issued == null) {
@@ -165,7 +157,7 @@ public class ReceivablesReadService {
     /**
      * Called only after staff permission and loan visibility checks; integration API authorization remains unchanged.
      */
-    JsonNode investment(JsonNode scope, String id, boolean includeProjections) {
+    JsonNode investment(String scope, String id, boolean includeProjections) {
         var boundary = new Boundary(DateUtils.getBusinessLocalDate(), "AFTER_EVENTS", watermark(scope));
         var current = (ObjectNode) position(scope, id, boundary);
         current.put("eventWatermark", Long.toString(boundary.watermark()));
@@ -185,7 +177,7 @@ public class ReceivablesReadService {
         return result;
     }
 
-    public JsonNode measurement(JsonNode scope, String id, Boundary boundary) {
+    public JsonNode measurement(String scope, String id, Boundary boundary) {
         var account = accountRow(scope, id);
         var state = historicalState(account, boundary);
         var measured = ReceivablesMath.position(state, boundary.date());
@@ -227,7 +219,7 @@ public class ReceivablesReadService {
         return result;
     }
 
-    public JsonNode schedule(JsonNode scope, String id, Boundary boundary) {
+    public JsonNode schedule(String scope, String id, Boundary boundary) {
         var account = accountRow(scope, id);
         var state = nativeState(scope, account, boundary);
         var issued = issuedPositions(scope, boundary).get(id);
@@ -266,13 +258,13 @@ public class ReceivablesReadService {
         return result;
     }
 
-    public JsonNode events(JsonNode scope, String cursor, int limit, long maximum) {
+    public JsonNode events(String scope, String cursor, int limit, long maximum) {
         List<Map<String, Object>> rows = store.jdbc().queryForList(
-                "select * from m_mnzl_r_event where scope_key=? and sequence_id<=? order by created_at,record_key", key(scope), maximum);
+                "select * from m_mnzl_r_event where scope_key=? and sequence_id<=? order by created_at,record_key", scope, maximum);
         return page(rows, cursor, limit, row -> json.read(string(row, "event_json")));
     }
 
-    public JsonNode transactions(JsonNode scope, String id, String cursor, int limit) {
+    public JsonNode transactions(String scope, String id, String cursor, int limit) {
         var account = accountRow(scope, id);
         Boundary boundary = new Boundary(DateUtils.getBusinessLocalDate(), "AFTER_EVENTS", watermark(scope));
         var nativeState = nativeState(scope, account, boundary);
@@ -340,7 +332,7 @@ public class ReceivablesReadService {
                 row.set("businessDate", event.get("businessDate"));
                 row.put("amountMinor", tx.amountMinor().toString());
                 row.put("currency", "EGP");
-                boolean reversal = reversedSourceIds(event).contains(Long.parseLong(txId.asText()));
+                boolean reversal = reversedSourceIds(eventRow, event).contains(Long.parseLong(txId.asText()));
                 row.put("type", reversal ? "REVERSAL" : switch (tx.type()) {
                     case "PURCHASED_RECEIVABLE_ACTIVATION" -> "PURCHASE";
                     case "REPAYMENT" -> "COLLECTION";
@@ -356,11 +348,11 @@ public class ReceivablesReadService {
         return page(rows, cursor, limit, row -> (JsonNode) row.get("wire"));
     }
 
-    public JsonNode accounts(JsonNode scope, LocalDate asOf, LocalDate periodStart, long maximum, String cursor, int limit) {
+    public JsonNode accounts(String scope, LocalDate asOf, LocalDate periodStart, long maximum, String cursor, int limit) {
         Boundary boundary = new Boundary(asOf, "AFTER_EVENTS", maximum);
         var positions = issuedPositions(scope, boundary);
         List<Map<String, Object>> rows = store.jdbc().queryForList(
-                "select * from m_mnzl_r_account where scope_key=? and activation_date<=? order by created_at,record_key", key(scope), asOf);
+                "select * from m_mnzl_r_account where scope_key=? and activation_date<=? order by created_at,record_key", scope, asOf);
         rows = rows.stream().filter(row -> {
             JsonNode p = positions.get(string(row, "external_id"));
             return p != null
@@ -381,7 +373,6 @@ public class ReceivablesReadService {
             item.set("lastMovementDate", p.get("businessDate"));
             return item;
         });
-        result.set("scope", scope);
         result.put("productCode", "MNZL_PURCHASED_RECEIVABLE");
         result.put("asOfDate", asOf.toString());
         result.put("eventWatermark", Long.toString(maximum));
@@ -389,12 +380,12 @@ public class ReceivablesReadService {
         return result;
     }
 
-    private List<Map<String, Object>> snapshotRows(JsonNode scope, Boundary boundary, String kind) {
+    private List<Map<String, Object>> snapshotRows(String scope, Boundary boundary, String kind) {
         var rows = store.jdbc().queryForList(
                 "select s.*,e.created_at,e.sequence_id from m_mnzl_r_state_snapshot s join m_mnzl_r_event e on e.record_key=s.event_key "
                         + "where s.scope_key=? and s.subject_kind=? and e.sequence_id<=? and " + boundary.eventCutoff()
                         + " order by e.sequence_id",
-                key(scope), kind, boundary.watermark(), boundary.date(), boundary.date());
+                scope, kind, boundary.watermark(), boundary.date(), boundary.date());
         Map<String, Map<String, Object>> latest = new LinkedHashMap<>();
         rows.forEach(row -> latest.put(string(row, "subject_key"), row));
         List<Map<String, Object>> sorted = new ArrayList<>(latest.values());
@@ -402,7 +393,7 @@ public class ReceivablesReadService {
         return sorted;
     }
 
-    public JsonNode snapshots(JsonNode scope, Boundary boundary, String kind, String cursor, int limit) {
+    public JsonNode snapshots(String scope, Boundary boundary, String kind, String cursor, int limit) {
         ObjectNode result = (ObjectNode) page(snapshotRows(scope, boundary, kind), cursor, limit, row -> {
             ObjectNode value = (ObjectNode) json.read(string(row, "snapshot_json"));
             if (kind.equals("LOT")) {
@@ -414,17 +405,16 @@ public class ReceivablesReadService {
             }
             return value;
         });
-        result.set("scope", scope);
         result.put("businessDate", boundary.date().toString());
         result.put("boundarySide", boundary.side());
         result.put("eventWatermark", Long.toString(boundary.watermark()));
         return result;
     }
 
-    public JsonNode journals(JsonNode scope, List<String> operationIds, long maximum) {
+    public JsonNode journals(String scope, List<String> operationIds, long maximum) {
         require(!operationIds.isEmpty() && operationIds.size() <= 200, "INVALID_DATA");
         String placeholders = String.join(",", operationIds.stream().map(id -> "?").toList());
-        List<Object> args = new ArrayList<>(List.of(key(scope), maximum));
+        List<Object> args = new ArrayList<>(List.of(scope, maximum));
         args.addAll(operationIds);
         var rows = store.jdbc().queryForList(
                 "select l.*,j.id actual_id,j.account_id actual_gl,j.type_enum actual_side,j.amount actual_amount,j.currency_code,c.operation_id "
@@ -452,18 +442,13 @@ public class ReceivablesReadService {
             lines.add(line);
         }
         ObjectNode result = json.object();
-        result.set("scope", scope);
         result.put("eventWatermark", Long.toString(maximum));
         result.set("lines", json.value(lines));
         return result;
     }
 
-    public String scopeKey(JsonNode scope) {
-        return key(scope);
-    }
-
-    public JsonNode helTerms(JsonNode scope, String id) {
-        configuration.authorize(scope, false);
+    public JsonNode helTerms(String scope, String id) {
+        configuration.authorize(false);
         var terms = hel.readTerms(id);
         ObjectNode result = json.object();
         result.put("nativeLoanId", Long.toString(terms.nativeLoanId()));
@@ -495,17 +480,17 @@ public class ReceivablesReadService {
         return result;
     }
 
-    private long fundingClearing(JsonNode scope, Map<String, Object> funding) {
+    private long fundingClearing(String scope, Map<String, Object> funding) {
         var command = store.require("command", string(funding, "operation_key"));
         var request = json.read(string(command, "request_json"));
-        return configuration.mappings(key(scope), text(request, "accountMappingRevisionId")).get("helSettlementClearing");
+        return configuration.mappings(scope, text(request, "accountMappingRevisionId")).get("helSettlementClearing");
     }
 
-    public JsonNode helJournals(JsonNode scope, long loanId, List<Long> ids, long maximum) {
+    public JsonNode helJournals(String scope, long loanId, List<Long> ids, long maximum) {
         require(!ids.isEmpty() && ids.size() <= 200, "INVALID_DATA");
         var rows = store.jdbc().queryForList(
                 "select h.*,c.operation_id,c.business_date from m_mnzl_r_hel_funding h join m_mnzl_r_command c on c.record_key=h.operation_key join m_mnzl_r_event e on e.operation_key=h.operation_key where h.scope_key=? and h.loan_id=? and e.sequence_id<=?",
-                key(scope), loanId, maximum);
+                scope, loanId, maximum);
         if (rows.size() != 1) {
             throw new NotFoundException();
         }
@@ -531,7 +516,6 @@ public class ReceivablesReadService {
             return (JsonNode) node;
         }).toList();
         ObjectNode result = json.object();
-        result.set("scope", scope);
         result.put("nativeLoanId", Long.toString(loanId));
         result.put("businessDate", string(funding, "business_date"));
         result.put("eventWatermark", Long.toString(maximum));
@@ -540,12 +524,12 @@ public class ReceivablesReadService {
         return result;
     }
 
-    public JsonNode controls(JsonNode scope, Boundary boundary, String dealId, String accountId) {
+    public JsonNode controls(String scope, Boundary boundary, String dealId, String accountId) {
         return controls(scope, boundary, dealId, accountId, null);
     }
 
-    public JsonNode controls(JsonNode scope, Boundary boundary, String dealId, String accountId, String acquisitionId) {
-        String acquisitionKey = acquisitionId == null ? null : ReceivablesStore.key(key(scope), "acquisition", acquisitionId);
+    public JsonNode controls(String scope, Boundary boundary, String dealId, String accountId, String acquisitionId) {
+        String acquisitionKey = acquisitionId == null ? null : ReceivablesStore.key(scope, "acquisition", acquisitionId);
         if (acquisitionKey != null) {
             var acquisition = store.find("acquisition", acquisitionKey);
             if (acquisition == null) {
@@ -556,7 +540,7 @@ public class ReceivablesReadService {
         }
         var events = eventRows(scope, boundary);
         Map<String, ObjectNode> positions = issuedPositions(events);
-        List<Map<String, Object>> cohort = store.scoped("account", key(scope)).stream()
+        List<Map<String, Object>> cohort = store.scoped("account", scope).stream()
                 .filter(row -> (dealId == null || dealId.equals(string(row, "deal_id")))
                         && (accountId == null || accountId.equals(string(row, "external_id")))
                         && (acquisitionKey == null || acquisitionKey.equals(row.get("acquisition_key"))))
@@ -578,7 +562,7 @@ public class ReceivablesReadService {
                 activeIds.add(id);
             }
         }
-        List<Object> args = new ArrayList<>(List.of(key(scope), boundary.watermark(), boundary.date(), boundary.date()));
+        List<Object> args = new ArrayList<>(List.of(scope, boundary.watermark(), boundary.date(), boundary.date()));
         String filter = "";
         if (dealId != null) {
             filter += " and l.deal_id=?";
@@ -586,7 +570,7 @@ public class ReceivablesReadService {
         }
         if (accountId != null) {
             filter += " and l.account_key=?";
-            args.add(ReceivablesStore.key(key(scope), "account", accountId));
+            args.add(ReceivablesStore.key(scope, "account", accountId));
         }
         if (acquisitionKey != null) {
             filter += " and l.account_key in (select record_key from m_mnzl_r_account where acquisition_key=?)";
@@ -602,7 +586,7 @@ public class ReceivablesReadService {
                 + "on j.transaction_id=concat('R',substring(e.record_key,1,40)) left join m_mnzl_r_journal_line l on l.native_journal_id=j.id "
                 + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff() + " and l.record_key is null";
         if (acquisitionId == null) {
-            Long extra = store.jdbc().queryForObject("select count(*)" + extraFrom, Long.class, key(scope), boundary.watermark(),
+            Long extra = store.jdbc().queryForObject("select count(*)" + extraFrom, Long.class, scope, boundary.watermark(),
                     boundary.date(), boundary.date());
             require(extra != null && extra == 0, "JOURNAL_MISMATCH");
         } else {
@@ -617,7 +601,7 @@ public class ReceivablesReadService {
                     }
                 }
                 return true;
-            }, key(scope), boundary.watermark(), boundary.date(), boundary.date());
+            }, scope, boundary.watermark(), boundary.date(), boundary.date());
             require(Boolean.TRUE.equals(matched), "JOURNAL_MISMATCH");
         }
         Map<String, BigInteger> sub = new HashMap<>();
@@ -648,8 +632,8 @@ public class ReceivablesReadService {
                     "select h.* from m_mnzl_r_hel_funding h join m_mnzl_r_event e on e.operation_key=h.operation_key "
                             + "where h.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
                             + (dealId == null ? "" : " and h.deal_id=?"),
-                    dealId == null ? new Object[] { key(scope), boundary.watermark(), boundary.date(), boundary.date() }
-                            : new Object[] { key(scope), boundary.watermark(), boundary.date(), boundary.date(), dealId });
+                    dealId == null ? new Object[] { scope, boundary.watermark(), boundary.date(), boundary.date() }
+                            : new Object[] { scope, boundary.watermark(), boundary.date(), boundary.date(), dealId });
             for (var funding : fundingRows) {
                 long clearing = fundingClearing(scope, funding);
                 BigInteger expected = new BigInteger(string(funding, "principal_minor"))
@@ -724,7 +708,6 @@ public class ReceivablesReadService {
             balances.add(balance);
         }
         ObjectNode result = json.object();
-        result.set("scope", scope);
         if (dealId != null) {
             result.put("dealId", dealId);
         }
@@ -779,28 +762,22 @@ public class ReceivablesReadService {
                 : string(store.require("acquisition", string(account, "acquisition_key")), "external_id");
     }
 
-    private String key(JsonNode scope) {
-        return configuration.scopeKey(scope);
-    }
-
-    private Map<String, Object> accountRow(JsonNode scope, String id) {
-        var row = store.find("account", ReceivablesStore.key(key(scope), "account", id));
+    private Map<String, Object> accountRow(String scope, String id) {
+        var row = store.find("account", ReceivablesStore.key(scope, "account", id));
         if (row == null) {
             throw new NotFoundException();
         }
         return row;
     }
 
-    private List<Map<String, Object>> eventRows(JsonNode scope, Boundary boundary) {
+    private List<Map<String, Object>> eventRows(String scope, Boundary boundary) {
         return store.jdbc()
-                .queryForList(
-                        "select e.*,c.command_type from m_mnzl_r_event e join m_mnzl_r_command c on c.record_key=e.operation_key "
-                                + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
-                                + " order by e.business_date,e.sequence_id",
-                        key(scope), boundary.watermark(), boundary.date(), boundary.date());
+                .queryForList("select e.*,c.command_type from m_mnzl_r_event e join m_mnzl_r_command c on c.record_key=e.operation_key "
+                        + "where e.scope_key=? and e.sequence_id<=? and " + boundary.eventCutoff()
+                        + " order by e.business_date,e.sequence_id", scope, boundary.watermark(), boundary.date(), boundary.date());
     }
 
-    private Map<String, ObjectNode> issuedPositions(JsonNode scope, Boundary boundary) {
+    private Map<String, ObjectNode> issuedPositions(String scope, Boundary boundary) {
         return issuedPositions(eventRows(scope, boundary));
     }
 
@@ -834,24 +811,24 @@ public class ReceivablesReadService {
         return latest;
     }
 
-    private Set<Long> reversedSourceIds(JsonNode event) {
+    private Set<Long> reversedSourceIds(Map<String, Object> row, JsonNode event) {
         if (!event.hasNonNull("reversalOfEventId")) {
             return Set.of();
         }
         var original = store.require("event", text(event, "reversalOfEventId"));
-        require(string(original, "scope_key").equals(key(event.get("scope"))), "OWNERSHIP_CONFLICT");
+        require(string(original, "scope_key").equals(string(row, "scope_key")), "OWNERSHIP_CONFLICT");
         Set<Long> ids = new HashSet<>();
         json.read(string(original, "event_json")).path("sourceTransactionIds").forEach(id -> ids.add(Long.parseLong(id.asText())));
         return ids;
     }
 
-    private NativeReceivableBridge.NativeState nativeState(JsonNode scope, Map<String, Object> account, Boundary boundary) {
+    private NativeReceivableBridge.NativeState nativeState(String scope, Map<String, Object> account, Boundary boundary) {
         Set<Long> registered = new HashSet<>();
         Set<Long> registeredReversals = new HashSet<>();
-        for (var row : store.scoped("event", key(scope))) {
+        for (var row : store.scoped("event", scope)) {
             JsonNode event = json.read(string(row, "event_json"));
             event.path("sourceTransactionIds").forEach(id -> registered.add(Long.parseLong(id.asText())));
-            registeredReversals.addAll(reversedSourceIds(event));
+            registeredReversals.addAll(reversedSourceIds(row, event));
         }
         for (var transaction : store.jdbc().queryForList(
                 "select id,is_reversed from m_loan_transaction where loan_id=? and transaction_date<=?", number(account, "native_loan_id"),
@@ -868,7 +845,7 @@ public class ReceivablesReadService {
             JsonNode event = json.read(string(row, "event_json"));
             for (JsonNode id : event.path("sourceTransactionIds")) {
                 transactions.add(Long.parseLong(id.asText()));
-                if (reversedSourceIds(event).contains(Long.parseLong(id.asText()))) {
+                if (reversedSourceIds(row, event).contains(Long.parseLong(id.asText()))) {
                     reversals.add(Long.parseLong(id.asText()));
                 }
             }

@@ -178,8 +178,7 @@ class ReceivablesCalculationServiceTest {
         var purchase = measurement.purchase(basis, "account-1");
         var position = ReceivablesMath.position(purchase.segment(), date, collected);
         ObjectNode wire = measurement.measures(position, BigInteger.ZERO);
-        wire.set("scope", json.read(
-                "{\"platformId\":\"mnzl\",\"financierOrganizationId\":\"financier\",\"environment\":\"test\",\"developerOrganizationId\":\"developer\"}"));
+        wire.set("scope", json.object().put("developerOrganizationId", "developer"));
         for (String field : List.of("tenantId", "dealId", "accountId", "receivableId", "nativeLoanId")) {
             wire.put(field, "account-1");
         }

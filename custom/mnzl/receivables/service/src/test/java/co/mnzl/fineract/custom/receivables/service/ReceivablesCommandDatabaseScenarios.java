@@ -150,7 +150,6 @@ final class ReceivablesCommandDatabaseScenarios {
         long nativeTransactions = harness.queryLong("select count(*) from m_loan_transaction");
         harness.moveDate(harness.today.plusDays(1));
         ObjectNode authorization = harness.json.object();
-        authorization.set("scope", harness.scope(false));
         authorization.put("authorizationId", "rate-correction-authorization");
         authorization.put("scopeHash", "0".repeat(64));
         authorization.put("approvedBy", "1");
@@ -187,7 +186,6 @@ final class ReceivablesCommandDatabaseScenarios {
 
     private void borrowerIdentity() throws Exception {
         ObjectNode input = harness.json.object();
-        input.set("scope", harness.scope(false));
         input.put("accountMappingRevisionId", "mapping-1");
         input.put("customerReferenceId", "settlement-account-customer");
         long loans = harness.queryLong("select count(*) from m_loan");
@@ -257,7 +255,7 @@ final class ReceivablesCommandDatabaseScenarios {
             }
             c.set("legalOutcome", outcome);
             ObjectNode approval = harness.json.object();
-            approval.set("scope", harness.scope(true));
+            approval.set("scope", harness.scope());
             approval.put("approvedWorkoutCaseId", id + "-approval");
             approval.put("accountId", id);
             approval.put("businessDate", harness.today.toString());
@@ -373,7 +371,6 @@ final class ReceivablesCommandDatabaseScenarios {
             }
         }
         ObjectNode authorization = harness.json.object();
-        authorization.set("scope", harness.scope(false));
         authorization.put("authorizationId", "correction-authorization");
         authorization.put("scopeHash", "0".repeat(64));
         authorization.put("approvedBy", "1");
@@ -858,7 +855,7 @@ final class ReceivablesCommandDatabaseScenarios {
 
     private void fundingEvent(ObjectNode terms, String kind, String operation, String amount, String version) throws Exception {
         ObjectNode c = harness.command("RECORD_FUNDING_EVENT", operation, "facility", "FUNDING_FACILITY");
-        c.set("scope", harness.scope(false));
+        c.remove("scope");
         c.put("expectedVersion", version);
         c.set("terms", terms);
         ObjectNode event = harness.json.object();

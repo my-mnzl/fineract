@@ -516,7 +516,8 @@ public class ReceivablesAccountCommands {
         var original = store.require("command", originalKey);
         JsonNode request = json.read(string(original, "request_json"));
         require(text(request, "commandType").equals("RESET_RATE") && original.get("result_json") != null
-                && text(request, "subjectId").equals(e.subjectId()) && request.get("scope").equals(e.command.get("scope"))
+                && text(request, "subjectId").equals(e.subjectId())
+                && java.util.Objects.equals(request.get("scope"), e.command.get("scope"))
                 && !text(request, "corridorObservationId").equals(text(e.command, "corridorObservationId")), "SOURCE_CHANGED");
         require(!e.date.isBefore(date(request, "businessDate")) && store.jdbc().queryForObject(
                 "select count(*) from m_mnzl_r_command where scope_key=? and subject_key=? and command_type='RESET_RATE' "

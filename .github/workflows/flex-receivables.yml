@@ -143,7 +143,7 @@ jobs:
             --connect-timeout 5 --max-time 10 --retry-delay 5 \
             https://localhost:8443/fineract-provider/actuator/health > /tmp/flex-image-health.json
           python3 -c 'import json; assert json.load(open("/tmp/flex-image-health.json"))["status"] == "UP"'
-          # Missing scope must reach the native handler and its typed error mapper.
+          # A missing account mapping must reach the native handler and its typed error mapper.
           # A generic health check also passes when custom starter JARs are absent.
           status=$(curl --silent --show-error --insecure --user mifos:password \
             -H 'Fineract-Platform-TenantId: default' -o /tmp/flex-image-capabilities.json \

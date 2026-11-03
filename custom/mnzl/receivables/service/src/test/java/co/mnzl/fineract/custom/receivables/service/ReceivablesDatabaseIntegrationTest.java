@@ -66,9 +66,6 @@ class ReceivablesDatabaseIntegrationTest {
     private String tenantUrl;
     private String storeUrl;
     private String activeTenant = "default";
-    private String activeFinancier = "financier";
-    /** False sends no scope headers, as callers do once MNZL is the only lender. */
-    boolean scopeHeaders = true;
     String authentication = "mifos:password";
     private String databaseUser;
     private String databasePassword;
@@ -117,7 +114,7 @@ class ReceivablesDatabaseIntegrationTest {
                 JsonNode purchase = purchase("account-1");
                 assertThat(purchase.path("nativeTransactionIds").size()).isEqualTo(1);
                 verifyPurchaseAndIdempotency(purchase);
-                new ReceivablesScopelessScenarios(this).verify(purchase);
+                new ReceivablesBookKeyScenarios(this).verify(purchase);
                 verifyRollback(database);
                 boolean ordinaryPassed = ordinaryRegression();
                 verifyServicingAndClose();
@@ -125,7 +122,6 @@ class ReceivablesDatabaseIntegrationTest {
                 // Runs while mapping-1 is still active; the configuration scenarios retire it at the end.
                 new ReceivablesSimpleAccretionScenarios(this).verify();
                 new ReceivablesHistoricalAuthorizationScenarios(this).verify(database);
-                new ReceivablesScopelessScenarios(this).verifyAuthorizedCommand();
                 new ReceivablesOfficeClosureScenarios(this,
                         application.getBean(org.apache.fineract.organisation.office.domain.OfficeRepository.class)).verify();
                 new ReceivablesPeriodProofScenarios(this).verify();
@@ -146,7 +142,7 @@ class ReceivablesDatabaseIntegrationTest {
                 evidence.put("pendingOutboxEvents", queryLong("select count(*) from m_mnzl_r_event where delivered_at is null"));
                 evidence.set("assertions", json.value(List.of("historical-purchase-without-cash-or-risk",
                         "historical-partial-reconciliation", "historical-risk-and-funding-snapshots", "exact-face-and-small-cheque",
-                        "actual-native-journal-readback", "idempotent-retry", "scopeless-requests", "scopeless-authorized-command",
+                        "actual-native-journal-readback", "idempotent-retry", "book-key-and-developer-scope", "native-scope-migration",
                         "changed-payload-conflict", "stale-version", "scope-conflict", "late-event-failure-rolls-back-native-and-subledger",
                         "retry-after-rollback", "ordinary-loan-disbursement-and-repayment", "hel-native-noncash-clearing",
                         "separate-tenant-database-isolation", "rate-reset", "impairment", "frozen-period-close", "closed-period-rejection",
@@ -206,9 +202,6 @@ class ReceivablesDatabaseIntegrationTest {
                         "Basic " + Base64.getEncoder().encodeToString(authentication.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .header("Fineract-Platform-TenantId", activeTenant).header("Content-Type", "application/json")
                 .header("X-MNZL-Account-Mapping", mapping);
-        if (scopeHeaders) {
-            builder.header("X-MNZL-Platform", "mnzl").header("X-MNZL-Financier", activeFinancier).header("X-MNZL-Environment", "test");
-        }
         var response = http.send(builder
                 .method(method,
                         payload == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json.write(payload)))
@@ -220,22 +213,14 @@ class ReceivablesDatabaseIntegrationTest {
 
     ObjectNode issueHistory(ObjectNode command) throws Exception {
         ObjectNode grant = ((ObjectNode) command.get("executionAuthorization")).deepCopy();
-        grant.set("scope", scope(false));
         grant.set("mode", command.get("executionMode"));
         grant.put("commandPayloadHash", json.hash(command));
         assertThat(request("POST", PREFIX + "/authorizations/v2", grant, 200)).isEqualTo(grant);
         return grant;
     }
 
-    ObjectNode scope(boolean developer) {
-        ObjectNode scope = json.object();
-        scope.put("platformId", "mnzl");
-        scope.put("financierOrganizationId", "financier");
-        scope.put("environment", "test");
-        if (developer) {
-            scope.put("developerOrganizationId", "developer");
-        }
-        return scope;
+    ObjectNode scope() {
+        return json.object().put("developerOrganizationId", "developer");
     }
 
     private ObjectNode versions() {
@@ -259,7 +244,7 @@ class ReceivablesDatabaseIntegrationTest {
         command.put("expectedVersion", "0");
         command.put("businessDate", today.toString());
         command.put("basisHash", "0".repeat(64));
-        command.set("scope", scope(true));
+        command.set("scope", scope());
         command.put("subjectId", subject);
         command.put("subjectKind", kind);
         command.set("affectedAccountVersions", json.value(List.of()));
@@ -294,7 +279,6 @@ class ReceivablesDatabaseIntegrationTest {
                 "{\"instrumentCode\":\"MNZL_PURCHASED_RECEIVABLE\",\"scheduleStrategyCode\":\"MNZL_FIXED_RECEIVABLE\",\"chargeStrategyCode\":\"MNZL_NO_BORROWER_CHARGES\",\"cobStrategyCode\":\"MNZL_DUE_INSTALLMENTS\"}"),
                 200);
         ObjectNode configuration = versions();
-        configuration.set("scope", scope(false));
         configuration.put("accountMappingRevisionId", "mapping-1");
         configuration.put("productId", Long.toString(productId));
         configuration.put("officeId", "1");
@@ -526,6 +510,19 @@ class ReceivablesDatabaseIntegrationTest {
             var database = liquibase.database.DatabaseFactory.getInstance()
                     .findCorrectDatabaseImplementation(new liquibase.database.jvm.JdbcConnection(connection));
             try (var migration = new liquibase.Liquibase("db/custom-changelog/0008_mnzl_receivables_admin_fee.xml",
+                    new liquibase.resource.ClassLoaderResourceAccessor(), database)) {
+                migration.update(new liquibase.Contexts());
+            }
+        }
+    }
+
+    /** Re-runs the native scope changeset over whatever stored copies the database now holds. */
+    void migrateNativeScope() throws Exception {
+        executeSql("delete from DATABASECHANGELOG where id='mnzl-receivables-book-key-9'");
+        try (var connection = DriverManager.getConnection(tenantUrl, databaseUser, databasePassword)) {
+            var database = liquibase.database.DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new liquibase.database.jvm.JdbcConnection(connection));
+            try (var migration = new liquibase.Liquibase("db/custom-changelog/0009_mnzl_receivables_book_key.xml",
                     new liquibase.resource.ClassLoaderResourceAccessor(), database)) {
                 migration.update(new liquibase.Contexts());
             }
@@ -812,12 +809,6 @@ class ReceivablesDatabaseIntegrationTest {
         assertThat(frozen.path("snapshotId").asText()).isNotBlank();
         assertThat(frozen.path("snapshotBusinessDate").asText()).isEqualTo(fundedDate.toString());
         assertThat(request("GET", path + fundedDate.minusDays(1), null, 409).path("code").asText()).isEqualTo("RECOVERY_REQUIRED");
-        activeFinancier = "wrong-financier";
-        try {
-            assertThat(request("GET", path + fundedDate, null, 409).path("code").asText()).isEqualTo("RECOVERY_REQUIRED");
-        } finally {
-            activeFinancier = "financier";
-        }
         moveDate(today.plusDays(1));
         ObjectNode repayment = json.object();
         repayment.put("transactionDate", today.toString());
@@ -921,7 +912,7 @@ class ReceivablesDatabaseIntegrationTest {
         moveDate(boundary);
         String period = boundary.minusDays(1).toString().substring(0, 7);
         ObjectNode close = command("CLOSE_PERIOD", "close-prepare", period, "PERIOD");
-        close.set("scope", scope(false));
+        close.remove("scope");
         close.put("phase", "PREPARE");
         close.put("periodId", period);
         close.put("boundaryDate", boundary.toString());
@@ -949,7 +940,6 @@ class ReceivablesDatabaseIntegrationTest {
         close.put("eventWatermark", request("GET", PREFIX + "/capabilities", null, 200).path("currentEventWatermark").asText());
         JsonNode prepared = request("POST", PREFIX + "/commands", close, 200);
         ObjectNode historyAuthorization = json.object();
-        historyAuthorization.set("scope", scope(false));
         historyAuthorization.put("authorizationId", "preparing-history");
         historyAuthorization.put("scopeHash", "0".repeat(64));
         historyAuthorization.put("approvedBy", "1");

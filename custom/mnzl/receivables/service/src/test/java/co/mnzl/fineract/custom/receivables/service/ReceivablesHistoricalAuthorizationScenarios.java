@@ -81,9 +81,9 @@ final class ReceivablesHistoricalAuthorizationScenarios {
         ObjectNode wrongMapping = command.deepCopy();
         wrongMapping.put("accountMappingRevisionId", "changed-mapping");
         assertThat(post("/commands", wrongMapping, 409).path("code").asText()).isEqualTo("FINERACT_CAPABILITY_MISSING");
-        ObjectNode wrongScope = command.deepCopy();
-        ((ObjectNode) wrongScope.get("scope")).put("financierOrganizationId", "other-financier");
-        assertThat(post("/commands", wrongScope, 403).path("code").asText()).isEqualTo("OWNERSHIP_CONFLICT");
+        ObjectNode nativeScope = command.deepCopy();
+        ((ObjectNode) nativeScope.get("scope")).put("financierOrganizationId", "financier");
+        assertThat(post("/commands", nativeScope, 400).path("code").asText()).isEqualTo("INVALID_DATA");
         harness.executeSql("update m_mnzl_r_authorization set revoked=true where authorization_id='bound-history-grant'");
         assertThat(post("/commands", command, 409).path("code").asText()).isEqualTo("APPROVAL_SCOPE_CHANGED");
         harness.executeSql("update m_mnzl_r_authorization set revoked=false where authorization_id='bound-history-grant'");
