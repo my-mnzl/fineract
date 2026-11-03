@@ -113,4 +113,15 @@ public final class MnzlLoanScheduleMath {
         }
         return effectiveReferenceDate.lengthOfYear();
     }
+
+    /**
+     * Whether {@code targetDate} is the last day of the month before an instalment due on the 1st.
+     * <p>
+     * Such an instalment carries that month's interest, so it is fully earned by the month's last day, as a month-end
+     * close requires. Counting a 31st as day 30 would otherwise leave the instalment's final day to the 1st: a 14 Oct
+     * -> 1 Nov first period, priced on 17 days, had only 16 accrued at the October month-end.
+     */
+    public static boolean closesBeforeDueOnTheFirst(final LocalDate dueDate, final LocalDate targetDate) {
+        return dueDate != null && targetDate != null && dueDate.getDayOfMonth() == 1 && targetDate.isEqual(dueDate.minusDays(1));
+    }
 }

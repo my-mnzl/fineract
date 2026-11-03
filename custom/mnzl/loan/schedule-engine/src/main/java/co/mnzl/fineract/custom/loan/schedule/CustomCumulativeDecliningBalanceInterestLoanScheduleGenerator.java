@@ -402,7 +402,8 @@ public class CustomCumulativeDecliningBalanceInterestLoanScheduleGenerator exten
             return Money.zero(currency);
         }
         if (LoanRepaymentScheduleProcessingWrapper.isAfterPeriod(targetDate, installment)
-                || DateUtils.isEqual(targetDate, installment.getDueDate())) {
+                || DateUtils.isEqual(targetDate, installment.getDueDate())
+                || MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(installment.getDueDate(), targetDate)) {
             return installment.getInterestCharged(currency);
         }
         LocalDate startDate = installment.getFromDate();
