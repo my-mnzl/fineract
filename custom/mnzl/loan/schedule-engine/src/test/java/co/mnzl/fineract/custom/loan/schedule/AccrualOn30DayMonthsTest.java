@@ -94,6 +94,31 @@ class AccrualOn30DayMonthsTest {
     }
 
     @Test
+    void periodDueOnTheFirstIsFullyAccruedByThePreviousMonthEnd() {
+        // Loan 23319: 14 Oct -> 1 Nov first instalment, 20,777.78 interest priced on 17 thirty-day-month days. The 31st
+        // counts as day 30, so without the month-end rule 31 Oct held 16 of 17 and the 17th day landed on 1 Nov.
+        LoanRepaymentScheduleInstallment installment = installment(DaysInMonthType.DAYS_30, "2026-10-14", "2026-11-01", "20777.78");
+        assertThat(earned(installment, "2026-10-30")).isEqualByComparingTo("19555.56");
+        assertThat(earned(installment, "2026-10-31")).isEqualByComparingTo("20777.78");
+        assertThat(earned(installment, "2026-11-01")).isEqualByComparingTo("20777.78");
+    }
+
+    @Test
+    void periodDueOnTheFirstOfAThirtyDayMonthCompletesOnItsLastDay() {
+        // 1 Nov -> 1 Dec, 36,666.67 interest: complete by 30 Nov, a day before it falls due.
+        LoanRepaymentScheduleInstallment installment = installment(DaysInMonthType.DAYS_30, "2026-11-01", "2026-12-01", "36666.67");
+        assertThat(earned(installment, "2026-11-29")).isEqualByComparingTo("35444.45");
+        assertThat(earned(installment, "2026-11-30")).isEqualByComparingTo("36666.67");
+    }
+
+    @Test
+    void periodDueMidMonthIsNotCompletedEarly() {
+        // Loan 23299: 15 Aug -> 15 Sep. The day before a mid-month due date is an ordinary day.
+        LoanRepaymentScheduleInstallment installment = installment(DaysInMonthType.DAYS_30, "2026-08-15", "2026-09-15", "516396.88");
+        assertThat(earned(installment, "2026-09-14")).isEqualByComparingTo("499183.65");
+    }
+
+    @Test
     void irregularFirstPeriodIsSpreadOverIts30DayMonthLength() {
         // Loan 23299: 21 Jul -> 15 Aug first instalment, 416,666.67 interest over 24 thirty-day-month days.
         LoanRepaymentScheduleInstallment installment = installment(DaysInMonthType.DAYS_30, "2026-07-21", "2026-08-15", "416666.67");

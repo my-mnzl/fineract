@@ -326,4 +326,21 @@ class MnzlLoanScheduleMathTest {
         int days = MnzlLoanScheduleMath.getDifferenceInDays(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 31), terms);
         assertThat(days).isEqualTo(59);
     }
+
+    // ---- closesBeforeDueOnTheFirst tests ----
+
+    @Test
+    void closesOnTheLastDayOfTheMonthBeforeADueDateOnTheFirst() {
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 10, 31))).isTrue();
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(LocalDate.of(2026, 12, 1), LocalDate.of(2026, 11, 30))).isTrue();
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(LocalDate.of(2027, 3, 1), LocalDate.of(2027, 2, 28))).isTrue();
+    }
+
+    @Test
+    void doesNotCloseOnAnyOtherDay() {
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 10, 30))).isFalse();
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 1))).isFalse();
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 14))).isFalse();
+        assertThat(MnzlLoanScheduleMath.closesBeforeDueOnTheFirst(null, LocalDate.of(2026, 10, 31))).isFalse();
+    }
 }
