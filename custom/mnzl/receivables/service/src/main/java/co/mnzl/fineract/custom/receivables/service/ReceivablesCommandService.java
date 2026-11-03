@@ -61,13 +61,19 @@ public class ReceivablesCommandService {
         // The payload is hashed exactly as sent. A payload stored before the admin fee rename keeps its legacy names:
         // they are aliased to validate its replay, and a new command must already use the current names.
         JsonNode input = json.read(request);
+        var config = configuration.authorize(true);
+        String payloadHash = json.hash(input);
+        // A command recorded with fields the schema has since dropped, such as the native scope, still replays exactly.
+        var recorded = store.find("command",
+                ReceivablesStore.key(string(config, "scope_key"), "operation", input.path("operationId").asText()));
+        if (recorded != null && payloadHash.equals(string(recorded, "payload_hash")) && recorded.get("result_json") != null) {
+            return json.read(string(recorded, "result_json"));
+        }
         JsonNode command = ReceivablesLegacy.current(input);
         String type = text(command, "commandType");
         json.validate(type.equals("FUND_HEL_TO_SETTLEMENT_CLEARING") ? "helFundingCommand"
                 : type.equals("ALLOCATE_HEL_DEVELOPER_ADVANCE") ? "helAdvanceAllocationCommand" : "financialCommand", command);
-        var config = configuration.authorize(true);
         var execution = new ReceivablesExecution(command, string(config, "scope_key"), config);
-        String payloadHash = json.hash(input);
         String idempotencyHash = ReceivablesJson.hashText(text(command, "idempotencyKey"));
         var existingKeys = store.jdbc().queryForList("select record_key from m_mnzl_r_command where scope_key=? and idempotency_hash=?",
                 execution.scope, idempotencyHash);

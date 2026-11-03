@@ -855,6 +855,7 @@ final class ReceivablesCommandDatabaseScenarios {
 
     private void fundingEvent(ObjectNode terms, String kind, String operation, String amount, String version) throws Exception {
         ObjectNode c = harness.command("RECORD_FUNDING_EVENT", operation, "facility", "FUNDING_FACILITY");
+        c.remove("scope");
         c.put("expectedVersion", version);
         c.set("terms", terms);
         ObjectNode event = harness.json.object();

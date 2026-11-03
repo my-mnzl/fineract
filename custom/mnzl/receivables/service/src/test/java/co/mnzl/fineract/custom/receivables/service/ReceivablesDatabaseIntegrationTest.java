@@ -912,6 +912,7 @@ class ReceivablesDatabaseIntegrationTest {
         moveDate(boundary);
         String period = boundary.minusDays(1).toString().substring(0, 7);
         ObjectNode close = command("CLOSE_PERIOD", "close-prepare", period, "PERIOD");
+        close.remove("scope");
         close.put("phase", "PREPARE");
         close.put("periodId", period);
         close.put("boundaryDate", boundary.toString());

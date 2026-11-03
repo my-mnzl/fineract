@@ -563,7 +563,8 @@ public class ReceivablesConfiguration {
         var previous = store.find("authorization", key);
         String hash = json.hash(input);
         if (previous != null) {
-            require(hash.equals(string(previous, "scope_hash")), "IDEMPOTENCY_CONFLICT");
+            // Grants recorded before the native scope was removed hash it; their stored payload no longer holds it.
+            require(input.equals(json.read(string(previous, "payload_json"))), "IDEMPOTENCY_CONFLICT");
             return input;
         }
         LocalDate date = LocalDate.parse(text(input, "businessDate"));

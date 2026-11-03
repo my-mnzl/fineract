@@ -57,6 +57,12 @@ final class ReceivablesBookKeyScenarios {
         ObjectNode nativeScope = harness.bookingCommands.get("account-1").deepCopy();
         ((ObjectNode) nativeScope.get("scope")).put("platformId", "mnzl");
         assertThat(harness.request("POST", PREFIX + "/commands", nativeScope, 400).path("code").asText()).isEqualTo("INVALID_DATA");
+        // A command recorded with the native scope still replays its exact bytes.
+        String recordedHash = harness.queryText("select payload_hash from m_mnzl_r_command where operation_id='account-1-book'");
+        harness.executeSql("update m_mnzl_r_command set payload_hash=? where operation_id='account-1-book'",
+                harness.json.hash(nativeScope));
+        assertThat(harness.request("POST", PREFIX + "/commands", nativeScope, 200)).isEqualTo(booked);
+        harness.executeSql("update m_mnzl_r_command set payload_hash=? where operation_id='account-1-book'", recordedHash);
 
         // Stored copies recorded with the native scope lose it; the sealed event keeps its bytes.
         var before = harness.counts();
