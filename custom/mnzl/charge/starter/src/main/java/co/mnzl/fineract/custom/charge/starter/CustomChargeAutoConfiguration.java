@@ -18,12 +18,21 @@
  */
 package co.mnzl.fineract.custom.charge.starter;
 
+import co.mnzl.fineract.custom.charge.calculation.MnzlLoanChargeService;
 import org.apache.fineract.portfolio.charge.domain.BasicChargeCalculationDescriptor;
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationDescriptor;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanLifecycleStateMachine;
+import org.apache.fineract.portfolio.loanaccount.serialization.LoanChargeValidator;
+import org.apache.fineract.portfolio.loanaccount.service.ChargeAmountCalculatorRegistry;
+import org.apache.fineract.portfolio.loanaccount.service.LoanBalanceService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanChargeService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanTransactionProcessingService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Primary;
 
 @AutoConfiguration
 @ComponentScan("co.mnzl.fineract.custom.charge")
@@ -34,5 +43,16 @@ public class CustomChargeAutoConfiguration {
     public ChargeCalculationDescriptor mnzlAmountInterestAndPenaltiesChargeCalculationDescriptor() {
         return new BasicChargeCalculationDescriptor(6, "chargeCalculationType.percent.of.amount.interest.and.penalties",
                 "% Amount + Interest + Penalties", true, false, false, false, false, false);
+    }
+
+    @Bean
+    @Primary
+    @ConditionalOnBean(LoanChargeValidator.class)
+    @ConditionalOnProperty(name = "mnzl.charge.freeze-overdue-penalties", havingValue = "true", matchIfMissing = true)
+    public LoanChargeService mnzlLoanChargeService(LoanChargeValidator loanChargeValidator,
+            LoanTransactionProcessingService loanTransactionProcessingService, LoanLifecycleStateMachine loanLifecycleStateMachine,
+            LoanBalanceService loanBalanceService, ChargeAmountCalculatorRegistry chargeAmountCalculatorRegistry) {
+        return new MnzlLoanChargeService(loanChargeValidator, loanTransactionProcessingService, loanLifecycleStateMachine,
+                loanBalanceService, chargeAmountCalculatorRegistry);
     }
 }
