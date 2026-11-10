@@ -105,8 +105,8 @@ class MnzlLoanScheduleHistorySpringIT {
             JsonNode request = second.get("rescheduleRequest");
             assertThat(request.get("id").asLong()).isEqualTo(1L);
             assertThat(request.get("status").asText()).isEqualTo("Approved");
-            assertThat(request.get("rescheduleFromDate").asText()).isEqualTo("2026-12-01");
-            assertThat(request.get("rescheduleFromInstallment").asInt()).isEqualTo(2);
+            assertThat(request.get("rescheduleFromDate").asText()).isEqualTo("2027-02-01");
+            assertThat(request.get("rescheduleFromInstallment").asInt()).isEqualTo(3);
             assertThat(request.get("reason").asText()).isEqualTo("CBE rate change");
             assertThat(request.get("comment").isNull()).isTrue();
             assertThat(request.get("submittedOnDate").asText()).isEqualTo("2026-11-12");
@@ -116,7 +116,8 @@ class MnzlLoanScheduleHistorySpringIT {
             assertThat(request.get("termVariations")).hasSize(1);
             JsonNode variation = request.get("termVariations").get(0);
             assertThat(variation.get("type").asText()).isEqualTo("interestRateFromInstallment");
-            assertThat(variation.get("applicableFrom").asText()).isEqualTo("2026-12-01");
+            // As approved: the request's from-date, not the 2027-02-05 that request 2's due-date change wrote in place.
+            assertThat(variation.get("applicableFrom").asText()).isEqualTo("2027-02-01");
             assertThat(variation.get("decimalValue").decimalValue()).isEqualByComparingTo("26");
             assertThat(variation.get("dateValue").isNull()).isTrue();
 
@@ -124,7 +125,12 @@ class MnzlLoanScheduleHistorySpringIT {
             assertThat(third.get("rescheduleRequest").get("id").asLong()).isEqualTo(2L);
             // No approval command recorded: start of the approval business day (3 Dec) in tenant time.
             assertThat(third.get("archivedAt").asText()).isEqualTo("2026-12-02T22:00:00Z");
-            assertThat(third.get("rescheduleRequest").get("termVariations")).isEmpty();
+            // The due-date change and the grace it approved; core's derived extend-repayment-period child is left out.
+            JsonNode thirdTerms = third.get("rescheduleRequest").get("termVariations");
+            assertThat(thirdTerms).extracting(term -> term.get("type").asText()).containsExactly("dueDate", "graceOnPrincipal");
+            assertThat(thirdTerms).extracting(term -> term.get("applicableFrom").asText()).containsOnly("2027-01-01");
+            assertThat(thirdTerms.get(0).get("dateValue").asText()).isEqualTo("2027-01-05");
+            assertThat(thirdTerms.get(1).get("decimalValue").decimalValue()).isEqualByComparingTo("2");
         });
     }
 

@@ -63,11 +63,13 @@ public class JdbcMnzlLoanScheduleHistoryService implements MnzlLoanScheduleHisto
             + " left join m_code_value cv on cv.id = r.reschedule_reason_cv_id left join m_appuser su on su.id = r.submitted_by_user_id"
             + " left join m_appuser au on au.id = r.approved_by_user_id where h.loan_id = ? order by h.version, h.installment, h.id";
 
-    static final String TERM_VARIATIONS_SQL = "select m.loan_reschedule_request_id, tv.term_type, tv.applicable_date, tv.decimal_value,"
-            + " tv.date_value from m_loan_reschedule_request_term_variations_mapping m"
+    // No applicable_date: a later due-date reschedule shifts earlier requests' dates in place, so the request's own
+    // reschedule_from_date is used instead. decimal_value, date_value and parent_id are never rewritten.
+    static final String TERM_VARIATIONS_SQL = "select m.loan_reschedule_request_id, tv.term_type, tv.decimal_value, tv.date_value,"
+            + " tv.parent_id from m_loan_reschedule_request_term_variations_mapping m"
             + " join m_loan_term_variations tv on tv.id = m.loan_term_variations_id"
             + " join m_loan_reschedule_request r on r.id = m.loan_reschedule_request_id"
-            + " where r.loan_id = ? order by m.loan_reschedule_request_id, tv.applicable_date, tv.id";
+            + " where r.loan_id = ? order by m.loan_reschedule_request_id, tv.id";
 
     // A reschedule archive copies created_on_utc from the stored installments, so its approval command gives the
     // archive
@@ -135,8 +137,7 @@ public class JdbcMnzlLoanScheduleHistoryService implements MnzlLoanScheduleHisto
     }
 
     private static TermVariationRow termVariationRow(ResultSet rs) throws SQLException {
-        return new TermVariationRow(rs.getLong("loan_reschedule_request_id"), rs.getInt("term_type"),
-                rs.getObject("applicable_date", LocalDate.class), rs.getBigDecimal("decimal_value"),
-                rs.getObject("date_value", LocalDate.class));
+        return new TermVariationRow(rs.getLong("loan_reschedule_request_id"), rs.getInt("term_type"), rs.getBigDecimal("decimal_value"),
+                rs.getObject("date_value", LocalDate.class), rs.getObject("parent_id", Long.class));
     }
 }

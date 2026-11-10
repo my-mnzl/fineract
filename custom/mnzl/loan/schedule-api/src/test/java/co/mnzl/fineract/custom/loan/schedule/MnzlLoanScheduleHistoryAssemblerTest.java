@@ -102,9 +102,8 @@ class MnzlLoanScheduleHistoryAssemblerTest {
 
     @Test
     void rescheduleRequestCarriesItsFieldsAndOnlyItsOwnTermVariations() {
-        List<TermVariationRow> variations = List.of(
-                new TermVariationRow(12L, 2, LocalDate.of(2026, 11, 15), new BigDecimal("26.000000"), null),
-                new TermVariationRow(99L, 4, LocalDate.of(2026, 12, 1), null, LocalDate.of(2026, 12, 5)));
+        List<TermVariationRow> variations = List.of(new TermVariationRow(12L, 2, new BigDecimal("26.000000"), null, null),
+                new TermVariationRow(99L, 4, null, LocalDate.of(2026, 12, 5), null));
 
         MnzlLoanScheduleHistoryData.RescheduleRequest request = assemble(List.of(row(1, 1, 12L, ARCHIVED)), variations).versions().get(0)
                 .rescheduleRequest();
@@ -138,18 +137,36 @@ class MnzlLoanScheduleHistoryAssemblerTest {
     }
 
     @Test
-    void termVariationsAreOrderedByApplicableDate() {
-        List<TermVariationRow> variations = List.of(
-                new TermVariationRow(12L, 9, LocalDate.of(2027, 1, 1), new BigDecimal("2.000000"), null),
-                new TermVariationRow(12L, 10, LocalDate.of(2026, 11, 15), new BigDecimal("26.500000"), null));
+    void termVariationsApplyFromTheRequestsFromDateNotTheirShiftedStoredDate() {
+        // The row carries no stored date at all: whatever a later due-date reschedule did to applicable_date, the
+        // reported date is the request's own from-date (2026-11-15 in row()).
+        List<TermVariationRow> variations = List.of(new TermVariationRow(12L, 10, new BigDecimal("26.500000"), null, null),
+                new TermVariationRow(12L, 4, null, LocalDate.of(2026, 11, 20), null));
 
         List<MnzlLoanScheduleHistoryData.TermVariation> termVariations = assemble(List.of(row(1, 1, 12L, ARCHIVED)), variations).versions()
                 .get(0).rescheduleRequest().termVariations();
 
-        assertThat(termVariations).extracting(MnzlLoanScheduleHistoryData.TermVariation::type)
-                .containsExactly("interestRateFromInstallment", "extendRepaymentPeriod");
-        assertThat(termVariations).extracting(MnzlLoanScheduleHistoryData.TermVariation::decimalValue)
-                .containsExactly(new BigDecimal("26.5"), new BigDecimal("2"));
+        assertThat(termVariations).containsExactly(
+                new MnzlLoanScheduleHistoryData.TermVariation("interestRateFromInstallment", LocalDate.of(2026, 11, 15),
+                        new BigDecimal("26.5"), null),
+                new MnzlLoanScheduleHistoryData.TermVariation("dueDate", LocalDate.of(2026, 11, 15), null, LocalDate.of(2026, 11, 20)));
+    }
+
+    @Test
+    void derivedChildVariationsAreLeftOut() {
+        // Grace on principal: core adds an extend-repayment-period child pointing at the grace variation (id 501).
+        List<TermVariationRow> variations = List.of(new TermVariationRow(12L, 8, new BigDecimal("3.000000"), null, null),
+                new TermVariationRow(12L, 9, new BigDecimal("3.000000"), null, 501L),
+                new TermVariationRow(12L, 9, new BigDecimal("2.000000"), null, null));
+
+        List<MnzlLoanScheduleHistoryData.TermVariation> termVariations = assemble(List.of(row(1, 1, 12L, ARCHIVED)), variations).versions()
+                .get(0).rescheduleRequest().termVariations();
+
+        // The requested extension (no parent) stays; creation order is kept.
+        assertThat(termVariations).extracting(MnzlLoanScheduleHistoryData.TermVariation::type).containsExactly("graceOnPrincipal",
+                "extendRepaymentPeriod");
+        assertThat(termVariations).extracting(MnzlLoanScheduleHistoryData.TermVariation::decimalValue).containsExactly(new BigDecimal("3"),
+                new BigDecimal("2"));
     }
 
     @Test

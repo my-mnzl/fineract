@@ -54,6 +54,11 @@ public record MnzlLoanScheduleHistoryData(Long loanId, List<Version> versions) {
             List<TermVariation> termVariations) {
     }
 
+    /**
+     * A term the reschedule approved. {@code applicableFrom} is the request's {@code rescheduleFromDate} (the stored
+     * variation date can be shifted by a later due-date reschedule). Derived rows core adds on its own are omitted.
+     * EMI-amount requests list one entry per installment, told apart by {@code dateValue}.
+     */
     public record TermVariation(String type, LocalDate applicableFrom, BigDecimal decimalValue, LocalDate dateValue) {
     }
 

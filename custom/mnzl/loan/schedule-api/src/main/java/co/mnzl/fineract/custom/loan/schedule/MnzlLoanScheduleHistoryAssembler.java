@@ -51,8 +51,9 @@ public final class MnzlLoanScheduleHistoryAssembler {
             LocalDate submittedOnDate, String submittedByUsername, LocalDate approvedOnDate, String approvedByUsername) {
     }
 
-    public record TermVariationRow(Long rescheduleRequestId, Integer termType, LocalDate applicableDate, BigDecimal decimalValue,
-            LocalDate dateValue) {
+    /** {@code parentId} is set on variations core derives from another one of the same request. */
+    public record TermVariationRow(Long rescheduleRequestId, Integer termType, BigDecimal decimalValue, LocalDate dateValue,
+            Long parentId) {
     }
 
     /**
@@ -120,11 +121,16 @@ public final class MnzlLoanScheduleHistoryAssembler {
                 money(row.fees(), currencyDigits, roundingMode), money(row.penalties(), currencyDigits, roundingMode));
     }
 
+    /**
+     * The terms as approved: in creation order, every variation applies from the request's own from-date (core later
+     * shifts the stored dates in place), and derived child rows, such as the repayment-period extension core adds for a
+     * grace on principal, are left out.
+     */
     private static MnzlLoanScheduleHistoryData.RescheduleRequest rescheduleRequest(HistoryRow row, List<TermVariationRow> variations) {
         final List<MnzlLoanScheduleHistoryData.TermVariation> termVariations = variations.stream()
-                .sorted(Comparator.comparing(TermVariationRow::applicableDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .filter(variation -> variation.parentId() == null)
                 .map(variation -> new MnzlLoanScheduleHistoryData.TermVariation(termVariationTypeName(variation.termType()),
-                        variation.applicableDate(), plain(variation.decimalValue()), variation.dateValue()))
+                        row.rescheduleFromDate(), plain(variation.decimalValue()), variation.dateValue()))
                 .toList();
         return new MnzlLoanScheduleHistoryData.RescheduleRequest(row.rescheduleRequestId(), status(row.statusEnum()),
                 row.rescheduleFromDate(), row.rescheduleFromInstallment(), row.reason(), StringUtils.trimToNull(row.comment()),

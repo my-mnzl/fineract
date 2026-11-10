@@ -58,7 +58,8 @@ CREATE TABLE m_loan_term_variations (
     term_type SMALLINT NOT NULL,
     applicable_date DATE NOT NULL,
     decimal_value DECIMAL(19, 6),
-    date_value DATE
+    date_value DATE,
+    parent_id BIGINT
 );
 CREATE TABLE m_portfolio_command_source (
     id BIGINT PRIMARY KEY,
@@ -87,8 +88,11 @@ INSERT INTO m_code_value VALUES (23, 'CBE rate change');
 -- installment 1) would show up in 100's version 1 if the loan filter were missing.
 INSERT INTO m_loan VALUES (100, 10, NULL, 2), (101, 10, NULL, 2), (102, 11, NULL, 2);
 
-INSERT INTO m_loan_reschedule_request VALUES (1, 100, 200, 2, '2026-12-01', 23, '', '2026-11-12', 1, '2026-11-12', 2),
-    (2, 100, 200, 2, '2026-12-15', 23, NULL, '2026-12-03', 1, '2026-12-03', 1);
+-- Request 1 changed the rate from installment 3 (1 Feb 2027). Request 2 then moved installment 2 from 1 Jan to 5 Jan
+-- with a grace on principal; approving it shifted request 1's stored applicable_date in place to 5 Feb, and core
+-- derived an extend-repayment-period child (parent_id) from the grace.
+INSERT INTO m_loan_reschedule_request VALUES (1, 100, 200, 3, '2027-02-01', 23, '', '2026-11-12', 1, '2026-11-12', 2),
+    (2, 100, 200, 2, '2027-01-01', 23, NULL, '2026-12-03', 1, '2026-12-03', 1);
 -- Request 1: processed approval, plus rows that must be ignored and would win the max() otherwise: an unprocessed retry,
 -- and a loan APPROVE whose resource id (a loan id) collides with request 1's id. Request 2: no command.
 INSERT INTO m_portfolio_command_source VALUES
@@ -96,8 +100,12 @@ INSERT INTO m_portfolio_command_source VALUES
     (2, 'APPROVE', 'RESCHEDULELOAN', 1, 100, '2026-11-08 14:05:03.776947', NULL, 1),
     (3, 'APPROVE', 'RESCHEDULELOAN', 1, 100, '2026-11-09 09:00:00.000000', NULL, 2),
     (4, 'APPROVE', 'LOAN', 1, 1, '2026-11-09 09:00:00.000000', NULL, 1);
-INSERT INTO m_loan_term_variations VALUES (1, 100, 10, '2026-12-01', 26.000000, NULL), (2, 102, 2, '2026-12-01', 30.000000, NULL);
-INSERT INTO m_loan_reschedule_request_term_variations_mapping VALUES (1, 1, 1);
+INSERT INTO m_loan_term_variations VALUES (1, 100, 10, '2027-02-05', 26.000000, NULL, NULL),
+    (2, 102, 2, '2026-12-01', 30.000000, NULL, NULL),
+    (3, 100, 4, '2027-01-01', NULL, '2027-01-05', NULL),
+    (4, 100, 8, '2027-01-01', 2.000000, NULL, NULL),
+    (5, 100, 9, '2027-01-01', 2.000000, NULL, 4);
+INSERT INTO m_loan_reschedule_request_term_variations_mapping VALUES (1, 1, 1), (2, 2, 3), (3, 2, 4), (4, 2, 5);
 
 INSERT INTO m_loan_repayment_schedule_history VALUES
     (1, 100, NULL, '2026-01-08', '2026-02-01', 2, 1000.000000, 300.004000, 20.000000, NULL, '2026-02-17 13:20:26.823820', 1, NULL),
