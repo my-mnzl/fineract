@@ -23,6 +23,9 @@ import static org.mockito.Mockito.mock;
 
 import co.mnzl.fineract.custom.loan.instrument.MnzlLoanProductStrategyReadService;
 import co.mnzl.fineract.custom.loan.instrument.balloon.MnzlBalloonLoanInstrument;
+import co.mnzl.fineract.custom.loan.schedule.JdbcMnzlLoanScheduleHistoryService;
+import co.mnzl.fineract.custom.loan.schedule.MnzlLoanScheduleHistoryApiResource;
+import co.mnzl.fineract.custom.loan.schedule.MnzlLoanScheduleHistoryReadService;
 import java.util.List;
 import org.apache.fineract.cob.COBBusinessStepService;
 import org.apache.fineract.cob.COBBusinessStepServiceImpl;
@@ -36,6 +39,7 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.portfolio.account.service.AccountAssociationsReadPlatformService;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
 import org.apache.fineract.portfolio.account.service.StandingInstructionReadPlatformService;
@@ -59,7 +63,8 @@ class CustomLoanStarterSelectionTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
                         "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
-                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false",
+                        "mnzl.loan.scheduleHistory.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     COBBusinessStepService businessStepService = ctx.getBean(COBBusinessStepService.class);
                     var result = businessStepService.getCOBBusinessSteps(LoanCOBBusinessStep.class, "JOB");
@@ -74,7 +79,8 @@ class CustomLoanStarterSelectionTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
                         "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
-                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false",
+                        "mnzl.loan.scheduleHistory.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     assertThat(ctx).hasSingleBean(CustomLoanAutoConfiguration.class);
                     assertThat(ctx).hasBean("customCheckDueInstallmentsBusinessStep");
@@ -96,10 +102,32 @@ class CustomLoanStarterSelectionTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
                 .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
                         "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
-                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false",
+                        "mnzl.loan.scheduleHistory.enabled=false")
                 .withUserConfiguration(TestConfiguration.class).run(ctx -> {
                     assertThat(ctx).doesNotHaveBean(MnzlBalloonLoanInstrument.class);
                 });
+    }
+
+    @Test
+    void mnzlLoanScheduleHistoryEnabled_togglesScheduleHistoryBeans() {
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(CustomLoanAutoConfiguration.class))
+                .withPropertyValues("mnzl.loan.enabled=true", "mnzl.loan.job.enabled=false", "mnzl.loan.schedule.enabled=false",
+                        "mnzl.loan.instrument.enabled=false", "mnzl.loan.simulator.enabled=false",
+                        "mnzl.loan.grace.workingDays.enabled=false", "mnzl.loan.receivables.enabled=false")
+                .withUserConfiguration(TestConfiguration.class)
+                .withBean(PlatformSecurityContext.class, () -> mock(PlatformSecurityContext.class));
+
+        runner.withPropertyValues("mnzl.loan.scheduleHistory.enabled=false").run(ctx -> {
+            assertThat(ctx).hasNotFailed();
+            assertThat(ctx).doesNotHaveBean(MnzlLoanScheduleHistoryApiResource.class);
+            assertThat(ctx).doesNotHaveBean(MnzlLoanScheduleHistoryReadService.class);
+        });
+        runner.withPropertyValues("mnzl.loan.scheduleHistory.enabled=true").run(ctx -> {
+            assertThat(ctx).hasSingleBean(MnzlLoanScheduleHistoryApiResource.class);
+            assertThat(ctx.getBean(MnzlLoanScheduleHistoryReadService.class)).isInstanceOf(JdbcMnzlLoanScheduleHistoryService.class);
+        });
     }
 
     // Skipped "*_true_loads*Beans" toggle tests (production wins): tests for `mnzl.loan.schedule.enabled`,

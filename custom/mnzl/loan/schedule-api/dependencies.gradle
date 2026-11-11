@@ -24,12 +24,18 @@ dependencies {
     implementation(project(':fineract-progressive-loan'))
     implementation(project(':fineract-provider'))
     implementation(project(':fineract-rates'))
+    implementation('com.fasterxml.jackson.core:jackson-databind')
+    implementation('com.fasterxml.jackson.datatype:jackson-datatype-jsr310')
+    implementation('jakarta.ws.rs:jakarta.ws.rs-api')
+    implementation('org.apache.commons:commons-lang3')
     implementation('org.springframework.boot:spring-boot-starter')
     implementation('org.springframework.boot:spring-boot-starter-data-jpa')
     implementation('org.springframework.boot:spring-boot-starter-jdbc')
+    implementation('org.springframework.security:spring-security-core')
     implementation('org.eclipse.persistence:org.eclipse.persistence.jpa') {
         exclude group: 'org.eclipse.persistence', module: 'jakarta.persistence'
     }
     testImplementation(project(':fineract-provider'))
     testImplementation('org.springframework.boot:spring-boot-starter-test')
+    testRuntimeOnly('com.h2database:h2')
 }
