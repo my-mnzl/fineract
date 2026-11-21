@@ -43,7 +43,7 @@ def customDockerRuntime = files(customDockerJarTasks.collect { it.flatMap { task
 
 jib {
     from {
-        image = 'azul/zulu-openjdk-alpine:21'
+        image = 'azul/zulu-openjdk-alpine:21.0.13.1-21.54@sha256:98eca0ef5fe5663e743243f289dce718372a9874b62ba681cd31115f7f3c3e15'
         platforms {
             platform {
                 architecture = System.getProperty("os.arch").equals("aarch64")?"arm64":"amd64"
